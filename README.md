@@ -1,1 +1,1 @@
-A new design tool build for design systems first
+A new design tool built for design systems first
