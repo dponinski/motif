@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, CSSProperties } from "react";
 import { useCanvasStore, type CanvasElement } from "@/store/canvas";
+import { useDesignSystemStore } from "@/store/design-system";
 
 // ── Fabric types ──────────────────────────────────────────────────────────────
 
@@ -95,7 +96,12 @@ function flatIds(ids: string[], elements: Record<string, CanvasElement>): string
   return out;
 }
 
-function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, CanvasElement>): FObj | null {
+type TokenResolver = {
+  color: (id?: string, fallback?: string) => string;
+  typo: (id?: string) => Partial<CanvasElement> | null;
+};
+
+function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, CanvasElement>, res: TokenResolver): FObj | null {
   const { x, y } = absPos(el, elements);
   const common: Record<string, unknown> = {
     left: x, top: y,
@@ -114,7 +120,7 @@ function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, Canva
     return new m.Rect({
       ...common,
       width: el.width, height: el.height,
-      fill: el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1"),
+      fill: res.color(el.fillTokenId, el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1")),
       stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
       rx: el.cornerRadius ?? 0, ry: el.cornerRadius ?? 0,
     });
@@ -123,31 +129,32 @@ function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, Canva
     return new m.Ellipse({
       ...common,
       rx: el.width / 2, ry: el.height / 2,
-      fill: el.fill ?? "#6366f1",
+      fill: res.color(el.fillTokenId, el.fill ?? "#6366f1"),
       stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
     });
   }
   if (el.type === "text") {
+    const typo = res.typo(el.typographyTokenId);
     return new m.Textbox(el.content ?? "Text", {
       ...common,
       width: el.width,
       fill: el.fontColor ?? "#111111",
-      fontSize: el.fontSize ?? 16,
-      fontWeight: el.fontWeight ?? "400",
-      fontFamily: el.fontFamily ?? "Inter",
+      fontSize: typo?.fontSize ?? el.fontSize ?? 16,
+      fontWeight: typo?.fontWeight ?? el.fontWeight ?? "400",
+      fontFamily: typo?.fontFamily ?? el.fontFamily ?? "Inter",
     });
   }
   return null;
 }
 
-function applyProps(obj: FObj, el: CanvasElement, elements: Record<string, CanvasElement>) {
+function applyProps(obj: FObj, el: CanvasElement, elements: Record<string, CanvasElement>, res: TokenResolver) {
   const { x, y } = absPos(el, elements);
   obj.set({ left: x, top: y, angle: el.rotation ?? 0, opacity: el.opacity ?? 1 });
   if (el.type === "rectangle" || el.type === "frame") {
     obj.set({
       width: el.width, height: el.height,
       scaleX: 1, scaleY: 1,
-      fill: el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1"),
+      fill: res.color(el.fillTokenId, el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1")),
       stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
       rx: el.cornerRadius ?? 0, ry: el.cornerRadius ?? 0,
     });
@@ -155,22 +162,23 @@ function applyProps(obj: FObj, el: CanvasElement, elements: Record<string, Canva
     obj.set({
       rx: el.width / 2, ry: el.height / 2,
       scaleX: 1, scaleY: 1,
-      fill: el.fill ?? "#6366f1",
+      fill: res.color(el.fillTokenId, el.fill ?? "#6366f1"),
       stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
     });
   } else if (el.type === "text") {
+    const typo = res.typo(el.typographyTokenId);
     obj.set({
       width: el.width,
       fill: el.fontColor ?? "#111111",
-      fontSize: el.fontSize ?? 16,
-      fontWeight: el.fontWeight ?? "400",
-      fontFamily: el.fontFamily ?? "Inter",
+      fontSize: typo?.fontSize ?? el.fontSize ?? 16,
+      fontWeight: typo?.fontWeight ?? el.fontWeight ?? "400",
+      fontFamily: typo?.fontFamily ?? el.fontFamily ?? "Inter",
       text: el.content ?? "",
     });
   }
 }
 
-async function syncCanvas(c: FCanvas, elements: Record<string, CanvasElement>, order: string[]) {
+async function syncCanvas(c: FCanvas, elements: Record<string, CanvasElement>, order: string[], res: TokenResolver) {
   const m = await fab();
   const existing = new Map<string, FObj>();
   for (const o of c.getObjects()) {
@@ -183,9 +191,9 @@ async function syncCanvas(c: FCanvas, elements: Record<string, CanvasElement>, o
     if (!el || el.visible === false) { if (existing.has(id)) c.remove(existing.get(id)); continue; }
     wanted.add(id);
     if (existing.has(id)) {
-      applyProps(existing.get(id)!, el, elements);
+      applyProps(existing.get(id)!, el, elements, res);
     } else {
-      const obj = makeObj(el, m, elements);
+      const obj = makeObj(el, m, elements, res);
       if (obj) { obj.motifId = id; c.add(obj); }
     }
   }
@@ -218,6 +226,18 @@ export default function DesignCanvas() {
   const deselectingRef = useRef(false);
 
   const { zoom, panX, panY, showGrid, selectedIds, elements, order, activeTool } = useCanvasStore();
+  const { colors: tokenColors, typography: tokenTypography } = useDesignSystemStore();
+
+  const tokenResolver: TokenResolver = {
+    color: (id?: string, fallback = "#6366f1") =>
+      id ? (tokenColors.find((c) => c.id === id)?.value ?? fallback) : fallback,
+    typo: (id?: string) => {
+      if (!id) return null;
+      const t = tokenTypography.find((t) => t.id === id);
+      if (!t) return null;
+      return { fontSize: t.fontSize, fontWeight: String(t.fontWeight), fontFamily: t.fontFamily };
+    },
+  };
 
   // ── Init ────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -417,7 +437,16 @@ export default function DesignCanvas() {
 
       // Initial element sync
       const s = useCanvasStore.getState();
-      await syncCanvas(canvas, s.elements, s.order);
+      const ds = useDesignSystemStore.getState();
+      const initRes: TokenResolver = {
+        color: (id, fb = "#6366f1") => id ? (ds.colors.find((c) => c.id === id)?.value ?? fb) : fb,
+        typo: (id) => {
+          if (!id) return null;
+          const t = ds.typography.find((t) => t.id === id);
+          return t ? { fontSize: t.fontSize, fontWeight: String(t.fontWeight), fontFamily: t.fontFamily } : null;
+        },
+      };
+      await syncCanvas(canvas, s.elements, s.order, initRes);
     })();
 
     return () => {
@@ -438,11 +467,12 @@ export default function DesignCanvas() {
     return () => ro.disconnect();
   }, []);
 
-  // ── Elements sync ───────────────────────────────────────────────────────────
+  // ── Elements sync (also re-runs when token values change) ───────────────────
   useEffect(() => {
     if (!fabricRef.current || !readyRef.current) return;
-    syncCanvas(fabricRef.current, elements, order);
-  }, [elements, order]);
+    syncCanvas(fabricRef.current, elements, order, tokenResolver);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elements, order, tokenColors, tokenTypography]);
 
   // ── Zoom / pan from store ───────────────────────────────────────────────────
   useEffect(() => {
