@@ -18,6 +18,8 @@ type FObj = {
   ry?: number;
   width?: number;
   height?: number;
+  scaleX?: number;
+  scaleY?: number;
   text?: string;
   fontSize?: number;
   fontWeight?: string | number;
@@ -66,6 +68,7 @@ function makeObj(el: CanvasElement, m: FabricMod): FObj | null {
     left: el.x, top: el.y,
     angle: el.rotation ?? 0,
     opacity: el.opacity ?? 1,
+    scaleX: 1, scaleY: 1,
     cornerSize: 7,
     cornerColor: "#6366f1",
     cornerStrokeColor: "#ffffff",
@@ -109,14 +112,27 @@ function applyProps(obj: FObj, el: CanvasElement) {
   if (el.type === "rectangle" || el.type === "frame") {
     obj.set({
       width: el.width, height: el.height,
+      scaleX: 1, scaleY: 1,
       fill: el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1"),
       stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
       rx: el.cornerRadius ?? 0, ry: el.cornerRadius ?? 0,
     });
   } else if (el.type === "ellipse") {
-    obj.set({ rx: el.width / 2, ry: el.height / 2, fill: el.fill ?? "#6366f1", stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0 });
+    obj.set({
+      rx: el.width / 2, ry: el.height / 2,
+      scaleX: 1, scaleY: 1,
+      fill: el.fill ?? "#6366f1",
+      stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
+    });
   } else if (el.type === "text") {
-    obj.set({ width: el.width, fill: el.fontColor ?? "#111111", fontSize: el.fontSize ?? 16, fontWeight: el.fontWeight ?? "400", fontFamily: el.fontFamily ?? "Inter", text: el.content ?? "" });
+    obj.set({
+      width: el.width,
+      fill: el.fontColor ?? "#111111",
+      fontSize: el.fontSize ?? 16,
+      fontWeight: el.fontWeight ?? "400",
+      fontFamily: el.fontFamily ?? "Inter",
+      text: el.content ?? "",
+    });
   }
 }
 
@@ -155,6 +171,7 @@ export default function DesignCanvas() {
 
   // Drawing state
   const drawRef = useRef(false);
+  const drawToolRef = useRef<string>("");  // track type being drawn (not rx check)
   const startPt = useRef({ x: 0, y: 0 });
   const previewObj = useRef<FObj | null>(null);
 
@@ -163,6 +180,9 @@ export default function DesignCanvas() {
   const lastMouse = useRef({ x: 0, y: 0 });
   // when true, pan came from direct mouse drag — skip store-driven re-apply
   const panDirtyRef = useRef(false);
+
+  // Deselect sync — prevents selection:cleared → setSelectedIds([]) → effect loop
+  const deselectingRef = useRef(false);
 
   // Reactive values for CSS grid + status bar only
   const { zoom, panX, panY, showGrid, selectedIds, elements, order, activeTool } = useCanvasStore();
@@ -203,7 +223,7 @@ export default function DesignCanvas() {
         }
         if (tool === "select") return;
 
-        const pt = opt.scenePoint;
+        const pt: { x: number; y: number } = opt.scenePoint ?? canvas.getPointer(opt.e);
         if (!pt) return;
 
         if (tool === "text") {
@@ -217,6 +237,7 @@ export default function DesignCanvas() {
         canvas.discardActiveObject();
         startPt.current = { x: pt.x, y: pt.y };
         drawRef.current = true;
+        drawToolRef.current = tool;
 
         const isFrame = tool === "frame";
         let shape: FObj | null = null;
@@ -242,13 +263,13 @@ export default function DesignCanvas() {
           return;
         }
         if (!drawRef.current || !previewObj.current) return;
-        const pt = opt.scenePoint;
+        const pt: { x: number; y: number } | undefined = opt.scenePoint ?? canvas.getPointer(opt.e);
         if (!pt) return;
         const { x: sx, y: sy } = startPt.current;
         const w = Math.abs(pt.x - sx), h = Math.abs(pt.y - sy);
         const left = Math.min(pt.x, sx), top = Math.min(pt.y, sy);
         const shape = previewObj.current;
-        if (shape.rx !== undefined) {
+        if (drawToolRef.current === "ellipse") {
           shape.set({ left, top, rx: Math.max(1, w / 2), ry: Math.max(1, h / 2) });
         } else {
           shape.set({ left, top, width: Math.max(1, w), height: Math.max(1, h) });
@@ -273,12 +294,13 @@ export default function DesignCanvas() {
 
         if (!drawRef.current || !previewObj.current) return;
         drawRef.current = false;
+        const drawnTool = drawToolRef.current;
+        drawToolRef.current = "";
         const shape = previewObj.current;
         previewObj.current = null;
         canvas.remove(shape);
 
-        // Read dimensions directly — getBoundingRect() can return stale cached values
-        const isEllipse = shape.rx !== undefined;
+        const isEllipse = drawnTool === "ellipse";
         const shapeW = isEllipse ? (shape.rx ?? 1) * 2 : (shape.width ?? 1);
         const shapeH = isEllipse ? (shape.ry ?? 1) * 2 : (shape.height ?? 1);
         const shapeX = shape.left ?? 0;
@@ -301,13 +323,21 @@ export default function DesignCanvas() {
         useCanvasStore.getState().setSelectedIds((e.selected ?? []).map((o) => o.motifId).filter(Boolean) as string[]);
       });
       canvas.on("selection:cleared", () => {
-        useCanvasStore.getState().setSelectedIds([]);
+        if (!deselectingRef.current) {
+          useCanvasStore.getState().setSelectedIds([]);
+        }
       });
       canvas.on("object:modified", (e: { target?: FObj }) => {
         const obj = e.target;
         if (!obj?.motifId) return;
         const s = useCanvasStore.getState();
-        s.updateElement(obj.motifId, { x: Math.round(obj.left ?? 0), y: Math.round(obj.top ?? 0), width: Math.round(obj.getScaledWidth()), height: Math.round(obj.getScaledHeight()), rotation: Math.round(obj.angle ?? 0) });
+        s.updateElement(obj.motifId, {
+          x: Math.round(obj.left ?? 0),
+          y: Math.round(obj.top ?? 0),
+          width: Math.round(obj.getScaledWidth()),
+          height: Math.round(obj.getScaledHeight()),
+          rotation: Math.round(obj.angle ?? 0),
+        });
         s.pushHistory();
       });
 
@@ -345,12 +375,21 @@ export default function DesignCanvas() {
     const c = fabricRef.current;
     if (!c || panDirtyRef.current) return;
     c.setZoom(zoom);
-    // absolutePan in Fabric v6 sets vpt[4]=x, vpt[5]=y directly
-    // To place canvas origin at screen(-panX*zoom, -panY*zoom):
-    //   scene point (0,0) → screen (vpt[4], vpt[5]) = (-panX*zoom, -panY*zoom)
     c.absolutePan({ x: -panX * zoom, y: -panY * zoom } as never);
     c.renderAll();
   }, [zoom, panX, panY]);
+
+  // ── selectedIds → Fabric deselect sync ─────────────────────────────────────
+  useEffect(() => {
+    const c = fabricRef.current;
+    if (!c || !readyRef.current) return;
+    if (selectedIds.length === 0) {
+      deselectingRef.current = true;
+      c.discardActiveObject();
+      c.renderAll();
+      deselectingRef.current = false;
+    }
+  }, [selectedIds]);
 
   // ── Tool cursor/mode ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -382,7 +421,6 @@ export default function DesignCanvas() {
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
       if (e.ctrlKey || e.metaKey) {
-        // Pinch-to-zoom: exponential factor, centered on cursor
         const factor = Math.pow(1.001, -e.deltaY);
         const newZoom = Math.min(32, Math.max(0.05, s.zoom * factor));
         const sceneCursorX = cursorX / s.zoom - s.panX;
@@ -397,10 +435,38 @@ export default function DesignCanvas() {
     return () => container.removeEventListener("wheel", onWheel);
   }, []);
 
+  // ── Reset stuck panning/drawing state on window blur ───────────────────────
+  useEffect(() => {
+    const onBlur = () => {
+      if (panningRef.current) {
+        panningRef.current = false;
+        panDirtyRef.current = false;
+        const c = fabricRef.current;
+        if (c) {
+          c.defaultCursor = "grab";
+          c.hoverCursor = "grab";
+          const vpt: number[] = c.viewportTransform;
+          const z: number = c.getZoom();
+          useCanvasStore.getState().setPan(vpt[4] / z, vpt[5] / z);
+        }
+      }
+      if (drawRef.current) {
+        drawRef.current = false;
+        drawToolRef.current = "";
+        const c = fabricRef.current;
+        if (c && previewObj.current) {
+          c.remove(previewObj.current);
+          previewObj.current = null;
+          c.renderAll();
+        }
+      }
+    };
+    window.addEventListener("blur", onBlur);
+    return () => window.removeEventListener("blur", onBlur);
+  }, []);
+
   // ── CSS grid (matches Fabric viewport transform) ────────────────────────────
-  // vpt[4] = -panX*zoom, so grid offset x = -panX*zoom mod gridPx
   const gridPx = 20 * zoom;
-  // vpt[4] = panX*zoom; grid offset aligns with vpt
   const gridOx = ((panX * zoom) % gridPx + gridPx) % gridPx;
   const gridOy = ((panY * zoom) % gridPx + gridPx) % gridPx;
   const gridStyle: CSSProperties = showGrid
@@ -420,7 +486,6 @@ export default function DesignCanvas() {
       className="w-full h-full relative overflow-hidden"
       style={{ backgroundColor: "var(--canvas-bg)", ...gridStyle }}
     >
-      {/* Canvas — NOT pointer-events-none, Fabric handles native selection/drag */}
       <canvas ref={canvasElRef} className="absolute inset-0" />
 
       {/* Status bar */}

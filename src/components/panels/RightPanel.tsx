@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   SlidersHorizontal,
   Palette,
@@ -29,21 +29,43 @@ function NumberInput({
   label,
   value,
   onChange,
+  onCommit,
   unit = "px",
 }: {
   label: string;
   value: number;
   onChange: (val: number) => void;
+  onCommit?: () => void;
   unit?: string;
 }) {
+  const [local, setLocal] = useState(String(Math.round(value)));
+
+  useEffect(() => {
+    setLocal(String(Math.round(value)));
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const n = parseFloat(raw);
+    if (!isNaN(n)) onChange(n);
+    onCommit?.();
+  };
+
   return (
     <div className="flex flex-col gap-1">
       <label className="text-2xs text-text-tertiary">{label}</label>
       <div className="flex items-center bg-surface-subtle border border-surface-border rounded px-1.5 py-1 gap-1">
         <input
           type="number"
-          value={Math.round(value)}
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          value={local}
+          onChange={(e) => {
+            setLocal(e.target.value);
+            const n = parseFloat(e.target.value);
+            if (!isNaN(n)) onChange(n);
+          }}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { commit((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).blur(); }
+          }}
           className="w-full bg-transparent text-xs text-text-primary outline-none"
         />
         {unit && <span className="text-2xs text-text-tertiary flex-shrink-0">{unit}</span>}
@@ -107,10 +129,12 @@ function PropertiesPanel() {
   const el = elements[selectedIds[0]];
   if (!el) return null;
 
+  // Live update (no history) — called on every keystroke/drag
   const update = (updates: Parameters<typeof updateElement>[1]) => {
     updateElement(el.id, updates);
-    pushHistory();
   };
+  // Commit to history — called on blur / Enter / select change
+  const commit = () => pushHistory();
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -120,6 +144,7 @@ function PropertiesPanel() {
           className="input-sm"
           value={el.name}
           onChange={(e) => updateElement(el.id, { name: e.target.value })}
+          onBlur={commit}
         />
       </div>
 
@@ -127,14 +152,14 @@ function PropertiesPanel() {
       <div className="px-3 py-2 border-b border-surface-border">
         <p className="text-2xs text-text-tertiary mb-2 font-medium uppercase tracking-wider">Position & Size</p>
         <div className="grid grid-cols-2 gap-2">
-          <NumberInput label="X" value={el.x} onChange={(v) => update({ x: v })} />
-          <NumberInput label="Y" value={el.y} onChange={(v) => update({ y: v })} />
-          <NumberInput label="W" value={el.width} onChange={(v) => update({ width: Math.max(1, v) })} />
-          <NumberInput label="H" value={el.height} onChange={(v) => update({ height: Math.max(1, v) })} />
+          <NumberInput label="X" value={el.x} onChange={(v) => update({ x: v })} onCommit={commit} />
+          <NumberInput label="Y" value={el.y} onChange={(v) => update({ y: v })} onCommit={commit} />
+          <NumberInput label="W" value={el.width} onChange={(v) => update({ width: Math.max(1, v) })} onCommit={commit} />
+          <NumberInput label="H" value={el.height} onChange={(v) => update({ height: Math.max(1, v) })} onCommit={commit} />
         </div>
         <div className="grid grid-cols-2 gap-2 mt-2">
-          <NumberInput label="Rotation" value={el.rotation} onChange={(v) => update({ rotation: v })} unit="°" />
-          <NumberInput label="Opacity" value={(el.opacity ?? 1) * 100} onChange={(v) => update({ opacity: Math.min(1, Math.max(0, v / 100)) })} unit="%" />
+          <NumberInput label="Rotation" value={el.rotation} onChange={(v) => update({ rotation: v })} onCommit={commit} unit="°" />
+          <NumberInput label="Opacity" value={(el.opacity ?? 1) * 100} onChange={(v) => update({ opacity: Math.min(1, Math.max(0, v / 100)) })} onCommit={commit} unit="%" />
         </div>
       </div>
 
@@ -145,7 +170,7 @@ function PropertiesPanel() {
           <ColorInput
             label="Color"
             value={el.fill ?? "#6366f1"}
-            onChange={(v) => update({ fill: v })}
+            onChange={(v) => { update({ fill: v }); commit(); }}
           />
 
           {/* Token picker */}
@@ -176,12 +201,13 @@ function PropertiesPanel() {
             <ColorInput
               label="Color"
               value={el.stroke ?? "#000000"}
-              onChange={(v) => update({ stroke: v })}
+              onChange={(v) => { update({ stroke: v }); commit(); }}
             />
             <NumberInput
               label="Width"
               value={el.strokeWidth ?? 0}
               onChange={(v) => update({ strokeWidth: Math.max(0, v) })}
+              onCommit={commit}
             />
           </div>
         </div>
@@ -195,6 +221,7 @@ function PropertiesPanel() {
             label="Radius"
             value={el.cornerRadius ?? 0}
             onChange={(v) => update({ cornerRadius: Math.max(0, v) })}
+            onCommit={commit}
           />
         </div>
       )}
@@ -211,16 +238,17 @@ function PropertiesPanel() {
                 rows={3}
                 value={el.content ?? ""}
                 onChange={(e) => update({ content: e.target.value })}
+                onBlur={commit}
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <NumberInput label="Size" value={el.fontSize ?? 16} onChange={(v) => update({ fontSize: v })} />
+              <NumberInput label="Size" value={el.fontSize ?? 16} onChange={(v) => update({ fontSize: v })} onCommit={commit} />
               <div>
                 <label className="text-2xs text-text-tertiary">Weight</label>
                 <select
                   className="input-sm mt-1"
                   value={el.fontWeight ?? "400"}
-                  onChange={(e) => update({ fontWeight: e.target.value })}
+                  onChange={(e) => { update({ fontWeight: e.target.value }); commit(); }}
                 >
                   <option value="300">Light</option>
                   <option value="400">Regular</option>
@@ -233,7 +261,7 @@ function PropertiesPanel() {
             <ColorInput
               label="Color"
               value={el.fontColor ?? "#0a0a0a"}
-              onChange={(v) => update({ fontColor: v })}
+              onChange={(v) => { update({ fontColor: v }); commit(); }}
             />
           </div>
         </div>
