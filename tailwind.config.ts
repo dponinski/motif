@@ -9,14 +9,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Surface tokens
+        // Surface tokens — resolved via CSS variables for theme support
         surface: {
-          base: "#0a0a0a",
-          raised: "#111111",
-          overlay: "#181818",
-          subtle: "#1f1f1f",
-          border: "#282828",
-          "border-subtle": "#1e1e1e",
+          base: "var(--surface-base)",
+          raised: "var(--surface-raised)",
+          overlay: "var(--surface-overlay)",
+          subtle: "var(--surface-subtle)",
+          border: "var(--surface-border)",
+          "border-subtle": "var(--surface-border-subtle)",
         },
         // Accent tokens
         accent: {
@@ -25,12 +25,12 @@ const config: Config = {
           muted: "rgba(99,102,241,0.12)",
           border: "rgba(99,102,241,0.3)",
         },
-        // Text tokens
+        // Text tokens — resolved via CSS variables for theme support
         text: {
-          primary: "#f0f0f0",
-          secondary: "#888888",
-          tertiary: "#555555",
-          inverse: "#0a0a0a",
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          tertiary: "var(--text-tertiary)",
+          inverse: "var(--text-inverse)",
         },
       },
       fontFamily: {

@@ -4,8 +4,42 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables ─────────────────────────────────────────────────────── */
+
 :root {
+  --surface-base: #0a0a0a;
+  --surface-raised: #111111;
+  --surface-overlay: #181818;
+  --surface-subtle: #1f1f1f;
+  --surface-border: #282828;
+  --surface-border-subtle: #1e1e1e;
+  --text-primary: #f0f0f0;
+  --text-secondary: #888888;
+  --text-tertiary: #555555;
+  --text-inverse: #0a0a0a;
+  --canvas-bg: #141414;
+  --grid-line: rgba(255, 255, 255, 0.045);
+  --scrollbar-thumb: #2e2e2e;
+  --scrollbar-thumb-hover: #444;
   color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --surface-base: #f0f0f0;
+  --surface-raised: #ffffff;
+  --surface-overlay: #f7f7f7;
+  --surface-subtle: #efefef;
+  --surface-border: #e0e0e0;
+  --surface-border-subtle: #ebebeb;
+  --text-primary: #141414;
+  --text-secondary: #606060;
+  --text-tertiary: #9a9a9a;
+  --text-inverse: #ffffff;
+  --canvas-bg: #e4e4e4;
+  --grid-line: rgba(0, 0, 0, 0.055);
+  --scrollbar-thumb: #ccc;
+  --scrollbar-thumb-hover: #bbb;
+  color-scheme: light;
 }
 
 * {
@@ -16,8 +50,8 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: #0a0a0a;
-  color: #f0f0f0;
+  background: var(--surface-base);
+  color: var(--text-primary);
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
@@ -35,12 +69,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Panel styles */

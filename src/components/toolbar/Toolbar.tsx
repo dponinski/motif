@@ -14,7 +14,9 @@ import {
   Grid,
   Sparkles,
   Download,
-  ChevronDown,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
 import Link from "next/link";
 import { cn, formatZoom } from "@/lib/utils";
@@ -22,6 +24,7 @@ import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useAIStore } from "@/store/ai";
 import { useDesignSystemStore } from "@/store/design-system";
 import { downloadString } from "@/lib/utils";
+import { useThemeStore, type ThemeMode } from "@/store/theme";
 
 const tools: { id: Tool; icon: React.ReactNode; label: string; key: string }[] = [
   { id: "select", icon: <MousePointer2 size={14} />, label: "Select (V)", key: "V" },
@@ -37,6 +40,13 @@ export default function Toolbar() {
     useCanvasStore();
   const { setOpen: setAIOpen, isOpen: aiOpen } = useAIStore();
   const { exportTokens } = useDesignSystemStore();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
+
+  const themeOptions: { mode: ThemeMode; icon: React.ReactNode; label: string }[] = [
+    { mode: "light", icon: <Sun size={12} />, label: "Light" },
+    { mode: "system", icon: <Monitor size={12} />, label: "System" },
+    { mode: "dark", icon: <Moon size={12} />, label: "Dark" },
+  ];
 
   const handleExport = () => {
     downloadString(exportTokens(), "motif-tokens.json", "application/json");
@@ -137,6 +147,29 @@ export default function Toolbar() {
         <Download size={12} />
         <span>Export</span>
       </button>
+
+      <div className="w-px h-5 bg-surface-border" />
+
+      {/* Theme toggle */}
+      <div className="flex items-center gap-0.5 bg-surface-subtle rounded p-0.5">
+        {themeOptions.map(({ mode, icon, label }) => (
+          <button
+            key={mode}
+            title={label}
+            onClick={() => setThemeMode(mode)}
+            className={cn(
+              "w-6 h-6 flex items-center justify-center rounded transition-colors",
+              themeMode === mode
+                ? "bg-surface-raised text-text-primary shadow-sm"
+                : "text-text-tertiary hover:text-text-secondary"
+            )}
+          >
+            {icon}
+          </button>
+        ))}
+      </div>
+
+      <div className="w-px h-5 bg-surface-border" />
 
       {/* AI button */}
       <button
