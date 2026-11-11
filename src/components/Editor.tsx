@@ -11,7 +11,7 @@ import { useFilesStore } from "@/store/files";
 import { useAIStore } from "@/store/ai";
 
 export default function Editor({ fileId }: { fileId?: string }) {
-  const { undo, redo, deleteSelected, duplicateSelected, setActiveTool } =
+  const { undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool } =
     useCanvasStore();
   const { setOpen: setAIOpen, isOpen: aiOpen } = useAIStore();
 
@@ -51,6 +51,12 @@ export default function Editor({ fileId }: { fileId?: string }) {
       } else if (ctrl && e.key === "d") {
         e.preventDefault();
         duplicateSelected();
+      } else if (ctrl && e.key === "c") {
+        e.preventDefault();
+        copySelected();
+      } else if (ctrl && e.key === "v") {
+        e.preventDefault();
+        pasteClipboard();
       } else if (ctrl && (e.key === "=" || e.key === "+")) {
         e.preventDefault();
         const s = useCanvasStore.getState();
@@ -76,7 +82,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
       } else if (e.key === "Escape") {
         setActiveTool("select");
         useCanvasStore.getState().setSelectedIds([]);
-      } else if (e.key === "v") {
+      } else if (e.key === "v" && !ctrl) {
         setActiveTool("select");
       } else if (e.key === "r") {
         setActiveTool("rectangle");
@@ -93,7 +99,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
         setAIOpen(!aiOpen);
       }
     },
-    [undo, redo, deleteSelected, duplicateSelected, setActiveTool, setAIOpen, aiOpen]
+    [undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool, setAIOpen, aiOpen]
   );
 
   const handleKeyUp = useCallback(

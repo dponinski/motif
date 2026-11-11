@@ -56,6 +56,7 @@ interface CanvasStore {
   showGrid: boolean;
   snapToGrid: boolean;
   gridSize: number;
+  clipboard: CanvasElement[];
 
   setActiveTool: (tool: Tool) => void;
   setZoom: (zoom: number) => void;
@@ -67,6 +68,9 @@ interface CanvasStore {
   updateElements: (updates: Record<string, Partial<CanvasElement>>) => void;
   deleteSelected: () => void;
   duplicateSelected: () => void;
+  copySelected: () => void;
+  pasteClipboard: () => void;
+  reparentElement: (id: string, newParentId: string | null, relX?: number, relY?: number) => void;
   bringForward: (id: string) => void;
   sendBackward: (id: string) => void;
   bringToFront: (id: string) => void;
@@ -172,6 +176,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   showGrid: true,
   snapToGrid: false,
   gridSize: 8,
+  clipboard: [],
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setZoom: (zoom) => set({ zoom: Math.min(256, Math.max(0.02, zoom)) }),
@@ -191,11 +196,21 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   addElement: (element) => {
     const id = nanoid(8);
     const newEl: CanvasElement = { ...element, id };
-    set((state) => ({
-      elements: { ...state.elements, [id]: newEl },
-      order: newEl.parentId ? state.order : [...state.order, id],
-      selectedIds: [id],
-    }));
+    set((state) => {
+      const nextElements: Record<string, CanvasElement> = { ...state.elements, [id]: newEl };
+      // Register with parent's children list
+      if (newEl.parentId && state.elements[newEl.parentId]) {
+        nextElements[newEl.parentId] = {
+          ...state.elements[newEl.parentId],
+          children: [...(state.elements[newEl.parentId].children ?? []), id],
+        };
+      }
+      return {
+        elements: nextElements,
+        order: newEl.parentId ? state.order : [...state.order, id],
+        selectedIds: [id],
+      };
+    });
     get().pushHistory();
     return id;
   },
@@ -267,6 +282,66 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }
 
     set({ elements: newElements, order: newOrder, selectedIds: newSelectedIds });
+    get().pushHistory();
+  },
+
+  copySelected: () => {
+    const { selectedIds, elements } = get();
+    if (!selectedIds.length) return;
+    set({ clipboard: selectedIds.map((id) => elements[id]).filter(Boolean) as CanvasElement[] });
+  },
+
+  pasteClipboard: () => {
+    const { clipboard, elements, order } = get();
+    if (!clipboard.length) return;
+    const newElements = { ...elements };
+    const newOrder = [...order];
+    const newSelectedIds: string[] = [];
+    for (const el of clipboard) {
+      const newId = nanoid(8);
+      newElements[newId] = {
+        ...el,
+        id: newId,
+        x: el.x + 20,
+        y: el.y + 20,
+        parentId: undefined,
+        children: el.type === "frame" ? [] : undefined,
+      };
+      newOrder.push(newId);
+      newSelectedIds.push(newId);
+    }
+    set({ elements: newElements, order: newOrder, selectedIds: newSelectedIds });
+    get().pushHistory();
+  },
+
+  reparentElement: (id, newParentId, relX, relY) => {
+    set((state) => {
+      const el = state.elements[id];
+      if (!el) return {};
+      const nextElements = { ...state.elements };
+      let nextOrder = [...state.order];
+      // Remove from old parent or root order
+      if (el.parentId && nextElements[el.parentId]) {
+        nextElements[el.parentId] = {
+          ...nextElements[el.parentId],
+          children: nextElements[el.parentId].children?.filter((c) => c !== id) ?? [],
+        };
+      } else {
+        nextOrder = nextOrder.filter((i) => i !== id);
+      }
+      // Add to new parent or root
+      if (newParentId && nextElements[newParentId]) {
+        nextElements[newParentId] = {
+          ...nextElements[newParentId],
+          children: [...(nextElements[newParentId].children ?? []), id],
+        };
+        nextElements[id] = { ...el, parentId: newParentId, x: relX ?? el.x, y: relY ?? el.y };
+      } else {
+        nextElements[id] = { ...el, parentId: undefined, x: relX ?? el.x, y: relY ?? el.y };
+        nextOrder.push(id);
+      }
+      return { elements: nextElements, order: nextOrder };
+    });
     get().pushHistory();
   },
 
