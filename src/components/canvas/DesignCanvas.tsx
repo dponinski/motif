@@ -175,7 +175,7 @@ export default function DesignCanvas() {
     let alive = true;
 
     (async () => {
-      const { Canvas } = await fab();
+      const { Canvas, Rect, Ellipse } = await fab();
       if (!alive || fabricRef.current) return;
 
       const { width, height } = container.getBoundingClientRect();
@@ -190,8 +190,8 @@ export default function DesignCanvas() {
       fabricRef.current = canvas;
       readyRef.current = true;
 
-      // mouse:down
-      canvas.on("mouse:down", async (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
+      // mouse:down — synchronous so previewObj is set before mouse:up can fire
+      canvas.on("mouse:down", (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
         const tool = useCanvasStore.getState().activeTool;
 
         if (tool === "hand") {
@@ -218,7 +218,6 @@ export default function DesignCanvas() {
         startPt.current = { x: pt.x, y: pt.y };
         drawRef.current = true;
 
-        const { Rect, Ellipse } = await fab();
         const isFrame = tool === "frame";
         let shape: FObj | null = null;
         if (tool === "rectangle" || isFrame) {
