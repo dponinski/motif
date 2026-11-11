@@ -1,5 +1,5 @@
-import ClientRoot from "@/components/ClientRoot";
+import DashboardRoot from "@/components/dashboard/DashboardRoot";
 
 export default function Home() {
-  return <ClientRoot />;
+  return <DashboardRoot />;
 }

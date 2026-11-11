@@ -16,6 +16,7 @@ import {
   Download,
   ChevronDown,
 } from "lucide-react";
+import Link from "next/link";
 import { cn, formatZoom } from "@/lib/utils";
 import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useAIStore } from "@/store/ai";
@@ -43,13 +44,17 @@ export default function Toolbar() {
 
   return (
     <header className="flex items-center h-11 border-b border-surface-border bg-surface-raised px-3 gap-2 flex-shrink-0 z-20">
-      {/* Logo */}
-      <div className="flex items-center gap-2 mr-3">
+      {/* Logo — links back to dashboard */}
+      <Link
+        href="/"
+        className="flex items-center gap-2 mr-3 opacity-90 hover:opacity-100 transition-opacity"
+        title="Back to files"
+      >
         <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
           <span className="text-white text-xs font-bold leading-none">M</span>
         </div>
         <span className="text-sm font-semibold text-text-primary">Motif</span>
-      </div>
+      </Link>
 
       <div className="w-px h-5 bg-surface-border" />
 
