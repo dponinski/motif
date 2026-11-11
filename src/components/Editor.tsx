@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import Toolbar from "./toolbar/Toolbar";
 import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import AIPanel from "./panels/AIPanel";
 import DesignCanvas from "./canvas/DesignCanvas";
-import { useCanvasStore } from "@/store/canvas";
+import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useAIStore } from "@/store/ai";
 
 export default function Editor() {
-  const { undo, redo, deleteSelected, duplicateSelected, activeTool, setActiveTool } =
+  const { undo, redo, deleteSelected, duplicateSelected, setActiveTool } =
     useCanvasStore();
   const { setOpen: setAIOpen, isOpen: aiOpen } = useAIStore();
+
+  // Spacebar temporary-pan state (not React state — avoids re-renders)
+  const spaceDown = useRef(false);
+  const toolBeforeSpace = useRef<Tool>("select");
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -23,6 +27,15 @@ export default function Editor() {
         target.isContentEditable;
 
       if (isInput) return;
+
+      // Spacebar: hold to pan, release to restore
+      if (e.key === " " && !e.repeat && !spaceDown.current) {
+        e.preventDefault();
+        spaceDown.current = true;
+        toolBeforeSpace.current = useCanvasStore.getState().activeTool;
+        setActiveTool("hand");
+        return;
+      }
 
       const ctrl = e.metaKey || e.ctrlKey;
 
@@ -57,10 +70,27 @@ export default function Editor() {
     [undo, redo, deleteSelected, duplicateSelected, setActiveTool, setAIOpen, aiOpen]
   );
 
+  const handleKeyUp = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === " " && spaceDown.current) {
+        spaceDown.current = false;
+        // Only restore if still in hand mode (user may have pressed H explicitly)
+        if (useCanvasStore.getState().activeTool === "hand") {
+          setActiveTool(toolBeforeSpace.current);
+        }
+      }
+    },
+    [setActiveTool]
+  );
+
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [handleKeyDown, handleKeyUp]);
 
   // Push initial history entry
   useEffect(() => {
