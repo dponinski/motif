@@ -1,636 +1,419 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, CSSProperties } from "react";
 import { useCanvasStore, type CanvasElement } from "@/store/canvas";
-import { cn } from "@/lib/utils";
 
-// Fabric.js is loaded dynamically to avoid SSR issues
-type FabricCanvas = import("fabric").Canvas;
-type FabricObject = import("fabric").FabricObject;
+// ── Fabric types ──────────────────────────────────────────────────────────────
 
-const CANVAS_BG = "#141414";
-const GRID_COLOR = "rgba(255,255,255,0.04)";
-const FRAME_BG = "#ffffff";
+type FObj = {
+  motifId?: string;
+  left?: number;
+  top?: number;
+  angle?: number;
+  opacity?: number;
+  fill?: string | null;
+  stroke?: string | null;
+  strokeWidth?: number;
+  rx?: number;
+  ry?: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  fontSize?: number;
+  fontWeight?: string | number;
+  fontFamily?: string;
+  selectable?: boolean;
+  evented?: boolean;
+  set(props: Record<string, unknown>): void;
+  getBoundingRect(): { left: number; top: number; width: number; height: number };
+  getScaledWidth(): number;
+  getScaledHeight(): number;
+};
 
-export default function DesignCanvas() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fabricRef = useRef<FabricCanvas | null>(null);
-  const drawingRef = useRef(false);
-  const startPtRef = useRef({ x: 0, y: 0 });
-  const activeShapeRef = useRef<FabricObject | null>(null);
-  const isPanningRef = useRef(false);
-  const lastPanRef = useRef({ x: 0, y: 0 });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FCanvas = any;
 
-  const {
-    activeTool,
-    zoom,
-    panX,
-    panY,
-    elements,
-    order,
-    selectedIds,
-    showGrid,
-    setSelectedIds,
-    addElement,
-    updateElement,
-    setActiveTool,
-    setPan,
-    pushHistory,
-  } = useCanvasStore();
+type FabricMod = {
+  Canvas: new (el: HTMLCanvasElement, opts: Record<string, unknown>) => FCanvas;
+  Rect: new (opts: Record<string, unknown>) => FObj;
+  Ellipse: new (opts: Record<string, unknown>) => FObj;
+  Textbox: new (text: string, opts: Record<string, unknown>) => FObj;
+};
 
-  // Initialize fabric canvas
-  useEffect(() => {
-    if (!canvasRef.current || !containerRef.current || fabricRef.current) return;
-
-    const container = containerRef.current;
-
-    import("fabric").then(({ Canvas }) => {
-      if (!canvasRef.current || fabricRef.current) return;
-
-      const canvas = new Canvas(canvasRef.current, {
-        width: container.clientWidth,
-        height: container.clientHeight,
-        backgroundColor: CANVAS_BG,
-        selection: true,
-        preserveObjectStacking: true,
-        stopContextMenu: true,
-      });
-
-      fabricRef.current = canvas;
-
-      // Handle selection
-      canvas.on("selection:created", (e) => {
-        const ids = (e.selected || [])
-          .map((o: FabricObject) => (o as FabricObject & { motifId?: string }).motifId)
-          .filter(Boolean) as string[];
-        setSelectedIds(ids);
-      });
-
-      canvas.on("selection:updated", (e) => {
-        const ids = (e.selected || [])
-          .map((o: FabricObject) => (o as FabricObject & { motifId?: string }).motifId)
-          .filter(Boolean) as string[];
-        setSelectedIds(ids);
-      });
-
-      canvas.on("selection:cleared", () => {
-        setSelectedIds([]);
-      });
-
-      canvas.on("object:modified", (e) => {
-        const obj = e.target as FabricObject & { motifId?: string };
-        if (!obj?.motifId) return;
-
-        const bounds = obj.getBoundingRect();
-        updateElement(obj.motifId, {
-          x: Math.round(obj.left ?? 0),
-          y: Math.round(obj.top ?? 0),
-          width: Math.round(bounds.width),
-          height: Math.round(bounds.height),
-          rotation: Math.round(obj.angle ?? 0),
-        });
-        pushHistory();
-      });
-
-      // Render grid on background
-      renderGrid(canvas, container.clientWidth, container.clientHeight);
-    });
-
-    return () => {
-      if (fabricRef.current) {
-        fabricRef.current.dispose();
-        fabricRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Resize handler
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      if (fabricRef.current) {
-        fabricRef.current.setWidth(width);
-        fabricRef.current.setHeight(height);
-        renderGrid(fabricRef.current, width, height);
-        fabricRef.current.renderAll();
-      }
-    });
-
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
-
-  // Sync elements to fabric canvas
-  useEffect(() => {
-    const canvas = fabricRef.current;
-    if (!canvas) return;
-
-    syncElementsToCanvas(canvas, elements, order);
-  }, [elements, order]);
-
-  // Sync zoom/pan
-  useEffect(() => {
-    const canvas = fabricRef.current;
-    if (!canvas) return;
-
-    canvas.setZoom(zoom);
+let _fab: FabricMod | null = null;
+async function fab(): Promise<FabricMod> {
+  if (!_fab) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    canvas.absolutePan({ x: -panX * zoom, y: -panY * zoom } as any);
-    canvas.renderAll();
-  }, [zoom, panX, panY]);
-
-  // Sync grid visibility
-  useEffect(() => {
-    const canvas = fabricRef.current;
-    if (!canvas || !containerRef.current) return;
-    renderGrid(canvas, containerRef.current.clientWidth, containerRef.current.clientHeight);
-    canvas.renderAll();
-  }, [showGrid]);
-
-  // Handle tool-based mouse interactions
-  useEffect(() => {
-    const canvas = fabricRef.current;
-    if (!canvas) return;
-
-    canvas.isDrawingMode = false;
-
-    if (activeTool === "select") {
-      canvas.defaultCursor = "default";
-      canvas.hoverCursor = "move";
-      canvas.selection = true;
-      canvas.getObjects().forEach((o) => { o.selectable = true; o.evented = true; });
-    } else if (activeTool === "hand") {
-      canvas.defaultCursor = "grab";
-      canvas.hoverCursor = "grab";
-      canvas.selection = false;
-      canvas.getObjects().forEach((o) => { o.selectable = false; o.evented = false; });
-    } else {
-      canvas.defaultCursor = "crosshair";
-      canvas.hoverCursor = "crosshair";
-      canvas.selection = false;
-      canvas.discardActiveObject();
-      canvas.renderAll();
-    }
-  }, [activeTool]);
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      const canvas = fabricRef.current;
-      if (!canvas) return;
-
-      if (activeTool === "hand") {
-        isPanningRef.current = true;
-        lastPanRef.current = { x: e.clientX, y: e.clientY };
-        return;
-      }
-
-      if (activeTool === "select") return;
-
-      // Drawing mode
-      const rect = (e.target as HTMLElement).closest("canvas")?.getBoundingClientRect();
-      if (!rect) return;
-
-      const clientX = e.clientX - rect.left;
-      const clientY = e.clientY - rect.top;
-      const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-      const x = (clientX - vpt[4]) / zoom;
-      const y = (clientY - vpt[5]) / zoom;
-
-      startPtRef.current = { x, y };
-      drawingRef.current = true;
-
-      import("fabric").then(({ Rect, Ellipse, Textbox, Group }) => {
-        const fill =
-          activeTool === "text" ? "transparent" : activeTool === "frame" ? FRAME_BG : "#6366f1";
-
-        let shape: FabricObject;
-
-        if (activeTool === "rectangle" || activeTool === "frame") {
-          shape = new Rect({
-            left: x,
-            top: y,
-            width: 1,
-            height: 1,
-            fill,
-            stroke: activeTool === "frame" ? "#c7d2fe" : undefined,
-            strokeWidth: activeTool === "frame" ? 1 : 0,
-            selectable: false,
-            evented: false,
-          });
-        } else if (activeTool === "ellipse") {
-          shape = new Ellipse({
-            left: x,
-            top: y,
-            rx: 0,
-            ry: 0,
-            fill,
-            selectable: false,
-            evented: false,
-          });
-        } else if (activeTool === "text") {
-          // Text is placed on mouse up
-          return;
-        } else {
-          return;
-        }
-
-        canvas.add(shape);
-        activeShapeRef.current = shape;
-      });
-    },
-    [activeTool, zoom]
-  );
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      const canvas = fabricRef.current;
-      if (!canvas) return;
-
-      if (activeTool === "hand" && isPanningRef.current) {
-        const dx = e.clientX - lastPanRef.current.x;
-        const dy = e.clientY - lastPanRef.current.y;
-        lastPanRef.current = { x: e.clientX, y: e.clientY };
-        const { panX: curPanX, panY: curPanY } = useCanvasStore.getState();
-        setPan(curPanX + dx / zoom, curPanY + dy / zoom);
-        return;
-      }
-
-      if (!drawingRef.current || !activeShapeRef.current) return;
-
-      const rect = (e.target as HTMLElement).closest("canvas")?.getBoundingClientRect();
-      if (!rect) return;
-
-      const clientX = e.clientX - rect.left;
-      const clientY = e.clientY - rect.top;
-      const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-      const x = (clientX - vpt[4]) / zoom;
-      const y = (clientY - vpt[5]) / zoom;
-
-      const { x: sx, y: sy } = startPtRef.current;
-      const w = Math.abs(x - sx);
-      const h = Math.abs(y - sy);
-      const left = Math.min(x, sx);
-      const top = Math.min(y, sy);
-
-      const shape = activeShapeRef.current as FabricObject & {
-        set: (props: Record<string, unknown>) => void;
-        rx?: number;
-        ry?: number;
-      };
-
-      if ("rx" in shape) {
-        shape.set({ left, top, rx: w / 2, ry: h / 2 });
-      } else {
-        shape.set({ left, top, width: Math.max(1, w), height: Math.max(1, h) });
-      }
-
-      canvas.renderAll();
-    },
-    [activeTool, zoom, setPan]
-  );
-
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      const canvas = fabricRef.current;
-      if (!canvas) return;
-
-      if (activeTool === "hand") {
-        isPanningRef.current = false;
-        return;
-      }
-
-      if (activeTool === "text" && !drawingRef.current) {
-        const rect = (e.target as HTMLElement).closest("canvas")?.getBoundingClientRect();
-        if (!rect) return;
-        const clientX = e.clientX - rect.left;
-        const clientY = e.clientY - rect.top;
-        const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-        const x = (clientX - vpt[4]) / zoom;
-        const y = (clientY - vpt[5]) / zoom;
-
-        const id = addElement({
-          type: "text",
-          name: "Text",
-          x,
-          y,
-          width: 200,
-          height: 32,
-          fill: "transparent",
-          fontColor: "#0a0a0a",
-          content: "Type something",
-          fontSize: 16,
-          fontWeight: "400",
-          fontFamily: "Inter",
-          opacity: 1,
-          rotation: 0,
-        });
-        setActiveTool("select");
-        drawingRef.current = false;
-        return;
-      }
-
-      if (!drawingRef.current || !activeShapeRef.current) return;
-      drawingRef.current = false;
-
-      const shape = activeShapeRef.current as FabricObject & { motifId?: string };
-      activeShapeRef.current = null;
-
-      const bounds = shape.getBoundingRect();
-
-      // Minimum size check
-      if (bounds.width < 4 || bounds.height < 4) {
-        canvas.remove(shape);
-        canvas.renderAll();
-        return;
-      }
-
-      // Remove temp fabric object and add to store instead
-      canvas.remove(shape);
-
-      const typeMap: Record<string, CanvasElement["type"]> = {
-        rectangle: "rectangle",
-        frame: "frame",
-        ellipse: "ellipse",
-      };
-
-      addElement({
-        type: typeMap[activeTool] ?? "rectangle",
-        name:
-          activeTool === "frame"
-            ? "Frame"
-            : activeTool === "rectangle"
-            ? "Rectangle"
-            : "Ellipse",
-        x: Math.round(bounds.left),
-        y: Math.round(bounds.top),
-        width: Math.round(bounds.width),
-        height: Math.round(bounds.height),
-        fill: activeTool === "frame" ? FRAME_BG : "#6366f1",
-        stroke: activeTool === "frame" ? "#c7d2fe" : undefined,
-        strokeWidth: activeTool === "frame" ? 1 : 0,
-        cornerRadius: 0,
-        opacity: 1,
-        rotation: 0,
-        children: activeTool === "frame" ? [] : undefined,
-      });
-
-      setActiveTool("select");
-    },
-    [activeTool, zoom, addElement, setActiveTool]
-  );
-
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      e.preventDefault();
-      const { zoom: curZoom, panX: curPanX, panY: curPanY } = useCanvasStore.getState();
-
-      if (e.ctrlKey || e.metaKey) {
-        // Zoom
-        const delta = e.deltaY > 0 ? -0.08 : 0.08;
-        const newZoom = Math.min(8, Math.max(0.1, curZoom + delta));
-        useCanvasStore.getState().setZoom(newZoom);
-      } else {
-        // Pan
-        setPan(curPanX - e.deltaX / curZoom, curPanY - e.deltaY / curZoom);
-      }
-    },
-    [setPan]
-  );
-
-  return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "canvas-wrap w-full h-full relative overflow-hidden",
-        `tool-${activeTool}`,
-        activeTool === "hand" && isPanningRef.current && "panning"
-      )}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onWheel={handleWheel}
-    >
-      <canvas ref={canvasRef} />
-
-      {/* Zoom info overlay */}
-      <div className="absolute bottom-3 left-3 text-2xs text-text-tertiary pointer-events-none select-none">
-        {Math.round(zoom * 100)}% · {selectedIds.length > 0 ? `${selectedIds.length} selected` : ""}
-      </div>
-
-      {/* Keyboard shortcuts hint */}
-      <div className="absolute bottom-3 right-3 text-2xs text-text-tertiary pointer-events-none select-none flex items-center gap-3">
-        <span>⌘K AI</span>
-        <span>V Select</span>
-        <span>R Rect</span>
-        <span>F Frame</span>
-        <span>T Text</span>
-      </div>
-    </div>
-  );
+    _fab = await import("fabric") as any;
+  }
+  return _fab!;
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function syncElementsToCanvas(
-  canvas: FabricCanvas,
-  elements: Record<string, CanvasElement>,
-  order: string[]
-) {
-  const { Rect, Ellipse, Textbox, Circle } = await import("fabric");
-
-  // Build set of motifIds currently on canvas
-  const existing = new Map<string, FabricObject>();
-  for (const obj of canvas.getObjects()) {
-    const o = obj as FabricObject & { motifId?: string };
-    if (o.motifId) existing.set(o.motifId, obj);
-  }
-
-  const wanted = new Set<string>();
-
-  // Flatten all elements to render (in order)
-  const toRender = flattenOrder(order, elements);
-
-  for (const id of toRender) {
+function flatIds(ids: string[], elements: Record<string, CanvasElement>): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    out.push(id);
     const el = elements[id];
-    if (!el || el.visible === false) {
-      if (existing.has(id)) {
-        canvas.remove(existing.get(id)!);
-        existing.delete(id);
-      }
-      continue;
-    }
-
-    wanted.add(id);
-
-    if (existing.has(id)) {
-      // Update existing
-      updateFabricObject(existing.get(id)!, el);
-    } else {
-      // Create new
-      const obj = createFabricObject(el, { Rect, Ellipse, Textbox, Circle });
-      if (obj) {
-        (obj as FabricObject & { motifId: string }).motifId = id;
-        canvas.add(obj);
-      }
-    }
+    if (el?.children?.length) out.push(...flatIds(el.children, elements));
   }
-
-  // Remove objects no longer in elements
-  for (const [id, obj] of existing) {
-    if (!wanted.has(id)) {
-      canvas.remove(obj);
-    }
-  }
-
-  canvas.renderAll();
+  return out;
 }
 
-function flattenOrder(
-  order: string[],
-  elements: Record<string, CanvasElement>
-): string[] {
-  const result: string[] = [];
-  for (const id of order) {
-    result.push(id);
-    const el = elements[id];
-    if (el?.children?.length) {
-      result.push(...flattenOrder(el.children, elements));
-    }
-  }
-  return result;
-}
-
-function createFabricObject(
-  el: CanvasElement,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fabric: Record<string, any>
-): FabricObject | null {
-  const common = {
-    left: el.x,
-    top: el.y,
+function makeObj(el: CanvasElement, m: FabricMod): FObj | null {
+  const common: Record<string, unknown> = {
+    left: el.x, top: el.y,
     angle: el.rotation ?? 0,
     opacity: el.opacity ?? 1,
     cornerSize: 7,
     cornerColor: "#6366f1",
-    cornerStrokeColor: "white",
+    cornerStrokeColor: "#ffffff",
     transparentCorners: false,
     borderColor: "#6366f1",
     padding: 1,
+    lockScalingFlip: true,
   };
-
   if (el.type === "rectangle" || el.type === "frame") {
-    return new fabric.Rect({
+    return new m.Rect({
       ...common,
-      width: el.width,
-      height: el.height,
+      width: el.width, height: el.height,
       fill: el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1"),
-      stroke: el.stroke,
-      strokeWidth: el.strokeWidth ?? 0,
-      rx: el.cornerRadius ?? 0,
-      ry: el.cornerRadius ?? 0,
+      stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
+      rx: el.cornerRadius ?? 0, ry: el.cornerRadius ?? 0,
     });
   }
-
   if (el.type === "ellipse") {
-    return new fabric.Ellipse({
+    return new m.Ellipse({
       ...common,
-      rx: el.width / 2,
-      ry: el.height / 2,
+      rx: el.width / 2, ry: el.height / 2,
       fill: el.fill ?? "#6366f1",
-      stroke: el.stroke,
-      strokeWidth: el.strokeWidth ?? 0,
+      stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
     });
   }
-
   if (el.type === "text") {
-    return new fabric.Textbox(el.content ?? "Text", {
+    return new m.Textbox(el.content ?? "Text", {
       ...common,
       width: el.width,
-      fill: el.fontColor ?? el.fill ?? "#0a0a0a",
+      fill: el.fontColor ?? "#111111",
       fontSize: el.fontSize ?? 16,
       fontWeight: el.fontWeight ?? "400",
       fontFamily: el.fontFamily ?? "Inter",
     });
   }
-
   return null;
 }
 
-function updateFabricObject(obj: FabricObject, el: CanvasElement) {
-  const o = obj as FabricObject & {
-    set: (props: Record<string, unknown>) => void;
-    text?: string;
-    rx?: number;
-    ry?: number;
-  };
-
-  o.set({
-    left: el.x,
-    top: el.y,
-    angle: el.rotation ?? 0,
-    opacity: el.opacity ?? 1,
-    fill: el.type === "text" ? (el.fontColor ?? "#0a0a0a") : (el.fill ?? "#6366f1"),
-    stroke: el.stroke,
-    strokeWidth: el.strokeWidth ?? 0,
-  });
-
+function applyProps(obj: FObj, el: CanvasElement) {
+  obj.set({ left: el.x, top: el.y, angle: el.rotation ?? 0, opacity: el.opacity ?? 1 });
   if (el.type === "rectangle" || el.type === "frame") {
-    o.set({ width: el.width, height: el.height, rx: el.cornerRadius ?? 0, ry: el.cornerRadius ?? 0 });
-  } else if (el.type === "ellipse") {
-    o.set({ rx: el.width / 2, ry: el.height / 2 });
-  } else if (el.type === "text") {
-    o.set({
-      width: el.width,
-      fontSize: el.fontSize ?? 16,
-      fontWeight: el.fontWeight ?? "400",
-      fontFamily: el.fontFamily ?? "Inter",
+    obj.set({
+      width: el.width, height: el.height,
+      fill: el.fill ?? (el.type === "frame" ? "#ffffff" : "#6366f1"),
+      stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0,
+      rx: el.cornerRadius ?? 0, ry: el.cornerRadius ?? 0,
     });
-    if ("text" in o && o.text !== el.content) {
-      o.set({ text: el.content ?? "" });
-    }
+  } else if (el.type === "ellipse") {
+    obj.set({ rx: el.width / 2, ry: el.height / 2, fill: el.fill ?? "#6366f1", stroke: el.stroke ?? null, strokeWidth: el.strokeWidth ?? 0 });
+  } else if (el.type === "text") {
+    obj.set({ width: el.width, fill: el.fontColor ?? "#111111", fontSize: el.fontSize ?? 16, fontWeight: el.fontWeight ?? "400", fontFamily: el.fontFamily ?? "Inter", text: el.content ?? "" });
   }
 }
 
-function renderGrid(canvas: FabricCanvas, width: number, height: number) {
-  if (!useCanvasStore.getState().showGrid) {
-    canvas.backgroundColor = CANVAS_BG;
-    return;
+async function syncCanvas(c: FCanvas, elements: Record<string, CanvasElement>, order: string[]) {
+  const m = await fab();
+  const existing = new Map<string, FObj>();
+  for (const o of c.getObjects()) {
+    const obj = o as FObj;
+    if (obj.motifId) existing.set(obj.motifId, obj);
   }
-
-  // Draw grid as a background pattern using HTML canvas
-  const gridSize = 20;
-  const bgCanvas = document.createElement("canvas");
-  bgCanvas.width = width;
-  bgCanvas.height = height;
-  const ctx = bgCanvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.fillStyle = CANVAS_BG;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.strokeStyle = GRID_COLOR;
-  ctx.lineWidth = 1;
-
-  // Vertical lines
-  for (let x = 0; x < width; x += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
+  const wanted = new Set<string>();
+  for (const id of flatIds(order, elements)) {
+    const el = elements[id];
+    if (!el || el.visible === false) { if (existing.has(id)) c.remove(existing.get(id)); continue; }
+    wanted.add(id);
+    if (existing.has(id)) {
+      applyProps(existing.get(id)!, el);
+    } else {
+      const obj = makeObj(el, m);
+      if (obj) { obj.motifId = id; c.add(obj); }
+    }
   }
-
-  // Horizontal lines
-  for (let y = 0; y < height; y += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
+  for (const [id, obj] of existing) {
+    if (!wanted.has(id)) c.remove(obj);
   }
+  c.renderAll();
+}
 
-  canvas.backgroundColor = new URL(bgCanvas.toDataURL()).href;
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export default function DesignCanvas() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasElRef = useRef<HTMLCanvasElement>(null);
+  const fabricRef = useRef<FCanvas>(null);
+  const readyRef = useRef(false);
+
+  // Drawing state
+  const drawRef = useRef(false);
+  const startPt = useRef({ x: 0, y: 0 });
+  const previewObj = useRef<FObj | null>(null);
+
+  // Panning state
+  const panningRef = useRef(false);
+  const lastMouse = useRef({ x: 0, y: 0 });
+  // when true, pan came from direct mouse drag — skip store-driven re-apply
+  const panDirtyRef = useRef(false);
+
+  // Reactive values for CSS grid + status bar only
+  const { zoom, panX, panY, showGrid, selectedIds, elements, order, activeTool } = useCanvasStore();
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    const el = canvasElRef.current;
+    if (!container || !el || fabricRef.current) return;
+    let alive = true;
+
+    (async () => {
+      const { Canvas } = await fab();
+      if (!alive || fabricRef.current) return;
+
+      const { width, height } = container.getBoundingClientRect();
+      const canvas = new Canvas(el, {
+        width: Math.max(width, 100),
+        height: Math.max(height, 100),
+        backgroundColor: "transparent",
+        selection: true,
+        preserveObjectStacking: true,
+        stopContextMenu: true,
+      });
+      fabricRef.current = canvas;
+      readyRef.current = true;
+
+      // mouse:down
+      canvas.on("mouse:down", async (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
+        const tool = useCanvasStore.getState().activeTool;
+
+        if (tool === "hand") {
+          panningRef.current = true;
+          lastMouse.current = { x: opt.e.clientX, y: opt.e.clientY };
+          canvas.defaultCursor = "grabbing";
+          canvas.hoverCursor = "grabbing";
+          return;
+        }
+        if (tool === "select") return;
+
+        const pt = opt.scenePoint;
+        if (!pt) return;
+
+        if (tool === "text") {
+          const { addElement, setActiveTool } = useCanvasStore.getState();
+          addElement({ type: "text", name: "Text", x: Math.round(pt.x), y: Math.round(pt.y), width: 220, height: 32, fill: "transparent", fontColor: "#111111", content: "Type something", fontSize: 16, fontWeight: "400", fontFamily: "Inter", opacity: 1, rotation: 0 });
+          setActiveTool("select");
+          return;
+        }
+
+        canvas.selection = false;
+        canvas.discardActiveObject();
+        startPt.current = { x: pt.x, y: pt.y };
+        drawRef.current = true;
+
+        const { Rect, Ellipse } = await fab();
+        const isFrame = tool === "frame";
+        let shape: FObj | null = null;
+        if (tool === "rectangle" || isFrame) {
+          shape = new Rect({ left: pt.x, top: pt.y, width: 1, height: 1, fill: isFrame ? "rgba(255,255,255,0.08)" : "#6366f1", stroke: "#6366f1", strokeWidth: 1, selectable: false, evented: false });
+        } else if (tool === "ellipse") {
+          shape = new Ellipse({ left: pt.x, top: pt.y, rx: 1, ry: 1, fill: "#6366f1", selectable: false, evented: false });
+        }
+        if (shape) { canvas.add(shape); previewObj.current = shape; canvas.renderAll(); }
+      });
+
+      // mouse:move
+      canvas.on("mouse:move", (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
+        if (panningRef.current) {
+          const dx = opt.e.clientX - lastMouse.current.x;
+          const dy = opt.e.clientY - lastMouse.current.y;
+          lastMouse.current = { x: opt.e.clientX, y: opt.e.clientY };
+          const vpt: number[] = canvas.viewportTransform;
+          vpt[4] += dx;
+          vpt[5] += dy;
+          panDirtyRef.current = true;
+          canvas.requestRenderAll();
+          return;
+        }
+        if (!drawRef.current || !previewObj.current) return;
+        const pt = opt.scenePoint;
+        if (!pt) return;
+        const { x: sx, y: sy } = startPt.current;
+        const w = Math.abs(pt.x - sx), h = Math.abs(pt.y - sy);
+        const left = Math.min(pt.x, sx), top = Math.min(pt.y, sy);
+        const shape = previewObj.current;
+        if (shape.rx !== undefined) {
+          shape.set({ left, top, rx: Math.max(1, w / 2), ry: Math.max(1, h / 2) });
+        } else {
+          shape.set({ left, top, width: Math.max(1, w), height: Math.max(1, h) });
+        }
+        canvas.requestRenderAll();
+      });
+
+      // mouse:up
+      canvas.on("mouse:up", () => {
+        const tool = useCanvasStore.getState().activeTool;
+
+        if (panningRef.current) {
+          panningRef.current = false;
+          canvas.defaultCursor = "grab";
+          canvas.hoverCursor = "grab";
+          panDirtyRef.current = false;
+          const vpt: number[] = canvas.viewportTransform;
+          const z: number = canvas.getZoom();
+          // vpt[4] = panX * zoom  (absolutePan sets vpt[4] = -(-panX*zoom) = panX*zoom)
+          useCanvasStore.getState().setPan(vpt[4] / z, vpt[5] / z);
+          return;
+        }
+
+        if (!drawRef.current || !previewObj.current) return;
+        drawRef.current = false;
+        const shape = previewObj.current;
+        previewObj.current = null;
+        canvas.remove(shape);
+
+        const b = shape.getBoundingRect();
+        if (b.width < 4 || b.height < 4) { canvas.renderAll(); return; }
+
+        const isFrame = tool === "frame";
+        const typeMap: Record<string, CanvasElement["type"]> = { rectangle: "rectangle", frame: "frame", ellipse: "ellipse" };
+        const { addElement, setActiveTool } = useCanvasStore.getState();
+        addElement({ type: typeMap[tool] ?? "rectangle", name: isFrame ? "Frame" : tool === "rectangle" ? "Rectangle" : "Ellipse", x: Math.round(b.left), y: Math.round(b.top), width: Math.round(b.width), height: Math.round(b.height), fill: isFrame ? "#ffffff" : "#6366f1", stroke: isFrame ? "#6366f1" : undefined, strokeWidth: isFrame ? 1 : 0, cornerRadius: 0, opacity: 1, rotation: 0, children: isFrame ? [] : undefined });
+        setActiveTool("select");
+        canvas.selection = true;
+      });
+
+      // selection events
+      canvas.on("selection:created", (e: { selected?: FObj[] }) => {
+        useCanvasStore.getState().setSelectedIds((e.selected ?? []).map((o) => o.motifId).filter(Boolean) as string[]);
+      });
+      canvas.on("selection:updated", (e: { selected?: FObj[] }) => {
+        useCanvasStore.getState().setSelectedIds((e.selected ?? []).map((o) => o.motifId).filter(Boolean) as string[]);
+      });
+      canvas.on("selection:cleared", () => {
+        useCanvasStore.getState().setSelectedIds([]);
+      });
+      canvas.on("object:modified", (e: { target?: FObj }) => {
+        const obj = e.target;
+        if (!obj?.motifId) return;
+        const s = useCanvasStore.getState();
+        s.updateElement(obj.motifId, { x: Math.round(obj.left ?? 0), y: Math.round(obj.top ?? 0), width: Math.round(obj.getScaledWidth()), height: Math.round(obj.getScaledHeight()), rotation: Math.round(obj.angle ?? 0) });
+        s.pushHistory();
+      });
+
+      // Initial element sync
+      const s = useCanvasStore.getState();
+      await syncCanvas(canvas, s.elements, s.order);
+    })();
+
+    return () => {
+      alive = false;
+      if (fabricRef.current) { try { fabricRef.current.dispose(); } catch { /**/ } fabricRef.current = null; readyRef.current = false; }
+    };
+  }, []);
+
+  // ── Resize ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (fabricRef.current && width > 0 && height > 0) { fabricRef.current.setWidth(width); fabricRef.current.setHeight(height); fabricRef.current.renderAll(); }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
+  // ── Elements sync ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!fabricRef.current || !readyRef.current) return;
+    syncCanvas(fabricRef.current, elements, order);
+  }, [elements, order]);
+
+  // ── Zoom / pan from store ───────────────────────────────────────────────────
+  useEffect(() => {
+    const c = fabricRef.current;
+    if (!c || panDirtyRef.current) return;
+    c.setZoom(zoom);
+    // absolutePan in Fabric v6 sets vpt[4]=x, vpt[5]=y directly
+    // To place canvas origin at screen(-panX*zoom, -panY*zoom):
+    //   scene point (0,0) → screen (vpt[4], vpt[5]) = (-panX*zoom, -panY*zoom)
+    c.absolutePan({ x: -panX * zoom, y: -panY * zoom } as never);
+    c.renderAll();
+  }, [zoom, panX, panY]);
+
+  // ── Tool cursor/mode ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const c = fabricRef.current;
+    if (!c) return;
+    if (activeTool === "select") {
+      c.defaultCursor = "default"; c.hoverCursor = "move"; c.selection = true;
+      (c.getObjects() as FObj[]).forEach((o) => { o.selectable = true; o.evented = true; });
+    } else if (activeTool === "hand") {
+      c.defaultCursor = "grab"; c.hoverCursor = "grab"; c.selection = false;
+      c.discardActiveObject();
+      (c.getObjects() as FObj[]).forEach((o) => { o.selectable = false; o.evented = false; });
+    } else {
+      c.defaultCursor = "crosshair"; c.hoverCursor = "crosshair"; c.selection = false;
+      c.discardActiveObject();
+      (c.getObjects() as FObj[]).forEach((o) => { o.selectable = false; o.evented = false; });
+    }
+    c.renderAll();
+  }, [activeTool]);
+
+  // ── Wheel zoom ───────────────────────────────────────────────────────────────
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const s = useCanvasStore.getState();
+    if (e.ctrlKey || e.metaKey) {
+      s.setZoom(s.zoom + (e.deltaY > 0 ? -0.08 : 0.08));
+    } else {
+      s.setPan(s.panX - e.deltaX / s.zoom, s.panY - e.deltaY / s.zoom);
+    }
+  };
+
+  // ── CSS grid (matches Fabric viewport transform) ────────────────────────────
+  // vpt[4] = -panX*zoom, so grid offset x = -panX*zoom mod gridPx
+  const gridPx = 20 * zoom;
+  // vpt[4] = panX*zoom; grid offset aligns with vpt
+  const gridOx = ((panX * zoom) % gridPx + gridPx) % gridPx;
+  const gridOy = ((panY * zoom) % gridPx + gridPx) % gridPx;
+  const gridStyle: CSSProperties = showGrid
+    ? {
+        backgroundImage: [
+          "linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)",
+          "linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)",
+        ].join(", "),
+        backgroundSize: `${gridPx}px ${gridPx}px`,
+        backgroundPosition: `${gridOx}px ${gridOy}px`,
+      }
+    : {};
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full relative overflow-hidden"
+      style={{ backgroundColor: "#141414", ...gridStyle }}
+      onWheel={handleWheel}
+    >
+      {/* Canvas — NOT pointer-events-none, Fabric handles native selection/drag */}
+      <canvas ref={canvasElRef} className="absolute inset-0" />
+
+      {/* Status bar */}
+      <div className="absolute bottom-3 left-3 text-[11px] text-[#444] pointer-events-none select-none flex items-center gap-3">
+        <span>{Math.round(zoom * 100)}%</span>
+        {selectedIds.length > 0 && <span className="text-[#666]">{selectedIds.length} selected</span>}
+      </div>
+      <div className="absolute bottom-3 right-3 text-[11px] text-[#333] pointer-events-none select-none">
+        V R O T F H · ⌘K AI
+      </div>
+    </div>
+  );
 }
