@@ -267,7 +267,6 @@ export default function DesignCanvas() {
           panDirtyRef.current = false;
           const vpt: number[] = canvas.viewportTransform;
           const z: number = canvas.getZoom();
-          // vpt[4] = panX * zoom  (absolutePan sets vpt[4] = -(-panX*zoom) = panX*zoom)
           useCanvasStore.getState().setPan(vpt[4] / z, vpt[5] / z);
           return;
         }
@@ -278,13 +277,18 @@ export default function DesignCanvas() {
         previewObj.current = null;
         canvas.remove(shape);
 
-        const b = shape.getBoundingRect();
-        if (b.width < 4 || b.height < 4) { canvas.renderAll(); return; }
+        // Read dimensions directly — getBoundingRect() can return stale cached values
+        const isEllipse = shape.rx !== undefined;
+        const shapeW = isEllipse ? (shape.rx ?? 1) * 2 : (shape.width ?? 1);
+        const shapeH = isEllipse ? (shape.ry ?? 1) * 2 : (shape.height ?? 1);
+        const shapeX = shape.left ?? 0;
+        const shapeY = shape.top ?? 0;
+        if (shapeW < 4 || shapeH < 4) { canvas.renderAll(); return; }
 
         const isFrame = tool === "frame";
         const typeMap: Record<string, CanvasElement["type"]> = { rectangle: "rectangle", frame: "frame", ellipse: "ellipse" };
         const { addElement, setActiveTool } = useCanvasStore.getState();
-        addElement({ type: typeMap[tool] ?? "rectangle", name: isFrame ? "Frame" : tool === "rectangle" ? "Rectangle" : "Ellipse", x: Math.round(b.left), y: Math.round(b.top), width: Math.round(b.width), height: Math.round(b.height), fill: isFrame ? "#ffffff" : "#6366f1", stroke: isFrame ? "#6366f1" : undefined, strokeWidth: isFrame ? 1 : 0, cornerRadius: 0, opacity: 1, rotation: 0, children: isFrame ? [] : undefined });
+        addElement({ type: typeMap[tool] ?? "rectangle", name: isFrame ? "Frame" : tool === "rectangle" ? "Rectangle" : "Ellipse", x: Math.round(shapeX), y: Math.round(shapeY), width: Math.round(shapeW), height: Math.round(shapeH), fill: isFrame ? "#ffffff" : "#6366f1", stroke: isFrame ? "#6366f1" : undefined, strokeWidth: isFrame ? 1 : 0, cornerRadius: 0, opacity: 1, rotation: 0, children: isFrame ? [] : undefined });
         setActiveTool("select");
         canvas.selection = true;
       });
