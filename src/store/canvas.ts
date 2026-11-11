@@ -61,6 +61,7 @@ interface CanvasStore {
   setZoom: (zoom: number) => void;
   setPan: (x: number, y: number) => void;
   setSelectedIds: (ids: string[]) => void;
+  nudgeSelected: (dx: number, dy: number) => void;
   addElement: (element: Omit<CanvasElement, "id">) => string;
   updateElement: (id: string, updates: Partial<CanvasElement>) => void;
   updateElements: (updates: Record<string, Partial<CanvasElement>>) => void;
@@ -173,9 +174,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   gridSize: 8,
 
   setActiveTool: (tool) => set({ activeTool: tool }),
-  setZoom: (zoom) => set({ zoom: Math.min(8, Math.max(0.1, zoom)) }),
+  setZoom: (zoom) => set({ zoom: Math.min(256, Math.max(0.02, zoom)) }),
   setPan: (panX, panY) => set({ panX, panY }),
   setSelectedIds: (ids) => set({ selectedIds: ids }),
+  nudgeSelected: (dx, dy) => {
+    const { selectedIds, elements } = get();
+    if (!selectedIds.length) return;
+    const updates: Record<string, Partial<CanvasElement>> = {};
+    for (const id of selectedIds) {
+      const el = elements[id];
+      if (el) updates[id] = { x: el.x + dx, y: el.y + dy };
+    }
+    get().updateElements(updates);
+  },
 
   addElement: (element) => {
     const id = nanoid(8);

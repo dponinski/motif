@@ -18,6 +18,8 @@ export default function Editor({ fileId }: { fileId?: string }) {
   // Spacebar temporary-pan state (not React state — avoids re-renders)
   const spaceDown = useRef(false);
   const toolBeforeSpace = useRef<Tool>("select");
+  // Arrow key: push history on release after nudging
+  const arrowDown = useRef(false);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -49,9 +51,32 @@ export default function Editor({ fileId }: { fileId?: string }) {
       } else if (ctrl && e.key === "d") {
         e.preventDefault();
         duplicateSelected();
+      } else if (ctrl && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        const s = useCanvasStore.getState();
+        s.setZoom(Math.min(32, s.zoom * 1.25));
+      } else if (ctrl && e.key === "-") {
+        e.preventDefault();
+        const s = useCanvasStore.getState();
+        s.setZoom(Math.max(0.05, s.zoom / 1.25));
+      } else if (ctrl && e.key === "0") {
+        e.preventDefault();
+        useCanvasStore.getState().setZoom(1);
       } else if (e.key === "Backspace" || e.key === "Delete") {
         deleteSelected();
-      } else if (e.key === "v" || e.key === "Escape") {
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (useCanvasStore.getState().selectedIds.length > 0) {
+          e.preventDefault();
+          arrowDown.current = true;
+          const dist = e.shiftKey ? 10 : 1;
+          const dx = e.key === "ArrowLeft" ? -dist : e.key === "ArrowRight" ? dist : 0;
+          const dy = e.key === "ArrowUp" ? -dist : e.key === "ArrowDown" ? dist : 0;
+          useCanvasStore.getState().nudgeSelected(dx, dy);
+        }
+      } else if (e.key === "Escape") {
+        setActiveTool("select");
+        useCanvasStore.getState().setSelectedIds([]);
+      } else if (e.key === "v") {
         setActiveTool("select");
       } else if (e.key === "r") {
         setActiveTool("rectangle");
@@ -79,6 +104,10 @@ export default function Editor({ fileId }: { fileId?: string }) {
         if (useCanvasStore.getState().activeTool === "hand") {
           setActiveTool(toolBeforeSpace.current);
         }
+      }
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && arrowDown.current) {
+        arrowDown.current = false;
+        useCanvasStore.getState().pushHistory();
       }
     },
     [setActiveTool]
@@ -134,7 +163,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
   }, [fileId]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0a0a0a] select-none">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base select-none">
       {/* Top toolbar */}
       <Toolbar />
 
@@ -144,7 +173,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
         <LeftPanel />
 
         {/* Canvas */}
-        <main className="flex-1 relative overflow-hidden bg-[#141414]">
+        <main className="flex-1 relative overflow-hidden">
           <DesignCanvas />
         </main>
 
