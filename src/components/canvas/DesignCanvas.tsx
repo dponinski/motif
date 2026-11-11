@@ -371,16 +371,31 @@ export default function DesignCanvas() {
     c.renderAll();
   }, [activeTool]);
 
-  // ── Wheel zoom ───────────────────────────────────────────────────────────────
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const s = useCanvasStore.getState();
-    if (e.ctrlKey || e.metaKey) {
-      s.setZoom(s.zoom + (e.deltaY > 0 ? -0.08 : 0.08));
-    } else {
-      s.setPan(s.panX - e.deltaX / s.zoom, s.panY - e.deltaY / s.zoom);
-    }
-  };
+  // ── Wheel zoom/pan (native listener for reliable preventDefault) ─────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const s = useCanvasStore.getState();
+      const rect = container.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch-to-zoom: exponential factor, centered on cursor
+        const factor = Math.pow(1.001, -e.deltaY);
+        const newZoom = Math.min(32, Math.max(0.05, s.zoom * factor));
+        const sceneCursorX = cursorX / s.zoom - s.panX;
+        const sceneCursorY = cursorY / s.zoom - s.panY;
+        s.setZoom(newZoom);
+        s.setPan(cursorX / newZoom - sceneCursorX, cursorY / newZoom - sceneCursorY);
+      } else {
+        s.setPan(s.panX - e.deltaX / s.zoom, s.panY - e.deltaY / s.zoom);
+      }
+    };
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, []);
 
   // ── CSS grid (matches Fabric viewport transform) ────────────────────────────
   // vpt[4] = -panX*zoom, so grid offset x = -panX*zoom mod gridPx
@@ -404,7 +419,6 @@ export default function DesignCanvas() {
       ref={containerRef}
       className="w-full h-full relative overflow-hidden"
       style={{ backgroundColor: "#141414", ...gridStyle }}
-      onWheel={handleWheel}
     >
       {/* Canvas — NOT pointer-events-none, Fabric handles native selection/drag */}
       <canvas ref={canvasElRef} className="absolute inset-0" />
