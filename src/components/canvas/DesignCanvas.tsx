@@ -406,8 +406,8 @@ export default function DesignCanvas() {
   const gridStyle: CSSProperties = showGrid
     ? {
         backgroundImage: [
-          "linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px)",
-          "linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px)",
+          "linear-gradient(var(--grid-line) 1px, transparent 1px)",
+          "linear-gradient(90deg, var(--grid-line) 1px, transparent 1px)",
         ].join(", "),
         backgroundSize: `${gridPx}px ${gridPx}px`,
         backgroundPosition: `${gridOx}px ${gridOy}px`,
@@ -418,17 +418,17 @@ export default function DesignCanvas() {
     <div
       ref={containerRef}
       className="w-full h-full relative overflow-hidden"
-      style={{ backgroundColor: "#141414", ...gridStyle }}
+      style={{ backgroundColor: "var(--canvas-bg)", ...gridStyle }}
     >
       {/* Canvas — NOT pointer-events-none, Fabric handles native selection/drag */}
       <canvas ref={canvasElRef} className="absolute inset-0" />
 
       {/* Status bar */}
-      <div className="absolute bottom-3 left-3 text-[11px] text-[#444] pointer-events-none select-none flex items-center gap-3">
+      <div className="absolute bottom-3 left-3 text-[11px] text-text-tertiary pointer-events-none select-none flex items-center gap-3">
         <span>{Math.round(zoom * 100)}%</span>
-        {selectedIds.length > 0 && <span className="text-[#666]">{selectedIds.length} selected</span>}
+        {selectedIds.length > 0 && <span className="text-text-secondary">{selectedIds.length} selected</span>}
       </div>
-      <div className="absolute bottom-3 right-3 text-[11px] text-[#333] pointer-events-none select-none">
+      <div className="absolute bottom-3 right-3 text-[11px] text-text-tertiary pointer-events-none select-none opacity-50">
         V R O T F H · ⌘K AI
       </div>
     </div>
