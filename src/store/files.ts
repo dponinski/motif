@@ -10,6 +10,14 @@ export interface DesignFile {
   updatedAt: number;
   elements: Record<string, CanvasElement>;
   order: string[];
+  folderId?: string;
+  isDraft?: boolean;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: number;
 }
 
 function makeDefaultContent(): { elements: Record<string, CanvasElement>; order: string[] } {
@@ -30,18 +38,25 @@ function makeDefaultContent(): { elements: Record<string, CanvasElement>; order:
 
 interface FilesStore {
   files: DesignFile[];
-  createFile: (name?: string) => DesignFile;
+  folders: Folder[];
+  createFile: (name?: string, opts?: { folderId?: string; isDraft?: boolean }) => DesignFile;
   saveFile: (id: string, elements: Record<string, CanvasElement>, order: string[]) => void;
   deleteFile: (id: string) => void;
   renameFile: (id: string, name: string) => void;
+  moveFileToFolder: (fileId: string, folderId: string | null) => void;
+  toggleDraft: (fileId: string) => void;
+  createFolder: (name: string) => Folder;
+  renameFolder: (id: string, name: string) => void;
+  deleteFolder: (id: string) => void;
 }
 
 export const useFilesStore = create<FilesStore>()(
   persist(
     (set) => ({
       files: [],
+      folders: [],
 
-      createFile: (name = "Untitled") => {
+      createFile: (name = "Untitled", opts = {}) => {
         const { elements, order } = makeDefaultContent();
         const file: DesignFile = {
           id: nanoid(8),
@@ -50,6 +65,8 @@ export const useFilesStore = create<FilesStore>()(
           updatedAt: Date.now(),
           elements,
           order,
+          folderId: opts.folderId,
+          isDraft: opts.isDraft,
         };
         set((s) => ({ files: [...s.files, file] }));
         return file;
@@ -72,6 +89,42 @@ export const useFilesStore = create<FilesStore>()(
           files: s.files.map((f) =>
             f.id === id ? { ...f, name, updatedAt: Date.now() } : f
           ),
+        }));
+      },
+
+      moveFileToFolder: (fileId, folderId) => {
+        set((s) => ({
+          files: s.files.map((f) =>
+            f.id === fileId ? { ...f, folderId: folderId ?? undefined } : f
+          ),
+        }));
+      },
+
+      toggleDraft: (fileId) => {
+        set((s) => ({
+          files: s.files.map((f) =>
+            f.id === fileId ? { ...f, isDraft: !f.isDraft } : f
+          ),
+        }));
+      },
+
+      createFolder: (name) => {
+        const folder: Folder = { id: nanoid(8), name, createdAt: Date.now() };
+        set((s) => ({ folders: [...s.folders, folder] }));
+        return folder;
+      },
+
+      renameFolder: (id, name) => {
+        set((s) => ({
+          folders: s.folders.map((f) => (f.id === id ? { ...f, name } : f)),
+        }));
+      },
+
+      deleteFolder: (id) => {
+        set((s) => ({
+          folders: s.folders.filter((f) => f.id !== id),
+          // Move files in deleted folder back to root
+          files: s.files.map((f) => (f.folderId === id ? { ...f, folderId: undefined } : f)),
         }));
       },
     }),

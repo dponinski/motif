@@ -51,7 +51,39 @@ async function fab(): Promise<FabricMod> {
   return _fab!;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Position helpers ──────────────────────────────────────────────────────────
+
+/** Recursively resolve element position to absolute canvas coordinates. */
+function absPos(el: CanvasElement, elements: Record<string, CanvasElement>): { x: number; y: number } {
+  if (!el.parentId || !elements[el.parentId]) return { x: el.x, y: el.y };
+  const parent = absPos(elements[el.parentId], elements);
+  return { x: parent.x + el.x, y: parent.y + el.y };
+}
+
+/**
+ * Find the deepest (smallest-area) frame whose bounds contain point (cx, cy).
+ * Pass excludeId to skip the element just created.
+ */
+function findContainerFrame(
+  cx: number,
+  cy: number,
+  elements: Record<string, CanvasElement>,
+  excludeId?: string
+): string | null {
+  let best: string | null = null;
+  let bestArea = Infinity;
+  for (const el of Object.values(elements)) {
+    if (el.type !== "frame" || el.id === excludeId) continue;
+    const { x: ex, y: ey } = absPos(el, elements);
+    if (cx >= ex && cy >= ey && cx <= ex + el.width && cy <= ey + el.height) {
+      const area = el.width * el.height;
+      if (area < bestArea) { best = el.id; bestArea = area; }
+    }
+  }
+  return best;
+}
+
+// ── Fabric object helpers ─────────────────────────────────────────────────────
 
 function flatIds(ids: string[], elements: Record<string, CanvasElement>): string[] {
   const out: string[] = [];
@@ -63,9 +95,10 @@ function flatIds(ids: string[], elements: Record<string, CanvasElement>): string
   return out;
 }
 
-function makeObj(el: CanvasElement, m: FabricMod): FObj | null {
+function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, CanvasElement>): FObj | null {
+  const { x, y } = absPos(el, elements);
   const common: Record<string, unknown> = {
-    left: el.x, top: el.y,
+    left: x, top: y,
     angle: el.rotation ?? 0,
     opacity: el.opacity ?? 1,
     scaleX: 1, scaleY: 1,
@@ -107,8 +140,9 @@ function makeObj(el: CanvasElement, m: FabricMod): FObj | null {
   return null;
 }
 
-function applyProps(obj: FObj, el: CanvasElement) {
-  obj.set({ left: el.x, top: el.y, angle: el.rotation ?? 0, opacity: el.opacity ?? 1 });
+function applyProps(obj: FObj, el: CanvasElement, elements: Record<string, CanvasElement>) {
+  const { x, y } = absPos(el, elements);
+  obj.set({ left: x, top: y, angle: el.rotation ?? 0, opacity: el.opacity ?? 1 });
   if (el.type === "rectangle" || el.type === "frame") {
     obj.set({
       width: el.width, height: el.height,
@@ -149,9 +183,9 @@ async function syncCanvas(c: FCanvas, elements: Record<string, CanvasElement>, o
     if (!el || el.visible === false) { if (existing.has(id)) c.remove(existing.get(id)); continue; }
     wanted.add(id);
     if (existing.has(id)) {
-      applyProps(existing.get(id)!, el);
+      applyProps(existing.get(id)!, el, elements);
     } else {
-      const obj = makeObj(el, m);
+      const obj = makeObj(el, m, elements);
       if (obj) { obj.motifId = id; c.add(obj); }
     }
   }
@@ -171,20 +205,18 @@ export default function DesignCanvas() {
 
   // Drawing state
   const drawRef = useRef(false);
-  const drawToolRef = useRef<string>("");  // track type being drawn (not rx check)
+  const drawToolRef = useRef<string>("");
   const startPt = useRef({ x: 0, y: 0 });
   const previewObj = useRef<FObj | null>(null);
 
   // Panning state
   const panningRef = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
-  // when true, pan came from direct mouse drag — skip store-driven re-apply
   const panDirtyRef = useRef(false);
 
   // Deselect sync — prevents selection:cleared → setSelectedIds([]) → effect loop
   const deselectingRef = useRef(false);
 
-  // Reactive values for CSS grid + status bar only
   const { zoom, panX, panY, showGrid, selectedIds, elements, order, activeTool } = useCanvasStore();
 
   // ── Init ────────────────────────────────────────────────────────────────────
@@ -210,7 +242,6 @@ export default function DesignCanvas() {
       fabricRef.current = canvas;
       readyRef.current = true;
 
-      // mouse:down — synchronous so previewObj is set before mouse:up can fire
       canvas.on("mouse:down", (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
         const tool = useCanvasStore.getState().activeTool;
 
@@ -227,8 +258,17 @@ export default function DesignCanvas() {
         if (!pt) return;
 
         if (tool === "text") {
-          const { addElement, setActiveTool } = useCanvasStore.getState();
-          addElement({ type: "text", name: "Text", x: Math.round(pt.x), y: Math.round(pt.y), width: 220, height: 32, fill: "transparent", fontColor: "#111111", content: "Type something", fontSize: 16, fontWeight: "400", fontFamily: "Inter", opacity: 1, rotation: 0 });
+          const { elements: elems, addElement, setActiveTool } = useCanvasStore.getState();
+          // Auto-parent text into the containing frame
+          const ax = Math.round(pt.x), ay = Math.round(pt.y);
+          const parentId = findContainerFrame(ax, ay, elems) ?? undefined;
+          let tx = ax, ty = ay;
+          if (parentId) {
+            const pAbs = absPos(elems[parentId], elems);
+            tx = ax - pAbs.x;
+            ty = ay - pAbs.y;
+          }
+          addElement({ type: "text", name: "Text", x: tx, y: ty, width: 220, height: 32, fill: "transparent", fontColor: "#111111", content: "Type something", fontSize: 16, fontWeight: "400", fontFamily: "Inter", opacity: 1, rotation: 0, parentId });
           setActiveTool("select");
           return;
         }
@@ -249,7 +289,6 @@ export default function DesignCanvas() {
         if (shape) { canvas.add(shape); previewObj.current = shape; canvas.renderAll(); }
       });
 
-      // mouse:move
       canvas.on("mouse:move", (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
         if (panningRef.current) {
           const dx = opt.e.clientX - lastMouse.current.x;
@@ -277,7 +316,6 @@ export default function DesignCanvas() {
         canvas.requestRenderAll();
       });
 
-      // mouse:up
       canvas.on("mouse:up", () => {
         const tool = useCanvasStore.getState().activeTool;
 
@@ -303,19 +341,43 @@ export default function DesignCanvas() {
         const isEllipse = drawnTool === "ellipse";
         const shapeW = isEllipse ? (shape.rx ?? 1) * 2 : (shape.width ?? 1);
         const shapeH = isEllipse ? (shape.ry ?? 1) * 2 : (shape.height ?? 1);
-        const shapeX = shape.left ?? 0;
-        const shapeY = shape.top ?? 0;
+        const absX = Math.round(shape.left ?? 0);
+        const absY = Math.round(shape.top ?? 0);
         if (shapeW < 4 || shapeH < 4) { canvas.renderAll(); return; }
 
-        const isFrame = tool === "frame";
+        const isFrame = drawnTool === "frame";
         const typeMap: Record<string, CanvasElement["type"]> = { rectangle: "rectangle", frame: "frame", ellipse: "ellipse" };
-        const { addElement, setActiveTool } = useCanvasStore.getState();
-        addElement({ type: typeMap[tool] ?? "rectangle", name: isFrame ? "Frame" : tool === "rectangle" ? "Rectangle" : "Ellipse", x: Math.round(shapeX), y: Math.round(shapeY), width: Math.round(shapeW), height: Math.round(shapeH), fill: isFrame ? "#ffffff" : "#6366f1", stroke: isFrame ? "#6366f1" : undefined, strokeWidth: isFrame ? 1 : 0, cornerRadius: 0, opacity: 1, rotation: 0, children: isFrame ? [] : undefined });
+        const { elements: elems, addElement, setActiveTool } = useCanvasStore.getState();
+
+        // Auto-parent into the deepest containing frame (use center point)
+        const cx = absX + shapeW / 2;
+        const cy = absY + shapeH / 2;
+        const parentId = findContainerFrame(cx, cy, elems) ?? undefined;
+
+        let finalX = absX, finalY = absY;
+        if (parentId) {
+          const pAbs = absPos(elems[parentId], elems);
+          finalX = absX - pAbs.x;
+          finalY = absY - pAbs.y;
+        }
+
+        addElement({
+          type: typeMap[drawnTool] ?? "rectangle",
+          name: isFrame ? "Frame" : drawnTool === "rectangle" ? "Rectangle" : "Ellipse",
+          x: finalX, y: finalY,
+          width: Math.round(shapeW), height: Math.round(shapeH),
+          fill: isFrame ? "#ffffff" : "#6366f1",
+          stroke: isFrame ? "#6366f1" : undefined,
+          strokeWidth: isFrame ? 1 : 0,
+          cornerRadius: 0, opacity: 1, rotation: 0,
+          parentId,
+          children: isFrame ? [] : undefined,
+        });
         setActiveTool("select");
         canvas.selection = true;
       });
 
-      // selection events
+      // Selection events
       canvas.on("selection:created", (e: { selected?: FObj[] }) => {
         useCanvasStore.getState().setSelectedIds((e.selected ?? []).map((o) => o.motifId).filter(Boolean) as string[]);
       });
@@ -331,9 +393,21 @@ export default function DesignCanvas() {
         const obj = e.target;
         if (!obj?.motifId) return;
         const s = useCanvasStore.getState();
+        const el = s.elements[obj.motifId];
+        if (!el) return;
+
+        // Convert absolute Fabric position back to parent-relative store coords
+        let relX = Math.round(obj.left ?? 0);
+        let relY = Math.round(obj.top ?? 0);
+        if (el.parentId && s.elements[el.parentId]) {
+          const pAbs = absPos(s.elements[el.parentId], s.elements);
+          relX -= pAbs.x;
+          relY -= pAbs.y;
+        }
+
         s.updateElement(obj.motifId, {
-          x: Math.round(obj.left ?? 0),
-          y: Math.round(obj.top ?? 0),
+          x: relX,
+          y: relY,
           width: Math.round(obj.getScaledWidth()),
           height: Math.round(obj.getScaledHeight()),
           rotation: Math.round(obj.angle ?? 0),
@@ -410,7 +484,7 @@ export default function DesignCanvas() {
     c.renderAll();
   }, [activeTool]);
 
-  // ── Wheel zoom/pan (native listener for reliable preventDefault) ─────────────
+  // ── Wheel zoom/pan ───────────────────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -435,7 +509,7 @@ export default function DesignCanvas() {
     return () => container.removeEventListener("wheel", onWheel);
   }, []);
 
-  // ── Reset stuck panning/drawing state on window blur ───────────────────────
+  // ── Reset stuck state on window blur ────────────────────────────────────────
   useEffect(() => {
     const onBlur = () => {
       if (panningRef.current) {
@@ -465,7 +539,7 @@ export default function DesignCanvas() {
     return () => window.removeEventListener("blur", onBlur);
   }, []);
 
-  // ── CSS grid (matches Fabric viewport transform) ────────────────────────────
+  // ── CSS grid ─────────────────────────────────────────────────────────────────
   const gridPx = 20 * zoom;
   const gridOx = ((panX * zoom) % gridPx + gridPx) % gridPx;
   const gridOy = ((panY * zoom) % gridPx + gridPx) % gridPx;
@@ -494,7 +568,7 @@ export default function DesignCanvas() {
         {selectedIds.length > 0 && <span className="text-text-secondary">{selectedIds.length} selected</span>}
       </div>
       <div className="absolute bottom-3 right-3 text-[11px] text-text-tertiary pointer-events-none select-none opacity-50">
-        V R O T F H · ⌘K AI
+        V R O T F H · ⌘C/V copy/paste · ⌘K AI
       </div>
     </div>
   );
