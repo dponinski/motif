@@ -7,9 +7,10 @@ import RightPanel from "./panels/RightPanel";
 import AIPanel from "./panels/AIPanel";
 import DesignCanvas from "./canvas/DesignCanvas";
 import { useCanvasStore, type Tool } from "@/store/canvas";
+import { useFilesStore } from "@/store/files";
 import { useAIStore } from "@/store/ai";
 
-export default function Editor() {
+export default function Editor({ fileId }: { fileId?: string }) {
   const { undo, redo, deleteSelected, duplicateSelected, setActiveTool } =
     useCanvasStore();
   const { setOpen: setAIOpen, isOpen: aiOpen } = useAIStore();
@@ -92,10 +93,45 @@ export default function Editor() {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Push initial history entry
+  // Load file elements on mount; fall back to canvas store defaults if no fileId
   useEffect(() => {
-    useCanvasStore.getState().pushHistory();
-  }, []);
+    if (!fileId) {
+      useCanvasStore.getState().pushHistory();
+      return;
+    }
+    const file = useFilesStore.getState().files.find((f) => f.id === fileId);
+    if (file) {
+      useCanvasStore.getState().loadElements(Object.values(file.elements));
+    } else {
+      useCanvasStore.getState().pushHistory();
+    }
+  }, [fileId]);
+
+  // Auto-save to files store when elements/order change (debounced 1.5s)
+  useEffect(() => {
+    if (!fileId) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastElements = useCanvasStore.getState().elements;
+    let lastOrder = useCanvasStore.getState().order;
+
+    const unsub = useCanvasStore.subscribe((state) => {
+      if (state.elements === lastElements && state.order === lastOrder) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        lastElements = state.elements;
+        lastOrder = state.order;
+        useFilesStore.getState().saveFile(fileId, state.elements, state.order);
+      }, 1500);
+    });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsub();
+      // Final sync on unmount
+      const { elements, order } = useCanvasStore.getState();
+      useFilesStore.getState().saveFile(fileId, elements, order);
+    };
+  }, [fileId]);
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0a0a0a] select-none">
