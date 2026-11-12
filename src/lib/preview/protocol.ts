@@ -25,6 +25,8 @@ export interface RenderMessage {
 export interface ModulesMessage {
   type: "modules";
   modules: Record<string, { code: string; imports: Record<string, string | null> }>;
+  // Packages the new code needs that the page hasn't loaded yet: specifier -> URL.
+  externals?: Record<string, string>;
 }
 
 // Turns picking elements on or off, and says which element is selected (a `data-motif` key).

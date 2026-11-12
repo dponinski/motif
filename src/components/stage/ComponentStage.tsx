@@ -10,7 +10,7 @@ import { tokenOverrides } from "@/lib/preview/overrides";
 import { readMotifTokens } from "@/lib/token-sync/doc";
 import { initialProps, variantCombinations } from "@/lib/preview/props";
 import { isFromPreview, type RenderItem, type ToPreview } from "@/lib/preview/protocol";
-import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
+import { buildSrcdoc, esmUrl, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useDesignSystemStore } from "@/store/design-system";
@@ -208,9 +208,11 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   // An edit changes the source of some modules; the preview runs the new code without loading again.
   const sent = useRef<Record<string, string>>({});
+  const loaded = useRef(new Set<string>());
   const patched = useRef(false);
   useEffect(() => {
     sent.current = Object.fromEntries(Object.entries(main.graph?.modules ?? {}).map(([p, m]) => [p, m.code]));
+    loaded.current = new Set(["react", "react/jsx-runtime", "react-dom", "react-dom/client", ...(main.graph?.bare ?? [])]);
     patched.current = false;
   }, [main.graph]);
   useEffect(() => {
@@ -228,7 +230,10 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         if (Object.keys(modules).length === 0) return;
         patched.current = true;
         for (const [p, m] of Object.entries(modules)) sent.current[p] = m.code;
-        post({ type: "modules", modules });
+        // An inserted component can bring packages the page hasn't loaded.
+        const externals = Object.fromEntries(graph.bare.filter((spec) => !loaded.current.has(spec)).map((spec) => [spec, esmUrl(spec, graph.deps)]));
+        for (const spec of Object.keys(externals)) loaded.current.add(spec);
+        post({ type: "modules", modules, externals });
       } catch (err) {
         if (!stale) setEditError(errorMessage(err));
       }
