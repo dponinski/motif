@@ -1,6 +1,7 @@
 import type { RepoReader } from "../github";
 import { Resolver } from "../repo-scan/model";
 import { isIgnoredPath, readerSource } from "../repo-scan/source";
+import { instrument } from "../edit/instrument";
 import { isJson, isScript, transformModule } from "./transform";
 
 // Everything the sandbox needs to run one component: its module and the modules it imports, the global
@@ -33,8 +34,10 @@ export interface GraphInput {
   entry: string;
   // More modules to run besides the entry, e.g. several examples that share one page.
   extraEntries?: string[];
-  // Files that exist only for this graph (examples), by path. They may import the repository's modules.
+  // Files that exist only for this graph (examples), or replace the repository's version (edits), by path.
   overlay?: Record<string, string>;
+  // Mark every HTML element with where it is in the source, so a click in the preview can name the element.
+  instrument?: boolean;
   // All file paths in the repository at `ref`.
   paths: string[];
   tailwindEntry: string | null;
@@ -173,7 +176,11 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
       imports[spec] = target;
       enqueue(target);
     }
-    if (isScript(path)) modules[path] = { code: await transformModule(path, model.code), imports };
+    if (isScript(path)) {
+      // An element that can't be marked is still shown; it just can't be picked.
+      const source = input.instrument ? await instrument(path, model.code).catch(() => model.code) : model.code;
+      modules[path] = { code: await transformModule(path, source), imports };
+    }
   }
 
   // Global stylesheets: Tailwind's entry first, then what the graph imports, then (without Tailwind) the rest.
@@ -196,4 +203,17 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   }
 
   return { entry, modules, css, deps, bare: [...bare].sort(), unsupported: [...unsupported], warnings: [...new Set(warnings)] };
+}
+
+// Reading files is the slow part of building a graph, and an edit builds one again, so what was read is kept.
+export function cachedReader(reader: RepoReader): RepoReader {
+  const texts = new Map<string, Promise<string | null>>();
+  return {
+    listTree: (ref) => reader.listTree(ref),
+    readText: (path, ref) => {
+      const key = `${ref}:${path}`;
+      if (!texts.has(key)) texts.set(key, reader.readText(path, ref).catch(() => null));
+      return texts.get(key)!;
+    },
+  };
 }

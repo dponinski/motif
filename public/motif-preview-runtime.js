@@ -71,6 +71,10 @@
       var React = externals['react'];
       var createRoot = externals['react-dom/client'].createRoot;
       var registry = createRegistry(data, externals);
+      var lastRender = null;
+      var editOn = false;
+      var selectedKey = null;
+      var hovered = null;
       var rootElement = document.getElementById('root');
       var overrides = document.getElementById('motif-overrides');
       var root = createRoot(rootElement);
@@ -125,21 +129,86 @@
         requestAnimationFrame(function () {
           requestAnimationFrame(function () {
             post({ type: 'rendered', id: currentId, height: Math.ceil(rootElement.getBoundingClientRect().height) });
+            draw();
           });
         });
       };
       if (typeof ResizeObserver !== 'undefined') new ResizeObserver(reportHeight).observe(rootElement);
 
+      // Outlines for the element under the pointer and the selected one, drawn over the page, never part of it.
+      var layer = document.createElement('div');
+      layer.setAttribute('aria-hidden', 'true');
+      layer.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483647';
+      document.body.appendChild(layer);
+      var boxes = [];
+      function box(index, rect, selected) {
+        var el = boxes[index];
+        if (!el) { el = document.createElement('div'); layer.appendChild(el); boxes[index] = el; }
+        el.style.cssText = 'position:fixed;pointer-events:none;box-sizing:border-box;border-radius:2px;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px;' +
+          (selected ? 'border:2px solid #6366f1;background:rgba(99,102,241,0.08)' : 'border:1px dashed #6366f1');
+      }
+      function matching(key) {
+        return Array.prototype.filter.call(document.querySelectorAll('[data-motif]'), function (el) { return el.getAttribute('data-motif') === key; });
+      }
+      function draw() {
+        var used = 0;
+        if (editOn) {
+          if (selectedKey) matching(selectedKey).forEach(function (el) { box(used++, el.getBoundingClientRect(), true); });
+          if (hovered && hovered.getAttribute('data-motif') !== selectedKey) box(used++, hovered.getBoundingClientRect(), false);
+        }
+        for (var i = used; i < boxes.length; i++) boxes[i].style.display = 'none';
+      }
+      window.addEventListener('scroll', draw, true);
+      window.addEventListener('resize', draw);
+
+      var pick = function (event) { return event.target && event.target.closest ? event.target.closest('[data-motif]') : null; };
+      // While editing, the page is for picking: nothing the component does on click or submit should happen.
+      ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit', 'dblclick', 'contextmenu'].forEach(function (name) {
+        window.addEventListener(name, function (event) { if (editOn) { event.preventDefault(); event.stopPropagation(); } }, true);
+      });
+      window.addEventListener('click', function (event) {
+        if (!editOn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        var el = pick(event);
+        if (el) post({ type: 'select', key: el.getAttribute('data-motif') });
+      }, true);
+      window.addEventListener('mouseover', function (event) {
+        if (!editOn) return;
+        var el = pick(event);
+        if (el !== hovered) { hovered = el; draw(); }
+      }, true);
+      document.addEventListener('mouseleave', function () { hovered = null; draw(); });
+
+      function renderLast() {
+        if (!lastRender) return;
+        root.render(h(App, { items: lastRender.items, layout: lastRender.layout }));
+        reportHeight();
+        requestAnimationFrame(function () { requestAnimationFrame(draw); });
+      }
+
       window.addEventListener('message', function (event) {
         if (event.source !== window.parent) return;
         var message = event.data;
-        if (!message || message.type !== 'render') return;
-        currentId = message.id;
-        document.documentElement.classList.toggle('dark', !!message.dark);
-        document.documentElement.style.colorScheme = message.dark ? 'dark' : 'light';
-        overrides.textContent = message.overrides || '';
-        root.render(h(App, { items: message.items, layout: message.layout }));
-        reportHeight();
+        if (!message) return;
+        if (message.type === 'render') {
+          currentId = message.id;
+          lastRender = message;
+          document.documentElement.classList.toggle('dark', !!message.dark);
+          document.documentElement.style.colorScheme = message.dark ? 'dark' : 'light';
+          overrides.textContent = message.overrides || '';
+          renderLast();
+        } else if (message.type === 'modules') {
+          Object.assign(data.modules, message.modules);
+          // A fresh registry runs the changed modules again; the old one is dropped.
+          registry = createRegistry(data, externals);
+          renderLast();
+        } else if (message.type === 'edit') {
+          editOn = !!message.on;
+          selectedKey = message.selected || null;
+          if (!editOn) hovered = null;
+          draw();
+        }
       });
 
       post({ type: 'ready' });

@@ -11,7 +11,7 @@ export interface RenderItem {
   props: Record<string, unknown>;
 }
 
-export type ToPreview = {
+export interface RenderMessage {
   type: "render";
   id: number;
   items: RenderItem[];
@@ -19,12 +19,28 @@ export type ToPreview = {
   dark: boolean;
   // CSS appended after the repository's own, used to show Motif's token values.
   overrides: string;
-};
+}
+
+// Replaces the code of some modules and renders again, so an edit shows without loading the page again.
+export interface ModulesMessage {
+  type: "modules";
+  modules: Record<string, { code: string; imports: Record<string, string | null> }>;
+}
+
+// Turns picking elements on or off, and says which element is selected (a `data-motif` key).
+export interface EditMessage {
+  type: "edit";
+  on: boolean;
+  selected: string | null;
+}
+
+export type ToPreview = RenderMessage | ModulesMessage | EditMessage;
 
 export type FromPreview =
   | { type: "ready" }
   | { type: "rendered"; id: number; height: number }
+  | { type: "select"; key: string }
   | { type: "error"; message: string };
 
 export const isFromPreview = (data: unknown): data is FromPreview =>
-  typeof data === "object" && data !== null && ["ready", "rendered", "error"].includes((data as { type?: unknown }).type as string);
+  typeof data === "object" && data !== null && ["ready", "rendered", "select", "error"].includes((data as { type?: unknown }).type as string);

@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BookOpen, ExternalLink, Layers, Loader2, Moon, Palette, Play, Sun } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, Palette, Pencil, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
+import { parseMotifKey } from "@/lib/edit/instrument";
 import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
 import { tokenOverrides } from "@/lib/preview/overrides";
 import { readMotifTokens } from "@/lib/token-sync/doc";
@@ -13,9 +14,12 @@ import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useDesignSystemStore } from "@/store/design-system";
+import { changedFiles, useEditStore } from "@/store/edit";
 import { useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
+import EditPrDialog from "./EditPrDialog";
+import { readerFor, versionOf } from "./reader";
 
 const WIDTHS: { label: string; value: number | null }[] = [
   { label: "Fit", value: null },
@@ -32,10 +36,8 @@ const exampleIndexes = new Map<string, Promise<ExampleIndex>>();
 class Unsupported extends Error {}
 
 type Host = ReturnType<typeof useGitHost>;
-type Doc = { srcdoc: string | null; unsupported: string[]; error: string | null };
-const EMPTY: Doc = { srcdoc: null, unsupported: [], error: null };
-
-const versionOf = (source: LibrarySource) => `${source.repo}@${source.branch}#${source.importedAt}`;
+type Doc = { srcdoc: string | null; graph: ModuleGraph | null; unsupported: string[]; error: string | null };
+const EMPTY: Doc = { srcdoc: null, graph: null, unsupported: [], error: null };
 
 function loadTree(source: LibrarySource, host: Host): Promise<string[]> {
   const key = versionOf(source);
@@ -63,13 +65,13 @@ function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, host: H
         const graph = await graphs.get(graphKey)!;
         if (graph.unsupported.length) throw Object.assign(new Unsupported("unsupported"), { reasons: graph.unsupported });
         const srcdoc = buildSrcdoc({ graph, tailwindVersion: source.tailwindVersion, runtimeUrl: runtimeUrlFor(window.location.origin), nonce: newNonce() });
-        if (!stale) setState({ srcdoc, unsupported: [], error: null });
+        if (!stale) setState({ srcdoc, graph, unsupported: [], error: null });
       } catch (err) {
         trees.delete(versionOf(source));
         graphs.delete(graphKey);
         if (stale) return;
-        if (err instanceof Unsupported) setState({ srcdoc: null, unsupported: (err as Unsupported & { reasons?: string[] }).reasons ?? [err.message], error: null });
-        else setState({ srcdoc: null, unsupported: [], error: errorMessage(err) });
+        if (err instanceof Unsupported) setState({ srcdoc: null, graph: null, unsupported: (err as Unsupported & { reasons?: string[] }).reasons ?? [err.message], error: null });
+        else setState({ srcdoc: null, graph: null, unsupported: [], error: errorMessage(err) });
       }
     })();
     return () => { stale = true; };
@@ -115,8 +117,12 @@ function Notice({ icon, title, children }: { icon: React.ReactNode; title: strin
 
 function Stage({ component, source, connection }: { component: LibraryComponent; source: LibrarySource; connection: GitConnection }) {
   const host = useGitHost(connection);
+  // Shared with the inspector, so a file read for one is not read again for the other.
+  const reader = useMemo(() => readerFor(source, host), [source, host]);
   const graphInput = { repo: source.repo, ref: source.branch, tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles };
-  const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader: host, entry: component.file, paths, ...graphInput }));
+  // Elements are marked with where they are in the source, so one can be picked in edit mode.
+  const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader, entry: component.file, paths, instrument: true, ...graphInput }));
+  useEffect(() => { useEditStore.getState().adopt(versionOf(source)); }, [source]);
 
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
@@ -124,7 +130,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const mode = wanted === "examples" && !examples.list.length ? "playground" : wanted;
   const exampleDoc = useSrcdoc(mode === "examples", `examples:${component.id}`, source, host, (paths) =>
     buildGraph({
-      reader: host, entry: examples.list[0].path, extraEntries: examples.list.slice(1).map((e) => e.path),
+      reader, entry: examples.list[0].path, extraEntries: examples.list.slice(1).map((e) => e.path),
       overlay: Object.fromEntries(examples.list.map((e) => [e.path, e.code])), paths, ...graphInput,
     }));
   const { srcdoc, unsupported, error } = mode === "examples" ? exampleDoc : main;
@@ -150,9 +156,13 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow || !isFromPreview(event.data)) return;
-      if (event.data.type === "ready") setReady(true);
-      else if (event.data.type === "rendered") { setRendered(true); setHeight(event.data.height); }
-      else setRuntimeError(event.data.message);
+      const data = event.data;
+      if (data.type === "ready") setReady(true);
+      else if (data.type === "rendered") { setRendered(true); setHeight(data.height); }
+      else if (data.type === "select") {
+        const picked = parseMotifKey(data.key);
+        if (picked) useEditStore.getState().select(picked);
+      } else setRuntimeError(data.message);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -177,6 +187,68 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     iframeRef.current?.contentWindow?.postMessage(message, "*");
   }, [ready, items, layout, dark, overridesCss]);
 
+  // ── Editing ────────────────────────────────────────────────────────────────
+  const editing = mode === "edit";
+  const selection = useEditStore((s) => s.selection);
+  const revision = useEditStore((s) => s.revision);
+  const canUndo = useEditStore((s) => s.index > 0);
+  const canRedo = useEditStore((s) => s.index < s.history.length - 1);
+  const changed = useEditStore((s) => changedFiles(s).length);
+  const [prOpen, setPrOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const post = (message: ToPreview) => iframeRef.current?.contentWindow?.postMessage(message, "*");
+
+  // Which element is selected, and whether clicking picks one.
+  const selectedKey = editing && selection ? `${selection.path}|${selection.start}` : null;
+  useEffect(() => {
+    if (ready) post({ type: "edit", on: editing, selected: selectedKey });
+  }, [ready, editing, selectedKey, revision]);
+
+  // An edit changes the source of some modules; the preview runs the new code without loading again.
+  const sent = useRef<Record<string, string>>({});
+  const patched = useRef(false);
+  useEffect(() => {
+    sent.current = Object.fromEntries(Object.entries(main.graph?.modules ?? {}).map(([p, m]) => [p, m.code]));
+    patched.current = false;
+  }, [main.graph]);
+  useEffect(() => {
+    if (!ready || !main.graph) return;
+    const texts = useEditStore.getState().history[useEditStore.getState().index].texts;
+    if (Object.keys(texts).length === 0 && !patched.current) return;
+    let stale = false;
+    const timer = setTimeout(async () => {
+      try {
+        const paths = await loadTree(source, host);
+        const graph = await buildGraph({ reader, entry: component.file, paths, instrument: true, overlay: texts, ...graphInput });
+        if (stale) return;
+        const modules = Object.fromEntries(Object.entries(graph.modules).filter(([p, m]) => sent.current[p] !== m.code));
+        setEditError(null);
+        if (Object.keys(modules).length === 0) return;
+        patched.current = true;
+        for (const [p, m] of Object.entries(modules)) sent.current[p] = m.code;
+        post({ type: "modules", modules });
+      } catch (err) {
+        if (!stale) setEditError(errorMessage(err));
+      }
+    }, 80);
+    return () => { stale = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, revision, main.graph]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      e.preventDefault();
+      if (e.shiftKey) useEditStore.getState().redo();
+      else useEditStore.getState().undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing]);
+
   const githubUrl = `https://github.com/${source.repo}/blob/${source.branch}/${component.file}#L${component.line}`;
 
   return (
@@ -189,7 +261,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         <div className="flex-1" />
 
         <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5">
-          {([["playground", "Playground", Play], ["variants", "All variants", Layers], ["examples", "Examples", BookOpen]] as const).map(([id, label, Icon]) => (
+          {([["playground", "Playground", Play], ["variants", "All variants", Layers], ["examples", "Examples", BookOpen], ["edit", "Edit", Pencil]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setMode(id)}
@@ -202,6 +274,23 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             </button>
           ))}
         </div>
+
+        {(editing || canUndo || canRedo) && (
+          <div className="flex items-center gap-0.5">
+            <button onClick={() => useEditStore.getState().undo()} disabled={!canUndo} aria-label="Undo" title="Undo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Undo2 size={13} /></button>
+            <button onClick={() => useEditStore.getState().redo()} disabled={!canRedo} aria-label="Redo" title="Redo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Redo2 size={13} /></button>
+          </div>
+        )}
+        {changed > 0 && (
+          <button
+            onClick={() => setPrOpen(true)}
+            aria-label="Create pull request"
+            title={`${changed} file${changed === 1 ? "" : "s"} changed. Open a pull request with the changes.`}
+            className="flex items-center gap-1 rounded bg-accent px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-accent/90"
+          >
+            <GitPullRequest size={11} /> {changed} {changed === 1 ? "file" : "files"}
+          </button>
+        )}
 
         {motif.changed.length > 0 && (
           <button
@@ -264,10 +353,12 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                 ))}
               </ul>
             )}
+            {editError && <p className="mx-6 mb-3 break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can't run: {editError}</p>}
             {runtimeError && <p className="mx-6 mb-6 break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
           </>
         )}
       </div>
+      <EditPrDialog open={prOpen} onOpenChange={setPrOpen} connection={connection} source={source} subject={component.name} />
     </div>
   );
 }

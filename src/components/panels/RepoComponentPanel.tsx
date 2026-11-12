@@ -5,7 +5,10 @@ import { cn } from "@/lib/utils";
 import { controlsFor, initialProps, type PropControl } from "@/lib/preview/props";
 import type { LibraryComponent } from "@/lib/preview/library";
 import type { Support } from "@/lib/repo-scan/types";
+import { useGitStore } from "@/store/git";
+import { useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
+import ElementInspector from "./ElementInspector";
 
 const SUPPORT_STYLE: Record<Support, string> = {
   editable: "bg-emerald-500/15 text-emerald-500",
@@ -76,9 +79,13 @@ export default function RepoComponentPanel({ component }: { component: LibraryCo
   const { setValue, resetValues } = usePreviewStore();
   const controls = controlsFor(component);
   const current = { ...initialProps(component), ...(overrides ?? {}) };
+  const editing = usePreviewStore((s) => s.mode === "edit");
+  const source = useLibraryStore((s) => s.source);
+  const connection = useGitStore((s) => s.connection);
 
   return (
     <div className="flex-1 select-text overflow-y-auto">
+      {editing && source && connection && <ElementInspector component={component} source={source} connection={connection} />}
       <div className="border-b border-surface-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className="flex-1 truncate text-sm font-medium text-text-primary">{component.name}</span>

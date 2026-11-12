@@ -7,14 +7,14 @@ interface PreviewStore {
   dark: boolean;
   // Width of the preview in px; null fills the stage.
   width: number | null;
-  mode: "playground" | "variants" | "examples";
+  mode: "playground" | "variants" | "examples" | "edit";
   // Whether previews show the tokens Motif has changed since the last sync.
   motifTokens: boolean;
   setValue: (id: string, name: string, value: unknown) => void;
   resetValues: (id: string) => void;
   setDark: (dark: boolean) => void;
   setWidth: (width: number | null) => void;
-  setMode: (mode: "playground" | "variants" | "examples") => void;
+  setMode: (mode: "playground" | "variants" | "examples" | "edit") => void;
   setMotifTokens: (on: boolean) => void;
 }
 
