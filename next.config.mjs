@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // Enable static export for Tauri desktop builds
   // Comment out for server-based deployment
   // output: 'export',
