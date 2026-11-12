@@ -2,12 +2,10 @@
 
 import { X } from "lucide-react";
 import TokensView from "./views/TokensView";
-import ComponentsView from "./views/ComponentsView";
 import ChatView from "./views/ChatView";
 import type { NavItem } from "./AppNav";
 
 const PANEL_TITLES: Record<NavItem, string> = {
-  components: "Components",
   tokens: "Tokens",
   chat: "AI Chat",
 };
@@ -33,7 +31,6 @@ export default function ActivityPanel({
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {activeNav === "components" && <ComponentsView />}
         {activeNav === "tokens" && <TokensView onClose={onClose} />}
         {activeNav === "chat" && <ChatView />}
       </div>

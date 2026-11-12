@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
-import Toolbar from "./toolbar/Toolbar";
 import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import DesignCanvas from "./canvas/DesignCanvas";
@@ -171,12 +170,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
   }, [fileId]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base select-none">
-      {/* Top toolbar */}
-      <Toolbar />
-
-      {/* Main area */}
-      <div className="flex flex-1 overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-surface-base select-none">
         {/* Far-left nav icon rail */}
         <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
 
@@ -198,7 +192,6 @@ export default function Editor({ fileId }: { fileId?: string }) {
 
         {/* Right properties panel */}
         <RightPanel />
-      </div>
     </div>
   );
 }

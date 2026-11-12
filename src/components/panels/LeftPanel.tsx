@@ -15,9 +15,95 @@ import {
   Frame,
   Trash2,
   Copy,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCanvasStore, type CanvasElement } from "@/store/canvas";
+
+// ── Built-in components (page-list style) ────────────────────────────────────
+
+const BUILT_IN = [
+  { name: "Button", category: "UI" },
+  { name: "Input", category: "UI" },
+  { name: "Badge", category: "UI" },
+  { name: "Avatar", category: "UI" },
+  { name: "Toggle", category: "UI" },
+  { name: "Chip", category: "UI" },
+  { name: "Dropdown", category: "UI" },
+  { name: "Tooltip", category: "UI" },
+  { name: "Card", category: "Layout" },
+  { name: "Modal", category: "Layout" },
+  { name: "Nav Bar", category: "Navigation" },
+  { name: "Tab Bar", category: "Navigation" },
+];
+
+function ComponentsSection() {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const filtered = query
+    ? BUILT_IN.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
+    : BUILT_IN;
+
+  const categories = Array.from(new Set(filtered.map((c) => c.category)));
+
+  return (
+    <div className="flex flex-col border-b border-surface-border" style={{ height: "240px" }}>
+      {/* Header */}
+      <div className="flex items-center gap-1.5 px-3 h-9 border-b border-surface-border flex-shrink-0">
+        <span className="text-xs font-medium text-text-secondary">Components</span>
+      </div>
+
+      {/* Search */}
+      <div className="px-2 py-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 bg-surface-subtle border border-surface-border rounded px-2 py-1">
+          <Search size={11} className="text-text-tertiary flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="Search…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-tertiary outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Component list */}
+      <div className="flex-1 overflow-y-auto">
+        {categories.length === 0 ? (
+          <div className="flex items-center justify-center h-10">
+            <span className="text-xs text-text-tertiary">No results</span>
+          </div>
+        ) : (
+          categories.map((cat) => (
+            <div key={cat}>
+              <p className="section-title">{cat}</p>
+              {filtered
+                .filter((c) => c.category === cat)
+                .map((c) => (
+                  <button
+                    key={c.name}
+                    onClick={() => setSelected(selected === c.name ? null : c.name)}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2",
+                      selected === c.name
+                        ? "bg-accent/15 text-accent"
+                        : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
+                    )}
+                  >
+                    <Square size={10} className="flex-shrink-0 opacity-50" />
+                    {c.name}
+                  </button>
+                ))}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Layer tree ────────────────────────────────────────────────────────────────
 
 const ELEMENT_ICONS: Record<CanvasElement["type"], React.ReactNode> = {
   rectangle: <Square size={11} />,
@@ -27,13 +113,7 @@ const ELEMENT_ICONS: Record<CanvasElement["type"], React.ReactNode> = {
   group: <Layers size={11} />,
 };
 
-function LayerItem({
-  id,
-  depth = 0,
-}: {
-  id: string;
-  depth?: number;
-}) {
+function LayerItem({ id, depth = 0 }: { id: string; depth?: number }) {
   const { elements, selectedIds, setSelectedIds, updateElement, deleteSelected, duplicateSelected } =
     useCanvasStore();
   const el = elements[id];
@@ -52,16 +132,6 @@ function LayerItem({
     }
   };
 
-  const handleVisibility = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    updateElement(id, { visible: el.visible === false ? true : false });
-  };
-
-  const handleLock = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    updateElement(id, { locked: !el.locked });
-  };
-
   return (
     <div>
       <div
@@ -72,38 +142,29 @@ function LayerItem({
         style={{ paddingLeft: `${8 + depth * 12}px` }}
         onClick={handleSelect}
       >
-        {/* Expand toggle */}
         <span
           className="w-3 flex-shrink-0"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (hasChildren) setExpanded(!expanded);
-          }}
+          onClick={(e) => { e.stopPropagation(); if (hasChildren) setExpanded(!expanded); }}
         >
-          {hasChildren ? (
-            expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />
-          ) : null}
+          {hasChildren ? (expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />) : null}
         </span>
 
-        {/* Icon */}
         <span className={cn("flex-shrink-0", isSelected ? "text-accent" : "text-text-tertiary")}>
           {ELEMENT_ICONS[el.type]}
         </span>
 
-        {/* Name */}
         <span className="flex-1 text-xs truncate ml-1">{el.name}</span>
 
-        {/* Actions (shown on hover/selected) */}
         <span className={cn("flex items-center gap-0.5 opacity-0 group-hover:opacity-100", isSelected && "opacity-100")}>
           <button
-            onClick={handleVisibility}
+            onClick={(e) => { e.stopPropagation(); updateElement(id, { visible: el.visible === false ? true : false }); }}
             className="p-0.5 rounded hover:bg-surface-overlay"
             title={el.visible === false ? "Show" : "Hide"}
           >
             {el.visible === false ? <EyeOff size={10} /> : <Eye size={10} />}
           </button>
           <button
-            onClick={handleLock}
+            onClick={(e) => { e.stopPropagation(); updateElement(id, { locked: !el.locked }); }}
             className="p-0.5 rounded hover:bg-surface-overlay"
             title={el.locked ? "Unlock" : "Lock"}
           >
@@ -112,7 +173,6 @@ function LayerItem({
         </span>
       </div>
 
-      {/* Children */}
       {hasChildren && expanded && el.children?.map((childId) => (
         <LayerItem key={childId} id={childId} depth={depth + 1} />
       ))}
@@ -120,58 +180,52 @@ function LayerItem({
   );
 }
 
-function LayersTab() {
-  const { order, elements, selectedIds, deleteSelected, duplicateSelected } =
-    useCanvasStore();
+function LayersSection() {
+  const { order, selectedIds, deleteSelected, duplicateSelected } = useCanvasStore();
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      {/* Actions bar */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center gap-1 px-2 py-1.5 border-b border-surface-border">
-          <span className="text-2xs text-text-tertiary flex-1">{selectedIds.length} selected</span>
-          <button
-            onClick={duplicateSelected}
-            className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-text-primary"
-            title="Duplicate"
-          >
-            <Copy size={11} />
-          </button>
-          <button
-            onClick={deleteSelected}
-            className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-red-400"
-            title="Delete"
-          >
-            <Trash2 size={11} />
-          </button>
-        </div>
-      )}
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-1.5 px-3 h-9 border-b border-surface-border flex-shrink-0">
+        <Layers size={12} className="text-text-tertiary" />
+        <span className="text-xs font-medium text-text-secondary flex-1">Layers</span>
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-0.5">
+            <button onClick={duplicateSelected} className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-text-primary" title="Duplicate">
+              <Copy size={11} />
+            </button>
+            <button onClick={deleteSelected} className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-red-400" title="Delete">
+              <Trash2 size={11} />
+            </button>
+          </div>
+        )}
+      </div>
 
-      {order.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-32 gap-2">
-          <Layers size={20} className="text-text-tertiary" />
-          <span className="text-xs text-text-tertiary">No elements yet</span>
-          <span className="text-2xs text-text-tertiary">Use the tools above to draw</span>
-        </div>
-      ) : (
-        <div className="py-1">
-          {[...order].reverse().map((id) => (
-            <LayerItem key={id} id={id} />
-          ))}
-        </div>
-      )}
+      <div className="flex-1 overflow-y-auto">
+        {order.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-24 gap-1">
+            <Layers size={18} className="text-text-tertiary" />
+            <span className="text-xs text-text-tertiary">No elements yet</span>
+          </div>
+        ) : (
+          <div className="py-1">
+            {[...order].reverse().map((id) => (
+              <LayerItem key={id} id={id} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 export default function LeftPanel() {
   return (
     <aside className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
-      <div className="flex items-center gap-1.5 px-3 h-10 border-b border-surface-border flex-shrink-0">
-        <Layers size={12} className="text-text-tertiary" />
-        <span className="text-xs font-medium text-text-secondary">Layers</span>
-      </div>
-      <LayersTab />
+      <ComponentsSection />
+      <LayersSection />
     </aside>
   );
 }

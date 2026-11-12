@@ -1,9 +1,10 @@
 "use client";
 
-import { LayoutGrid, Palette, Sparkles } from "lucide-react";
+import { Palette, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type NavItem = "components" | "tokens" | "chat";
+export type NavItem = "tokens" | "chat";
 
 export default function AppNav({
   activeNav,
@@ -13,13 +14,24 @@ export default function AppNav({
   setActiveNav: (item: NavItem | null) => void;
 }) {
   const items: { id: NavItem; icon: React.ReactNode; label: string }[] = [
-    { id: "components", icon: <LayoutGrid size={16} />, label: "Components" },
     { id: "tokens", icon: <Palette size={16} />, label: "Tokens" },
     { id: "chat", icon: <Sparkles size={16} />, label: "Chat" },
   ];
 
   return (
     <nav className="w-10 flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised">
+      {/* Logo */}
+      <Link
+        href="/"
+        title="Back to files"
+        className="w-10 h-10 flex items-center justify-center border-b border-surface-border hover:bg-surface-subtle transition-colors flex-shrink-0"
+      >
+        <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
+          <span className="text-white text-xs font-bold leading-none">M</span>
+        </div>
+      </Link>
+
+      {/* Nav items */}
       {items.map((item) => (
         <button
           key={item.id}
