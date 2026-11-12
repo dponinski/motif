@@ -7,12 +7,15 @@ interface PreviewStore {
   dark: boolean;
   // Width of the preview in px; null fills the stage.
   width: number | null;
-  mode: "playground" | "variants";
+  mode: "playground" | "variants" | "examples";
+  // Whether previews show the tokens Motif has changed since the last sync.
+  motifTokens: boolean;
   setValue: (id: string, name: string, value: unknown) => void;
   resetValues: (id: string) => void;
   setDark: (dark: boolean) => void;
   setWidth: (width: number | null) => void;
-  setMode: (mode: "playground" | "variants") => void;
+  setMode: (mode: "playground" | "variants" | "examples") => void;
+  setMotifTokens: (on: boolean) => void;
 }
 
 export const usePreviewStore = create<PreviewStore>((set) => ({
@@ -20,6 +23,7 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
   dark: false,
   width: null,
   mode: "playground",
+  motifTokens: true,
   setValue: (id, name, value) =>
     set((s) => {
       const current = { ...(s.values[id] ?? {}) };
@@ -31,4 +35,5 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
   setDark: (dark) => set({ dark }),
   setWidth: (width) => set({ width }),
   setMode: (mode) => set({ mode }),
+  setMotifTokens: (motifTokens) => set({ motifTokens }),
 }));

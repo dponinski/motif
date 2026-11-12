@@ -31,6 +31,10 @@ export interface GraphInput {
   repo: string;
   ref: string;
   entry: string;
+  // More modules to run besides the entry, e.g. several examples that share one page.
+  extraEntries?: string[];
+  // Files that exist only for this graph (examples), by path. They may import the repository's modules.
+  overlay?: Record<string, string>;
   // All file paths in the repository at `ref`.
   paths: string[];
   tailwindEntry: string | null;
@@ -102,9 +106,11 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   const limits = { ...DEFAULT_LIMITS, ...input.limits };
   const warnings: string[] = [];
   const unsupported = new Set<string>();
-  const paths = input.paths.filter((p) => !isIgnoredPath(p));
+  const overlay = input.overlay ?? {};
+  const paths = [...input.paths.filter((p) => !isIgnoredPath(p)), ...Object.keys(overlay)];
   const pathSet = new Set(paths);
-  const resolver = new Resolver(readerSource(reader, ref), pathSet, warnings);
+  const base = readerSource(reader, ref);
+  const resolver = new Resolver({ ...base, readText: async (p) => (p in overlay ? overlay[p] : base.readText(p)) }, pathSet, warnings);
   const read = (p: string) => reader.readText(p, ref).catch(() => null);
 
   const versions = await readVersions(reader, ref, entry);
@@ -116,8 +122,9 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   const rawUrl = (path: string) =>
     `https://raw.githubusercontent.com/${input.repo}/${ref.split("/").map(encodeURIComponent).join("/")}/${path.split("/").map(encodeURIComponent).join("/")}`;
 
-  const queue: string[] = [entry];
-  const seen = new Set<string>([entry]);
+  const starts = [entry, ...(input.extraEntries ?? [])];
+  const queue: string[] = [...starts];
+  const seen = new Set<string>(starts);
   const enqueue = (p: string) => { if (!seen.has(p)) { seen.add(p); queue.push(p); } };
 
   while (queue.length) {

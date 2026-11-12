@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ExternalLink, Layers, Loader2, Moon, Play, Sun } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, Layers, Loader2, Moon, Palette, Play, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
+import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
+import { tokenOverrides } from "@/lib/preview/overrides";
+import { readMotifTokens } from "@/lib/token-sync/doc";
 import { initialProps, variantCombinations } from "@/lib/preview/props";
 import { isFromPreview, type RenderItem, type ToPreview } from "@/lib/preview/protocol";
 import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { useDesignSystemStore } from "@/store/design-system";
 import { useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
@@ -23,48 +27,79 @@ const WIDTHS: { label: string; value: number | null }[] = [
 // Reading a repository is the slow part, so file lists and graphs are kept for as long as the import is current.
 const trees = new Map<string, Promise<string[]>>();
 const graphs = new Map<string, Promise<ModuleGraph>>();
+const exampleIndexes = new Map<string, Promise<ExampleIndex>>();
 
 class Unsupported extends Error {}
 
-function useGraph(component: LibraryComponent, source: LibrarySource, host: ReturnType<typeof useGitHost>) {
-  const [state, setState] = useState<{ srcdoc: string | null; unsupported: string[]; error: string | null }>({ srcdoc: null, unsupported: [], error: null });
+type Host = ReturnType<typeof useGitHost>;
+type Doc = { srcdoc: string | null; unsupported: string[]; error: string | null };
+const EMPTY: Doc = { srcdoc: null, unsupported: [], error: null };
+
+const versionOf = (source: LibrarySource) => `${source.repo}@${source.branch}#${source.importedAt}`;
+
+function loadTree(source: LibrarySource, host: Host): Promise<string[]> {
+  const key = versionOf(source);
+  if (!trees.has(key)) trees.set(key, host.listTree(source.branch).then((t) => t.paths));
+  return trees.get(key)!;
+}
+
+// Builds a page for a module graph. `key` says what the graph is of; `enabled` lets a page wait until it is wanted.
+function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, host: Host, make: (paths: string[]) => Promise<ModuleGraph>): Doc {
+  const [state, setState] = useState<Doc>(EMPTY);
+  const makeRef = useRef(make);
+  makeRef.current = make;
 
   useEffect(() => {
+    if (!enabled) return;
     let stale = false;
-    setState({ srcdoc: null, unsupported: [], error: null });
-    const version = `${source.repo}@${source.branch}#${source.importedAt}`;
+    setState(EMPTY);
+    const graphKey = `${versionOf(source)}:${key}`;
 
     (async () => {
       try {
         if (source.tailwindVersion === 3) throw new Unsupported("This repository uses Tailwind v3, which can't be previewed yet");
-        const treeKey = version;
-        if (!trees.has(treeKey)) trees.set(treeKey, host.listTree(source.branch).then((t) => t.paths));
-        const paths = await trees.get(treeKey)!;
-        const graphKey = `${version}:${component.file}`;
-        if (!graphs.has(graphKey)) {
-          graphs.set(graphKey, buildGraph({
-            reader: host, repo: source.repo, ref: source.branch, entry: component.file, paths,
-            tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles,
-          }));
-        }
+        const paths = await loadTree(source, host);
+        if (!graphs.has(graphKey)) graphs.set(graphKey, makeRef.current(paths));
         const graph = await graphs.get(graphKey)!;
         if (graph.unsupported.length) throw Object.assign(new Unsupported("unsupported"), { reasons: graph.unsupported });
         const srcdoc = buildSrcdoc({ graph, tailwindVersion: source.tailwindVersion, runtimeUrl: runtimeUrlFor(window.location.origin), nonce: newNonce() });
         if (!stale) setState({ srcdoc, unsupported: [], error: null });
       } catch (err) {
-        trees.delete(version);
-        graphs.delete(`${version}:${component.file}`);
+        trees.delete(versionOf(source));
+        graphs.delete(graphKey);
         if (stale) return;
-        if (err instanceof Unsupported) {
-          setState({ srcdoc: null, unsupported: (err as Unsupported & { reasons?: string[] }).reasons ?? [err.message], error: null });
-        } else {
-          setState({ srcdoc: null, unsupported: [], error: errorMessage(err) });
-        }
+        if (err instanceof Unsupported) setState({ srcdoc: null, unsupported: (err as Unsupported & { reasons?: string[] }).reasons ?? [err.message], error: null });
+        else setState({ srcdoc: null, unsupported: [], error: errorMessage(err) });
       }
     })();
     return () => { stale = true; };
-  }, [component.file, source, host]);
+  }, [enabled, key, source, host]);
 
+  return state;
+}
+
+// How the repository itself uses the component, from its demo files. Optional: a failure just means no examples.
+function useExamples(component: LibraryComponent, source: LibrarySource, host: Host): { list: RepoExample[]; loading: boolean } {
+  const [state, setState] = useState<{ list: RepoExample[]; loading: boolean }>({ list: [], loading: true });
+  useEffect(() => {
+    let stale = false;
+    setState({ list: [], loading: true });
+    const key = versionOf(source);
+    (async () => {
+      try {
+        if (!exampleIndexes.has(key)) {
+          const components = useLibraryStore.getState().components;
+          exampleIndexes.set(key, loadTree(source, host).then((paths) => findExamples({ reader: host, ref: source.branch, paths, components })));
+        }
+        const index = await exampleIndexes.get(key)!;
+        if (!stale) setState({ list: index[component.id] ?? [], loading: false });
+      } catch {
+        exampleIndexes.delete(key);
+        if (!stale) setState({ list: [], loading: false });
+      }
+    })();
+    return () => { stale = true; };
+  }, [component.id, source, host]);
   return state;
 }
 
@@ -80,9 +115,28 @@ function Notice({ icon, title, children }: { icon: React.ReactNode; title: strin
 
 function Stage({ component, source, connection }: { component: LibraryComponent; source: LibrarySource; connection: GitConnection }) {
   const host = useGitHost(connection);
-  const { srcdoc, unsupported, error } = useGraph(component, source, host);
+  const graphInput = { repo: source.repo, ref: source.branch, tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles };
+  const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader: host, entry: component.file, paths, ...graphInput }));
+
+  const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
-  const { dark, width, mode, setDark, setWidth, setMode } = usePreviewStore();
+  const { dark, width, mode: wanted, motifTokens, setDark, setWidth, setMode, setMotifTokens } = usePreviewStore();
+  const mode = wanted === "examples" && !examples.list.length ? "playground" : wanted;
+  const exampleDoc = useSrcdoc(mode === "examples", `examples:${component.id}`, source, host, (paths) =>
+    buildGraph({
+      reader: host, entry: examples.list[0].path, extraEntries: examples.list.slice(1).map((e) => e.path),
+      overlay: Object.fromEntries(examples.list.map((e) => [e.path, e.code])), paths, ...graphInput,
+    }));
+  const { srcdoc, unsupported, error } = mode === "examples" ? exampleDoc : main;
+
+  // What Motif has changed in its tokens since the last sync, shown on the repository's own components.
+  const link = useGitStore((s) => s.tokenLink);
+  const { colors, spacing, radii, shadows } = useDesignSystemStore();
+  const motif = useMemo(
+    () => (link && link.repo === source.repo ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes)) : { css: "", changed: [] as string[] }),
+    [link, source.repo, colors, spacing, radii, shadows]
+  );
+  const overridesCss = motifTokens ? motif.css : "";
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const renderId = useRef(0);
@@ -108,17 +162,20 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const props = useMemo(() => ({ ...initialProps(component), ...(overrides ?? {}) }), [component, overrides]);
   const variants = useMemo(() => variantCombinations(component, props), [component, props]);
   const items: RenderItem[] = useMemo(
-    () => mode === "variants" && component.variants.length > 0
-      ? variants.combinations.map((c) => ({ key: c.key, label: c.label, path: component.file, exportName, props: c.props }))
-      : [{ key: "main", path: component.file, exportName, props }],
-    [mode, component, variants, exportName, props]
+    () => mode === "examples"
+      ? examples.list.map((e) => ({ key: e.id, label: `${e.title}  ·  ${e.file}:${e.line}`, path: e.path, exportName: "default", props: {} }))
+      : mode === "variants" && component.variants.length > 0
+        ? variants.combinations.map((c) => ({ key: c.key, label: c.label, path: component.file, exportName, props: c.props }))
+        : [{ key: "main", path: component.file, exportName, props }],
+    [mode, examples.list, component, variants, exportName, props]
   );
+  const layout = mode === "examples" ? "stack" : items.length > 1 ? "grid" : "single";
 
   useEffect(() => {
     if (!ready) return;
-    const message: ToPreview = { type: "render", id: ++renderId.current, items, layout: items.length > 1 ? "grid" : "single", dark, overrides: "" };
+    const message: ToPreview = { type: "render", id: ++renderId.current, items, layout, dark, overrides: overridesCss };
     iframeRef.current?.contentWindow?.postMessage(message, "*");
-  }, [ready, items, dark]);
+  }, [ready, items, layout, dark, overridesCss]);
 
   const githubUrl = `https://github.com/${source.repo}/blob/${source.branch}/${component.file}#L${component.line}`;
 
@@ -132,18 +189,31 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         <div className="flex-1" />
 
         <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5">
-          {([["playground", "Playground", Play], ["variants", "All variants", Layers]] as const).map(([id, label, Icon]) => (
+          {([["playground", "Playground", Play], ["variants", "All variants", Layers], ["examples", "Examples", BookOpen]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setMode(id)}
               aria-pressed={mode === id}
-              disabled={id === "variants" && component.variants.length === 0}
+              disabled={(id === "variants" && component.variants.length === 0) || (id === "examples" && examples.list.length === 0)}
+              title={id === "examples" ? (examples.loading ? "Looking for examples in the repository…" : examples.list.length ? "How the repository uses this component" : "No examples found in the repository's demo files") : undefined}
               className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors disabled:opacity-40", mode === id ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}
             >
-              <Icon size={11} /> {label}
+              <Icon size={11} /> {label}{id === "examples" && examples.list.length > 0 && <span className="text-text-tertiary"> {examples.list.length}</span>}
             </button>
           ))}
         </div>
+
+        {motif.changed.length > 0 && (
+          <button
+            onClick={() => setMotifTokens(!motifTokens)}
+            aria-pressed={motifTokens}
+            aria-label="Motif token changes"
+            title={`${motif.changed.length} token${motif.changed.length === 1 ? "" : "s"} changed in Motif since the last sync: ${motifTokens ? "shown" : "hidden"}. Click to ${motifTokens ? "hide" : "show"}.`}
+            className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors", motifTokens ? "bg-accent/15 text-accent" : "bg-surface-subtle text-text-tertiary")}
+          >
+            <Palette size={11} /> {motif.changed.length}
+          </button>
+        )}
 
         <button onClick={() => setDark(!dark)} className="tool-btn !h-7 !w-7" title={dark ? "Switch to light" : "Switch to dark"} aria-label={dark ? "Light theme" : "Dark theme"}>
           {dark ? <Moon size={13} /> : <Sun size={13} />}
@@ -183,6 +253,16 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                 <Loader2 size={16} className="animate-spin" />
                 {srcdoc ? "Loading packages…" : `Reading ${component.name} from ${source.repo}…`}
               </div>
+            )}
+            {mode === "examples" && (
+              <ul className="mx-6 mb-6 flex flex-col gap-1.5 text-2xs text-text-tertiary">
+                {examples.list.filter((e) => e.notes.length > 0).map((e) => (
+                  <li key={e.id}>
+                    <a href={`https://github.com/${source.repo}/blob/${source.branch}/${e.file}#L${e.line}`} target="_blank" rel="noreferrer" className="font-mono hover:text-text-secondary">{e.file}:{e.line}</a>
+                    {" "}as shown here, {e.notes.join("; ")}.
+                  </li>
+                ))}
+              </ul>
             )}
             {runtimeError && <p className="mx-6 mb-6 break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
           </>
