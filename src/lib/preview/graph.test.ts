@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadFixture } from "../repo-scan/fixtures";
 import { memoryReader, memorySource, scanRepository } from "../repo-scan";
-import { buildGraph, packageName, type GraphInput } from "./graph";
+import { buildGraph, cachedReader, packageName, type GraphInput } from "./graph";
 
 async function graphOf(files: Record<string, string>, entry: string, extra: Partial<GraphInput> = {}) {
   const analysis = await scanRepository(memorySource(files), { repo: "a/b", ref: "main" }, { tokensOnly: true });
@@ -135,5 +135,36 @@ describe("module graph edge cases", () => {
   it("names the package of a specifier", () => {
     expect([packageName("clsx"), packageName("lucide-react/icons"), packageName("@radix-ui/react-dialog"), packageName("@radix-ui/react-dialog/sub")])
       .toEqual(["clsx", "lucide-react", "@radix-ui/react-dialog", "@radix-ui/react-dialog"]);
+  });
+});
+
+describe("graphs for editing", () => {
+  const files = loadFixture("motif-test-system");
+
+  it("marks elements with where they are in the source when asked", async () => {
+    const plain = await graphOf(files, "src/components/Card.tsx");
+    const marked = await graphOf(files, "src/components/Card.tsx", { instrument: true });
+    expect(plain.modules["src/components/Card.tsx"].code).not.toContain("data-motif");
+    expect(marked.modules["src/components/Card.tsx"].code).toContain("data-motif");
+    expect(marked.modules["src/components/Card.tsx"].code).toContain("src/components/Card.tsx|");
+  });
+
+  it("runs an edited file in place of the repository's, without changing the repository", async () => {
+    const edited = files["src/components/Card.tsx"].replace("bg-surface", "bg-primary");
+    const graph = await graphOf(files, "src/components/Card.tsx", { overlay: { "src/components/Card.tsx": edited } });
+    expect(graph.modules["src/components/Card.tsx"].code).toContain("bg-primary");
+    expect(graph.modules["src/components/Card.tsx"].code).not.toContain("bg-surface");
+    expect(files["src/components/Card.tsx"]).toContain("bg-surface");
+  });
+
+  it("reads each file once however many graphs are built", async () => {
+    let reads = 0;
+    const counting = { ...memoryReader(files), readText: async (p: string) => { reads++; return files[p] ?? null; } };
+    const reader = cachedReader(counting);
+    const build = () => buildGraph({ reader, repo: "a/b", ref: "main", entry: "src/components/Button.tsx", paths: Object.keys(files), tailwindEntry: null, tailwindVersion: 4, styleFiles: [] });
+    await build();
+    const first = reads;
+    await build();
+    expect(reads).toBe(first);
   });
 });

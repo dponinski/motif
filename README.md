@@ -35,6 +35,16 @@ After a scan, **Import components** (Git panel or the repository view) adds the 
 - **Not supported yet** (the stage says so): CSS modules, Tailwind v3, Sass and `next/*` imports. Compound parts such as `TabsTrigger` render on their own only through their examples.
 - Nothing is written to the repository.
 
+## Editing repository components
+
+Open a repository component and press **Edit** in the stage toolbar. Click any element in the preview to select it; the right panel shows what can be changed, and every change is made to the component's real source and shown in the preview straight away.
+
+- **Layout, spacing, size, type, fill and border** are controls over the element's Tailwind classes: display, direction, gap, alignment, padding, margin, width, height, text size and weight, color, background, border, radius and shadow. Colors take the linked token names. A change replaces the class where it already is, so the diff is the one class that changed. Classes with a modifier (`hover:`, `md:`, `dark:`) are left as written.
+- **Classes are found** in a plain `className`, in `cn(...)` / `clsx(...)` strings, and in `cva` / `tailwind-variants` tables: the base and the variant that is showing are edited, and a string written as `"a " + "b"` keeps its shape. Classes built at runtime or defined in another file are shown as such and not edited.
+- **Text, order and structure**: edit an element's text, move it up or down among its siblings, duplicate it or delete it. The root of a component can't be deleted.
+- **Undo and redo** step through every change, and **Create pull request** (toolbar) shows the diff of each file, then opens a branch and a pull request from the branch that was imported. Nothing is written to a branch directly, and a file that changed in the repository in the meantime stops the pull request instead of being overwritten.
+- Edits live in the browser session until they are sent. After the pull request is merged, press Update from repository.
+
 ## Syncing tokens with a repository
 
 Open **Sync tokens** in the Git panel (or **Repo sync** in the Tokens view) with a repository connected. Opening pull requests needs a token with Contents and Pull requests read and write.
