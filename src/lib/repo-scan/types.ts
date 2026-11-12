@@ -29,11 +29,22 @@ export interface RepoStack {
 
 export type RepoTokenKind = "color" | "radius" | "shadow" | "font" | "spacing" | "other";
 
+// css-var: a custom property in a rule; theme: a Tailwind v4 @theme entry; config: Tailwind v3 config; json: a token file.
+export type TokenContainer = "css-var" | "theme" | "config" | "json";
+
+export interface TokenLocation {
+  file: string;
+  line: number;
+  container: TokenContainer;
+}
+
 export interface RepoToken {
   name: string;
   kind: RepoTokenKind;
   // Value per theme key; "default" is the base theme unless a "light" theme exists.
   values: Record<string, string>;
+  // Where each theme's value is written, to change it in place.
+  locations: Record<string, TokenLocation>;
   // Tailwind name this token is exposed as, e.g. "color-primary" for bg-primary.
   tailwind: string | null;
   file: string;
@@ -82,6 +93,9 @@ export interface RepoAnalysis {
   themes: string[];
   tokens: RepoToken[];
   components: RepoComponent[];
+  // Stylesheets that were read, and the one that imports Tailwind (where a new tokens file would be imported).
+  styleFiles: string[];
+  tailwindEntry: string | null;
   warnings: string[];
   stats: { filesInRepo: number; filesRead: number; truncated: boolean };
 }

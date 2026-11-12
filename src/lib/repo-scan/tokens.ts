@@ -1,8 +1,8 @@
 import { keyName, lineOf, nameOf, parseModule, staticString, unwrap, type AnyNode } from "./ast";
 import { isColorValue } from "./summary";
-import type { RepoToken, RepoTokenKind } from "./types";
+import type { RepoToken, RepoTokenKind, TokenContainer } from "./types";
 
-const BASE = "base";
+export const BASE = "base";
 
 export interface TokenFile {
   path: string;
@@ -39,16 +39,19 @@ function kindOf(name: string, value: string): RepoTokenKind {
   return isColorValue(value) ? "color" : "other";
 }
 
-function put(acc: TokenAccumulator, token: { name: string; theme: string; value: string; file: string; line: number; tailwind?: string | null; kind?: RepoTokenKind }) {
+function put(acc: TokenAccumulator, token: { name: string; theme: string; value: string; file: string; line: number; container: TokenContainer; tailwind?: string | null; kind?: RepoTokenKind }) {
+  const location = { file: token.file, line: token.line, container: token.container };
   const existing = acc.tokens.get(token.name);
   if (existing) {
     existing.values[token.theme] = token.value;
+    existing.locations[token.theme] = location;
     return;
   }
   acc.tokens.set(token.name, {
     name: token.name,
     kind: token.kind ?? kindOf(token.name, token.value),
     values: { [token.theme]: token.value },
+    locations: { [token.theme]: location },
     tailwind: token.tailwind ?? null,
     file: token.file,
     line: token.line,
@@ -59,7 +62,7 @@ function put(acc: TokenAccumulator, token: { name: string; theme: string; value:
 
 const THEME_ATTR = /\[data-(?:theme|mode|color-scheme|color-mode)\s*[~|^$*]?=\s*["']?([\w-]+)["']?\]/i;
 
-function themeOfSelector(selector: string): string | null {
+export function themeOfSelector(selector: string): string | null {
   const themes = new Set<string>();
   for (const raw of selector.split(",")) {
     const sel = raw.trim().replace(/:not\([^)]*\)/g, "").replace(/:where\(([^)]*)\)/g, "$1");
@@ -112,11 +115,11 @@ export async function scanCss(files: TokenFile[], acc: TokenAccumulator, warning
       if (inTheme) {
         const target = value.match(/^var\(\s*--([\w-]+)/)?.[1];
         if (target) acc.aliases.push({ tailwind: name, target, file: file.path, line, value });
-        else put(acc, { name, theme: BASE, value, file: file.path, line, tailwind: name });
+        else put(acc, { name, theme: BASE, value, file: file.path, line, container: "theme", tailwind: name });
         return;
       }
       if (!selectorTheme) return;
-      put(acc, { name, theme: darkMedia && selectorTheme === BASE ? "dark" : selectorTheme, value, file: file.path, line });
+      put(acc, { name, theme: darkMedia && selectorTheme === BASE ? "dark" : selectorTheme, value, file: file.path, line, container: "css-var" });
     });
   }
 }
@@ -195,7 +198,7 @@ export async function scanTailwindConfig(file: TokenFile, acc: TokenAccumulator,
         const text = literalValue(value, consts);
         if (text === null || next.length === 0) continue;
         const name = `${V3_PREFIX[key]}-${next.join("-")}`;
-        put(acc, { name, theme: BASE, value: text, file: file.path, line: lineOf(prop), tailwind: name, kind: V3_SECTIONS[key] });
+        put(acc, { name, theme: BASE, value: text, file: file.path, line: lineOf(prop), container: "config", tailwind: name, kind: V3_SECTIONS[key] });
       }
     };
     visit(root, []);
@@ -232,7 +235,7 @@ export function scanTokenJson(file: TokenFile, acc: TokenAccumulator, warnings: 
         : /^(radius|radii|borderRadius)$/i.test(path[0]) ? "radius"
         : /^(space|spacing|size)$/i.test(path[0]) ? "spacing"
         : kindOf(name, value);
-      put(acc, { name, theme: BASE, value, file: file.path, line: 0, kind });
+      put(acc, { name, theme: BASE, value, file: file.path, line: 0, container: "json", kind });
       return;
     }
     for (const [key, child] of Object.entries(obj)) {
@@ -252,7 +255,7 @@ export function finalizeTokens(acc: TokenAccumulator): { themes: string[]; token
       target.tailwind = alias.tailwind;
       if (target.kind === "other" && kind) target.kind = kind;
     } else if (!acc.tokens.has(alias.tailwind)) {
-      put(acc, { name: alias.tailwind, theme: BASE, value: alias.value, file: alias.file, line: alias.line, tailwind: alias.tailwind });
+      put(acc, { name: alias.tailwind, theme: BASE, value: alias.value, file: alias.file, line: alias.line, container: "theme", tailwind: alias.tailwind });
     }
   }
 
@@ -264,6 +267,7 @@ export function finalizeTokens(acc: TokenAccumulator): { themes: string[]; token
   const tokens = [...acc.tokens.values()].map((t) => ({
     ...t,
     values: Object.fromEntries(Object.entries(t.values).map(([k, v]) => [rename(k), v])),
+    locations: Object.fromEntries(Object.entries(t.locations).map(([k, v]) => [rename(k), v])),
   }));
   const others = [...keys].filter((k) => k !== BASE).sort((a, b) => (a === "dark" ? -1 : b === "dark" ? 1 : a.localeCompare(b)));
   return { themes: [baseKey, ...others].filter((k) => keys.has(k === baseKey ? BASE : k)), tokens };

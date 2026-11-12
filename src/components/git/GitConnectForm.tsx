@@ -49,7 +49,7 @@ export default function GitConnectForm() {
         <span className="text-2xs text-text-tertiary">Access token (optional)</span>
         <input className="input-sm font-mono" type="password" placeholder="github_pat_…" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
         <span className="text-2xs text-text-tertiary leading-relaxed">
-          Public repositories can be read without one. Private repositories, and saving design files, need a fine-grained token limited to this repository with Contents read and write. It is stored in this browser only.
+          Public repositories can be read without one. Private repositories, saving design files and opening pull requests need a fine-grained token limited to this repository with Contents and Pull requests read and write. It is stored in this browser only.
         </span>
       </label>
       <label className="flex flex-col gap-1">

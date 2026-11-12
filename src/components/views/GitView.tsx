@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, GitBranch, Loader2, Plus, ScanSearch } from "lucide-react";
+import { ArrowDown, ArrowUp, GitBranch, Loader2, Palette, Plus, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createGitHubClient, gitBlobSha, type GitHost } from "@/lib/github";
 import { readerSource } from "@/lib/repo-scan/source";
@@ -13,6 +13,7 @@ import { loadOpenDocument, snapshotOpenDocument } from "@/store/open-document";
 import { toDocument, useFilesStore, type DesignFile } from "@/store/files";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import GitConnectForm from "@/components/git/GitConnectForm";
+import TokenSyncDialog from "@/components/git/TokenSyncDialog";
 import { errorMessage, useBranches, useGitHost } from "@/components/git/hooks";
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "untitled";
@@ -359,6 +360,7 @@ function ScanSection({ connection, host, initialBranch, onOpenReport }: {
   const [branch, setBranch] = useState(initialBranch);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncOpen, setSyncOpen] = useState(false);
   const result = analysis?.repo === repoSlug(connection) ? analysis : null;
 
   const scan = async () => {
@@ -404,6 +406,10 @@ function ScanSection({ connection, host, initialBranch, onOpenReport }: {
           <button className={cn(btnPrimary, "mt-1")} onClick={onOpenReport}>Open report</button>
         </div>
       )}
+      <button className={btnSecondary} onClick={() => setSyncOpen(true)}>
+        <Palette size={12} /> Sync tokens
+      </button>
+      <TokenSyncDialog open={syncOpen} onOpenChange={setSyncOpen} />
     </div>
   );
 }
@@ -436,7 +442,7 @@ function AddToken({ connection }: { connection: GitConnection }) {
   return (
     <form onSubmit={save} className="flex flex-col gap-3">
       <p className="text-xs text-text-secondary leading-relaxed">
-        Saving this design file to the repository needs an access token with Contents read and write. It is stored in this browser only.
+        Saving this design file or opening token pull requests needs an access token with Contents and Pull requests read and write. It is stored in this browser only.
       </p>
       <input className="input-sm font-mono" type="password" placeholder="github_pat_…" aria-label="Access token" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
       {error && <p className="text-xs text-red-400">{error}</p>}

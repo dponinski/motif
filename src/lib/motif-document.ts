@@ -286,6 +286,13 @@ function repair(doc: MotifDocument): MotifDocument {
   return { ...doc, components };
 }
 
+// Three-way merge of any JSON-like value; conflicts are provisionally resolved to `mine`.
+export function mergeJson(base: unknown, mine: unknown, theirs: unknown): { merged: unknown; conflicts: { path: string[]; mine: unknown; theirs: unknown }[] } {
+  const conflicts: Omit<MergeConflict, "label">[] = [];
+  const merged = merge3(base ?? {}, mine, theirs, [], conflicts);
+  return { merged, conflicts };
+}
+
 export function mergeDocuments(base: MotifDocument | null, mine: MotifDocument, theirs: MotifDocument): MergeResult {
   const raw: Omit<MergeConflict, "label">[] = [];
   const merged = merge3(base ?? {}, mine, theirs, [], raw) as MotifDocument;
@@ -293,7 +300,7 @@ export function mergeDocuments(base: MotifDocument | null, mine: MotifDocument, 
   return { merged: repair(merged), conflicts };
 }
 
-function setAt(node: unknown, path: string[], value: unknown): unknown {
+export function setAt(node: unknown, path: string[], value: unknown): unknown {
   if (path.length === 0) return value;
   const [key, ...rest] = path;
   if (Array.isArray(node)) {
