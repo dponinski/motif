@@ -27,6 +27,7 @@ function singleComponent(elements: Record<string, CanvasElement>, order: string[
   return {
     componentGroups: [],
     components: [{ id: MAIN_COMPONENT_ID, name: "Main", groupId: null, variantProps: [], elements, order }],
+    docs: [],
   };
 }
 
@@ -53,6 +54,7 @@ export function toDocument(file: DesignFile): MotifDocument {
     name: file.name,
     componentGroups: file.componentGroups,
     components: file.components,
+    docs: file.docs,
   };
 }
 
@@ -101,6 +103,7 @@ export const useFilesStore = create<FilesStore>()(
           patchFile(id, () => ({
             componentGroups: content.componentGroups,
             components: content.components,
+            docs: content.docs,
             updatedAt: Date.now(),
           }));
         },
@@ -110,6 +113,7 @@ export const useFilesStore = create<FilesStore>()(
             name: doc.name,
             componentGroups: doc.componentGroups,
             components: doc.components,
+            docs: doc.docs,
             updatedAt: Date.now(),
           }));
         },
@@ -122,6 +126,7 @@ export const useFilesStore = create<FilesStore>()(
             updatedAt: Date.now(),
             componentGroups: doc.componentGroups,
             components: doc.components,
+            docs: doc.docs,
             git,
           };
           set((s) => ({ files: [...s.files, file] }));
@@ -163,17 +168,16 @@ export const useFilesStore = create<FilesStore>()(
     },
     {
       name: "motif-files",
-      version: 1,
-      // v0 files stored a single scene as top-level elements/order.
+      version: 2,
+      // v0 files stored a single scene as top-level elements/order; v1 files had no docs.
       migrate: (persisted, version) => {
         const state = persisted as { files?: unknown[]; folders?: Folder[] };
-        if (version >= 1) return state as FilesStore;
         const files = (state.files ?? []).map((raw) => {
-          const { elements, order, ...rest } = raw as Omit<DesignFile, keyof DocumentContent> & {
+          const { elements, order, ...rest } = raw as Partial<DesignFile> & {
             elements?: Record<string, CanvasElement>;
             order?: string[];
           };
-          return { ...rest, ...singleComponent(elements ?? {}, order ?? []) };
+          return { docs: [], ...rest, ...(version < 1 ? singleComponent(elements ?? {}, order ?? []) : {}) };
         });
         return { ...state, files } as FilesStore;
       },

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { SlidersHorizontal, X, Minus, Plus, Code2, Trash2, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCanvasStore, type VariantProp } from "@/store/canvas";
+import { componentInterface, componentJsx } from "@/lib/component-code";
 import { formatZoom } from "@/lib/utils";
 import {
   useDesignSystemStore,
@@ -102,9 +103,7 @@ function ComponentPropsPanel() {
 
   const addProp = () => addVariantProp(def.id, `prop${def.variantProps.length + 1}`);
 
-  const tsxSignature = `interface ${def.name.replace(/\s+/g, "")}Props {\n${def.variantProps
-    .map((p) => `  ${p.name}?: ${p.values.map((v) => `"${v}"`).join(" | ")};`)
-    .join("\n")}\n}`;
+  const tsxSignature = componentInterface(def);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -241,10 +240,7 @@ function InstancePanel({ elementId }: { elementId: string }) {
     pushHistory();
   };
 
-  const jsxProps = def.variantProps
-    .map((p) => `${p.name}="${props[p.name] ?? p.default}"`)
-    .join(" ");
-  const jsxSnippet = `<${def.name.replace(/\s+/g, "")}${jsxProps ? " " + jsxProps : ""} />`;
+  const jsxSnippet = componentJsx(def, props);
 
   return (
     <div className="flex-1 overflow-y-auto">

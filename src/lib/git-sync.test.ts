@@ -41,6 +41,7 @@ function makeDoc(fills: Record<string, string>): MotifDocument {
     id: "file1",
     name: "Design",
     componentGroups: [],
+    docs: [],
     components: [{
       id: "comp-main",
       name: "Main",
