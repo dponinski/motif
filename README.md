@@ -28,9 +28,11 @@ Nothing is written to the repository by a scan. Only React repositories are read
 After a scan, **Import components** (Git panel or the repository view) adds the repository's components to the **Repository** group under Components. Opening one replaces the canvas with a stage that runs the real component from the repository, with its own styles and tokens.
 
 - **Props**: the right panel has a control for each prop (dropdowns from `cva` variants and string unions, switches for booleans, text) plus the content inside the component. **All variants** shows every combination side by side, and the stage has Light/Dark and width switches.
+- **Examples** show how the repository itself uses a component, taken from its demo, story and example files (`demo/`, `examples/`, `*.stories.tsx`, ...). Each usage becomes an example, and the parts of a compound component (`TabsTrigger`, `CardTitle`) are shown inside their parent. Values that only exist while the demo runs (state, props, local variables) are left out and handlers do nothing; the preview says what was left out. Overlays the demo opened with state are shown open.
+- **Motif's tokens**: once tokens are linked to the repository, the tokens you have changed in Motif since the last sync are applied on top of the repository's own styles in every preview, so you see the components in your tokens before a pull request exists. The palette button in the stage toolbar counts them and switches them off.
 - **Update from repository** rescans and reports what is new, changed or gone.
 - **How it runs**: the code is fetched in the browser, compiled with Sucrase and run in a sandboxed iframe with no access to Motif's storage or GitHub token, a Content Security Policy that blocks network requests and loads only React and the repository's packages from esm.sh and Tailwind's browser build from jsDelivr. Previews need network access to those CDNs, and image requests to https hosts are allowed.
-- **Not supported yet** (the stage says so): CSS modules, Tailwind v3, Sass and `next/*` imports. Compound parts such as `TabsTrigger` need their parent to render, which the examples work will provide.
+- **Not supported yet** (the stage says so): CSS modules, Tailwind v3, Sass and `next/*` imports. Compound parts such as `TabsTrigger` render on their own only through their examples.
 - Nothing is written to the repository.
 
 ## Syncing tokens with a repository

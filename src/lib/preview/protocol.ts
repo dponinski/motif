@@ -15,7 +15,7 @@ export type ToPreview = {
   type: "render";
   id: number;
   items: RenderItem[];
-  layout: "single" | "grid";
+  layout: "single" | "grid" | "stack";
   dark: boolean;
   // CSS appended after the repository's own, used to show Motif's token values.
   overrides: string;

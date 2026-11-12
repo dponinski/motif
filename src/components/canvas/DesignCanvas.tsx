@@ -475,7 +475,7 @@ export default function DesignCanvas() {
     if (!container) return;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      if (fabricRef.current && width > 0 && height > 0) { fabricRef.current.setWidth(width); fabricRef.current.setHeight(height); fabricRef.current.renderAll(); }
+      if (fabricRef.current && width > 0 && height > 0) { fabricRef.current.setDimensions({ width, height }); fabricRef.current.renderAll(); }
     });
     ro.observe(container);
     return () => ro.disconnect();

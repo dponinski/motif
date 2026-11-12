@@ -100,7 +100,11 @@
 
       function App(props) {
         var grid = props.layout === 'grid';
-        return h('div', { style: grid ? { display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', padding: 24 } : { padding: 24 } },
+        var stack = props.layout === 'stack';
+        var outer = grid ? { display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', padding: 24 }
+          : stack ? { display: 'flex', flexDirection: 'column', gap: 32, padding: 24 }
+          : { padding: 24 };
+        return h('div', { style: outer },
           props.items.map(function (item) {
             var element;
             try {
@@ -108,9 +112,11 @@
             } catch (error) {
               element = h('pre', { style: errorStyle }, error.message);
             }
-            return h('div', { key: item.key, style: { display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' } },
+            var body = h(Boundary, { key: JSON.stringify(item.props) }, element);
+            return h('div', { key: item.key, style: { display: 'flex', flexDirection: 'column', gap: 8, alignItems: stack ? 'stretch' : 'flex-start' } },
               item.label ? h('span', { style: { font: '11px ui-monospace, monospace', color: '#71717a' } }, item.label) : null,
-              h(Boundary, { key: JSON.stringify(item.props) }, element));
+              // A block wrapper lets full-width components fill the row while inline ones keep their size.
+              stack ? h('div', null, body) : body);
           }));
       }
 
