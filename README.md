@@ -71,3 +71,7 @@ Open **Sync tokens** in the Git panel (or **Repo sync** in the Tokens view) with
 ```bash
 npm test
 ```
+
+## Building on a server with an old glibc
+
+`npm run build` uses Webpack (`next build --webpack`). Next 16 builds with Turbopack by default, which needs Next's native compiler, and that needs glibc 2.29 or newer; on an older host (some shared hosting) Next falls back to its WebAssembly compiler, which only Webpack supports. Webpack builds the same app everywhere, so the build doesn't depend on the host. `npm run dev` still uses Turbopack.
