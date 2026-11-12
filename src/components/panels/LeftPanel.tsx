@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Layers,
   ChevronRight,
@@ -15,88 +15,290 @@ import {
   Frame,
   Trash2,
   Copy,
-  Search,
+  Plus,
+  FolderPlus,
+  Component,
+  Folder,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCanvasStore, type CanvasElement } from "@/store/canvas";
+import {
+  useCanvasStore,
+  type CanvasElement,
+  type ComponentDef,
+  type ComponentGroup,
+} from "@/store/canvas";
 
-// ── Built-in components (page-list style) ────────────────────────────────────
+// ── Component Browser ─────────────────────────────────────────────────────────
 
-const BUILT_IN = [
-  { name: "Button", category: "UI" },
-  { name: "Input", category: "UI" },
-  { name: "Badge", category: "UI" },
-  { name: "Avatar", category: "UI" },
-  { name: "Toggle", category: "UI" },
-  { name: "Chip", category: "UI" },
-  { name: "Dropdown", category: "UI" },
-  { name: "Tooltip", category: "UI" },
-  { name: "Card", category: "Layout" },
-  { name: "Modal", category: "Layout" },
-  { name: "Nav Bar", category: "Navigation" },
-  { name: "Tab Bar", category: "Navigation" },
-];
+function ComponentRow({
+  def,
+  isActive,
+  onActivate,
+  onRename,
+  onDelete,
+}: {
+  def: ComponentDef;
+  isActive: boolean;
+  onActivate: () => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(def.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(def.name);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
+
+  const commitEdit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== def.name) onRename(trimmed);
+    setEditing(false);
+  };
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-1.5 px-2 py-1.5 cursor-pointer transition-colors mx-1 rounded",
+        isActive
+          ? "bg-accent/15 text-accent"
+          : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
+      )}
+      onClick={onActivate}
+      onDoubleClick={startEdit}
+    >
+      <Component
+        size={11}
+        className={cn("flex-shrink-0", isActive ? "text-accent" : "text-text-tertiary")}
+      />
+
+      {editing ? (
+        <input
+          ref={inputRef}
+          className="flex-1 bg-surface-overlay text-xs text-text-primary outline-none rounded px-1 py-0.5 min-w-0"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") setEditing(false);
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          autoFocus
+        />
+      ) : (
+        <span className="flex-1 text-xs truncate">{def.name}</span>
+      )}
+
+      {!editing && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-overlay text-text-tertiary hover:text-red-400 flex-shrink-0"
+          title="Delete component"
+        >
+          <Trash2 size={10} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GroupRow({
+  group,
+  expanded,
+  onToggle,
+  onRename,
+  onDelete,
+}: {
+  group: ComponentGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(group.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(group.name);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  };
+
+  const commitEdit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== group.name) onRename(trimmed);
+    setEditing(false);
+  };
+
+  return (
+    <div
+      className="group flex items-center gap-1 px-2 py-1 cursor-pointer text-text-secondary hover:text-text-primary hover:bg-surface-subtle mx-1 rounded transition-colors"
+      onClick={onToggle}
+      onDoubleClick={startEdit}
+    >
+      <span className="flex-shrink-0 w-3 flex items-center justify-center">
+        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+      </span>
+      <Folder size={10} className="flex-shrink-0 text-text-tertiary" />
+
+      {editing ? (
+        <input
+          ref={inputRef}
+          className="flex-1 bg-surface-overlay text-xs text-text-primary outline-none rounded px-1 py-0.5 min-w-0"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitEdit();
+            if (e.key === "Escape") setEditing(false);
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          autoFocus
+        />
+      ) : (
+        <span className="flex-1 text-xs font-medium truncate">{group.name}</span>
+      )}
+
+      {!editing && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-surface-overlay text-text-tertiary hover:text-red-400 flex-shrink-0"
+          title="Delete group"
+        >
+          <Trash2 size={10} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 function ComponentsSection() {
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  const {
+    componentGroups,
+    componentDefs,
+    activeComponentId,
+    setActiveComponent,
+    createComponent,
+    deleteComponent,
+    renameComponent,
+    createGroup,
+    deleteGroup,
+    renameGroup,
+  } = useCanvasStore();
 
-  const filtered = query
-    ? BUILT_IN.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
-    : BUILT_IN;
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  const categories = Array.from(new Set(filtered.map((c) => c.category)));
+  const toggleGroup = (id: string) =>
+    setExpandedGroups((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
+
+  const isGroupExpanded = (id: string) => expandedGroups[id] !== false;
+
+  const handleCreateComponent = (groupId: string | null = null) => {
+    const name = `Component ${componentDefs.length + 1}`;
+    const id = createComponent(name, groupId);
+    setActiveComponent(id);
+  };
+
+  const handleCreateGroup = () => {
+    const name = `Group ${componentGroups.length + 1}`;
+    createGroup(name);
+  };
+
+  const ungrouped = componentDefs.filter((c) => c.groupId === null);
 
   return (
     <div className="flex flex-col border-b border-surface-border" style={{ height: "240px" }}>
       {/* Header */}
       <div className="flex items-center gap-1.5 px-3 h-9 border-b border-surface-border flex-shrink-0">
-        <span className="text-xs font-medium text-text-secondary">Components</span>
+        <span className="text-xs font-medium text-text-secondary flex-1">Components</span>
+        <button
+          onClick={handleCreateGroup}
+          className="p-1 rounded hover:bg-surface-subtle text-text-tertiary hover:text-text-primary transition-colors"
+          title="New group"
+        >
+          <FolderPlus size={11} />
+        </button>
+        <button
+          onClick={() => handleCreateComponent(null)}
+          className="p-1 rounded hover:bg-surface-subtle text-text-tertiary hover:text-text-primary transition-colors"
+          title="New component"
+        >
+          <Plus size={11} />
+        </button>
       </div>
 
-      {/* Search */}
-      <div className="px-2 py-1.5 flex-shrink-0">
-        <div className="flex items-center gap-1.5 bg-surface-subtle border border-surface-border rounded px-2 py-1">
-          <Search size={11} className="text-text-tertiary flex-shrink-0" />
-          <input
-            type="text"
-            placeholder="Search…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 bg-transparent text-xs text-text-primary placeholder:text-text-tertiary outline-none"
-          />
-        </div>
-      </div>
-
-      {/* Component list */}
-      <div className="flex-1 overflow-y-auto">
-        {categories.length === 0 ? (
-          <div className="flex items-center justify-center h-10">
-            <span className="text-xs text-text-tertiary">No results</span>
-          </div>
-        ) : (
-          categories.map((cat) => (
-            <div key={cat}>
-              <p className="section-title">{cat}</p>
-              {filtered
-                .filter((c) => c.category === cat)
-                .map((c) => (
-                  <button
-                    key={c.name}
-                    onClick={() => setSelected(selected === c.name ? null : c.name)}
-                    className={cn(
-                      "w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2",
-                      selected === c.name
-                        ? "bg-accent/15 text-accent"
-                        : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
-                    )}
-                  >
-                    <Square size={10} className="flex-shrink-0 opacity-50" />
-                    {c.name}
-                  </button>
+      {/* List */}
+      <div className="flex-1 overflow-y-auto py-1">
+        {/* Groups */}
+        {componentGroups.map((group) => {
+          const members = componentDefs.filter((c) => c.groupId === group.id);
+          const expanded = isGroupExpanded(group.id);
+          return (
+            <div key={group.id}>
+              <GroupRow
+                group={group}
+                expanded={expanded}
+                onToggle={() => toggleGroup(group.id)}
+                onRename={(name) => renameGroup(group.id, name)}
+                onDelete={() => deleteGroup(group.id)}
+              />
+              {expanded &&
+                members.map((def) => (
+                  <div key={def.id} className="pl-3">
+                    <ComponentRow
+                      def={def}
+                      isActive={def.id === activeComponentId}
+                      onActivate={() => setActiveComponent(def.id)}
+                      onRename={(name) => renameComponent(def.id, name)}
+                      onDelete={() => deleteComponent(def.id)}
+                    />
+                  </div>
                 ))}
+              {expanded && members.length === 0 && (
+                <div className="pl-7 py-1">
+                  <button
+                    onClick={() => handleCreateComponent(group.id)}
+                    className="text-xs text-text-tertiary hover:text-accent transition-colors flex items-center gap-1"
+                  >
+                    <Plus size={10} /> Add component
+                  </button>
+                </div>
+              )}
             </div>
-          ))
+          );
+        })}
+
+        {/* Ungrouped */}
+        {ungrouped.map((def) => (
+          <ComponentRow
+            key={def.id}
+            def={def}
+            isActive={def.id === activeComponentId}
+            onActivate={() => setActiveComponent(def.id)}
+            onRename={(name) => renameComponent(def.id, name)}
+            onDelete={() => deleteComponent(def.id)}
+          />
+        ))}
+
+        {componentDefs.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-20 gap-1">
+            <span className="text-xs text-text-tertiary">No components yet</span>
+          </div>
         )}
       </div>
     </div>
@@ -137,14 +339,19 @@ function LayerItem({ id, depth = 0 }: { id: string; depth?: number }) {
       <div
         className={cn(
           "group flex items-center gap-1 px-2 py-1 cursor-pointer rounded mx-1 transition-colors",
-          isSelected ? "bg-accent/20 text-text-primary" : "hover:bg-surface-subtle text-text-secondary hover:text-text-primary"
+          isSelected
+            ? "bg-accent/20 text-text-primary"
+            : "hover:bg-surface-subtle text-text-secondary hover:text-text-primary"
         )}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
         onClick={handleSelect}
       >
         <span
           className="w-3 flex-shrink-0"
-          onClick={(e) => { e.stopPropagation(); if (hasChildren) setExpanded(!expanded); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (hasChildren) setExpanded(!expanded);
+          }}
         >
           {hasChildren ? (expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />) : null}
         </span>
@@ -155,16 +362,27 @@ function LayerItem({ id, depth = 0 }: { id: string; depth?: number }) {
 
         <span className="flex-1 text-xs truncate ml-1">{el.name}</span>
 
-        <span className={cn("flex items-center gap-0.5 opacity-0 group-hover:opacity-100", isSelected && "opacity-100")}>
+        <span
+          className={cn(
+            "flex items-center gap-0.5 opacity-0 group-hover:opacity-100",
+            isSelected && "opacity-100"
+          )}
+        >
           <button
-            onClick={(e) => { e.stopPropagation(); updateElement(id, { visible: el.visible === false ? true : false }); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              updateElement(id, { visible: el.visible === false ? true : false });
+            }}
             className="p-0.5 rounded hover:bg-surface-overlay"
             title={el.visible === false ? "Show" : "Hide"}
           >
             {el.visible === false ? <EyeOff size={10} /> : <Eye size={10} />}
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); updateElement(id, { locked: !el.locked }); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              updateElement(id, { locked: !el.locked });
+            }}
             className="p-0.5 rounded hover:bg-surface-overlay"
             title={el.locked ? "Unlock" : "Lock"}
           >
@@ -173,9 +391,11 @@ function LayerItem({ id, depth = 0 }: { id: string; depth?: number }) {
         </span>
       </div>
 
-      {hasChildren && expanded && el.children?.map((childId) => (
-        <LayerItem key={childId} id={childId} depth={depth + 1} />
-      ))}
+      {hasChildren &&
+        expanded &&
+        el.children?.map((childId) => (
+          <LayerItem key={childId} id={childId} depth={depth + 1} />
+        ))}
     </div>
   );
 }
@@ -191,10 +411,18 @@ function LayersSection() {
         <span className="text-xs font-medium text-text-secondary flex-1">Layers</span>
         {selectedIds.length > 0 && (
           <div className="flex items-center gap-0.5">
-            <button onClick={duplicateSelected} className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-text-primary" title="Duplicate">
+            <button
+              onClick={duplicateSelected}
+              className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-text-primary"
+              title="Duplicate"
+            >
               <Copy size={11} />
             </button>
-            <button onClick={deleteSelected} className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-red-400" title="Delete">
+            <button
+              onClick={deleteSelected}
+              className="p-1 rounded hover:bg-surface-subtle text-text-secondary hover:text-red-400"
+              title="Delete"
+            >
               <Trash2 size={11} />
             </button>
           </div>

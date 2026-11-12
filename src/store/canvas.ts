@@ -1,6 +1,19 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 
+export interface ComponentGroup {
+  id: string;
+  name: string;
+}
+
+export interface ComponentDef {
+  id: string;
+  name: string;
+  groupId: string | null;
+}
+
+const MAIN_COMPONENT_ID = "comp-main";
+
 export type Tool =
   | "select"
   | "frame"
@@ -43,6 +56,11 @@ interface HistoryEntry {
   order: string[];
 }
 
+interface SceneSnapshot {
+  elements: Record<string, CanvasElement>;
+  order: string[];
+}
+
 interface CanvasStore {
   activeTool: Tool;
   zoom: number;
@@ -57,6 +75,12 @@ interface CanvasStore {
   snapToGrid: boolean;
   gridSize: number;
   clipboard: CanvasElement[];
+
+  // Multi-component support
+  componentGroups: ComponentGroup[];
+  componentDefs: ComponentDef[];
+  activeComponentId: string;
+  componentScenes: Record<string, SceneSnapshot>;
 
   setActiveTool: (tool: Tool) => void;
   setZoom: (zoom: number) => void;
@@ -82,6 +106,15 @@ interface CanvasStore {
   redo: () => void;
   clearCanvas: () => void;
   loadElements: (elements: CanvasElement[]) => void;
+
+  // Component management
+  setActiveComponent: (id: string) => void;
+  createComponent: (name: string, groupId?: string | null) => string;
+  deleteComponent: (id: string) => void;
+  renameComponent: (id: string, name: string) => void;
+  createGroup: (name: string) => string;
+  deleteGroup: (id: string) => void;
+  renameGroup: (id: string, name: string) => void;
 }
 
 const DEFAULT_ELEMENTS: CanvasElement[] = [
@@ -177,6 +210,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   snapToGrid: false,
   gridSize: 8,
   clipboard: [],
+
+  componentGroups: [],
+  componentDefs: [{ id: MAIN_COMPONENT_ID, name: "Main", groupId: null }],
+  activeComponentId: MAIN_COMPONENT_ID,
+  componentScenes: {
+    [MAIN_COMPONENT_ID]: { elements: initElements, order: initOrder },
+  },
 
   setActiveTool: (tool) => set({ activeTool: tool }),
   setZoom: (zoom) => set({ zoom: Math.min(256, Math.max(0.02, zoom)) }),
@@ -421,6 +461,90 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   clearCanvas: () => {
     set({ elements: {}, order: [], selectedIds: [] });
     get().pushHistory();
+  },
+
+  setActiveComponent: (id) => {
+    const { activeComponentId, elements, order, componentScenes, componentDefs } = get();
+    if (id === activeComponentId || !componentDefs.find((c) => c.id === id)) return;
+    // Save current scene before switching
+    const nextScenes: Record<string, SceneSnapshot> = {
+      ...componentScenes,
+      [activeComponentId]: { elements, order },
+    };
+    const scene = nextScenes[id] ?? { elements: {}, order: [] };
+    set({
+      componentScenes: nextScenes,
+      activeComponentId: id,
+      elements: scene.elements,
+      order: scene.order,
+      selectedIds: [],
+      history: [],
+      historyIndex: -1,
+    });
+  },
+
+  createComponent: (name, groupId = null) => {
+    const id = nanoid(8);
+    set((state) => ({
+      componentDefs: [...state.componentDefs, { id, name, groupId: groupId ?? null }],
+      componentScenes: { ...state.componentScenes, [id]: { elements: {}, order: [] } },
+    }));
+    return id;
+  },
+
+  deleteComponent: (id) => {
+    const { componentDefs, activeComponentId, componentScenes } = get();
+    if (componentDefs.length <= 1) return; // keep at least one
+    const nextDefs = componentDefs.filter((c) => c.id !== id);
+    const nextScenes = { ...componentScenes };
+    delete nextScenes[id];
+    // If deleting active component, switch to first remaining
+    if (activeComponentId === id) {
+      const fallback = nextDefs[0];
+      const scene = nextScenes[fallback.id] ?? { elements: {}, order: [] };
+      set({
+        componentDefs: nextDefs,
+        componentScenes: nextScenes,
+        activeComponentId: fallback.id,
+        elements: scene.elements,
+        order: scene.order,
+        selectedIds: [],
+        history: [],
+        historyIndex: -1,
+      });
+    } else {
+      set({ componentDefs: nextDefs, componentScenes: nextScenes });
+    }
+  },
+
+  renameComponent: (id, name) => {
+    set((state) => ({
+      componentDefs: state.componentDefs.map((c) => (c.id === id ? { ...c, name } : c)),
+    }));
+  },
+
+  createGroup: (name) => {
+    const id = nanoid(8);
+    set((state) => ({
+      componentGroups: [...state.componentGroups, { id, name }],
+    }));
+    return id;
+  },
+
+  deleteGroup: (id) => {
+    set((state) => ({
+      componentGroups: state.componentGroups.filter((g) => g.id !== id),
+      // Move components to ungrouped
+      componentDefs: state.componentDefs.map((c) =>
+        c.groupId === id ? { ...c, groupId: null } : c
+      ),
+    }));
+  },
+
+  renameGroup: (id, name) => {
+    set((state) => ({
+      componentGroups: state.componentGroups.map((g) => (g.id === id ? { ...g, name } : g)),
+    }));
   },
 
   loadElements: (elList) => {

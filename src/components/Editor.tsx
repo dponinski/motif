@@ -12,7 +12,7 @@ import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useFilesStore } from "@/store/files";
 
 export default function Editor({ fileId }: { fileId?: string }) {
-  const [activeNav, setActiveNav] = useState<NavItem | null>(null);
+  const [activeNav, setActiveNav] = useState<NavItem | null>("components");
 
   const { undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool } =
     useCanvasStore();
@@ -185,8 +185,8 @@ export default function Editor({ fileId }: { fileId?: string }) {
             <ActivityPanel activeNav="chat" onClose={() => setActiveNav(null)} />
           )}
 
-          {/* Layers + components panel */}
-          <LeftPanel />
+          {/* Components + layers panel (shown when components nav is active) */}
+          {activeNav === "components" && <LeftPanel />}
 
           {/* Vertical draw tools */}
           <VerticalToolbar />
