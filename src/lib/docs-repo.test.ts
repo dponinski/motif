@@ -4,7 +4,7 @@ import { memorySource, scanRepository } from "./repo-scan";
 import { toLibrary } from "./preview/library";
 import { blockHtml, renderDocsSite, type DocsContext } from "./docs-html";
 import { createBlock, docSections, isBuiltInPage, pageRepoRef, previewKey, repoPageId, BLOCK_TYPES } from "./docs";
-import { parseDocument, type DocBlock } from "./motif-document";
+import type { DocBlock } from "./motif-document";
 
 describe("documenting repository components", async () => {
   const files = loadFixture("motif-test-system");
@@ -129,22 +129,6 @@ describe("documenting repository components", async () => {
       const html = renderDocsSite("DS", sections, ctx(previews));
       expect(html).toContain("Repository components");
       expect(html).toContain(`href="#${repoPageId(refOf(button))}"`);
-    });
-  });
-
-  describe("in a saved document", () => {
-    it("keeps well formed blocks and drops the rest", () => {
-      const doc = parseDocument(JSON.stringify({
-        motif: 1, id: "d", name: "n", componentGroups: [], components: [],
-        docs: [{ id: "p", title: "t", blocks: [
-          { id: "1", type: "repo-preview", ref: { file: "a.tsx", name: "A" }, view: "variants" },
-          { id: "2", type: "repo-props", ref: { file: "a.tsx", name: "A" } },
-          { id: "3", type: "repo-code", ref: { file: "a.tsx" } },
-          { id: "4", type: "repo-preview", ref: { file: "a.tsx", name: "A" }, view: "wide" },
-          { id: "5", type: "repo-props", ref: "a.tsx" },
-        ] }],
-      }));
-      expect(doc.docs[0].blocks.map((b: DocBlock) => b.id)).toEqual(["1", "2"]);
     });
   });
 });

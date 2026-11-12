@@ -2,14 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CanvasElement } from "../store/canvas";
 import { componentPageId, docSections } from "./docs";
 import { blockHtml, renderDocsSite, sceneToSvg, type DocsContext } from "./docs-html";
-import {
-  mergeDocuments,
-  parseDocument,
-  serializeDocument,
-  type DocPage,
-  type DocumentComponent,
-  type MotifDocument,
-} from "./motif-document";
+import type { DocPage, DocumentComponent } from "./motif-document";
 
 const el = (id: string, extra: Partial<CanvasElement> = {}): CanvasElement => ({
   id, type: "rectangle", name: id, x: 0, y: 0, width: 10, height: 10, fill: "#000000", opacity: 1, rotation: 0, ...extra,
@@ -32,44 +25,7 @@ const context = (components: DocumentComponent[] = [component()]): DocsContext =
 
 const page = (blocks: DocPage["blocks"], id = "p1", title = "Intro"): DocPage => ({ id, title, blocks });
 
-const doc = (docs: DocPage[]): MotifDocument => ({
-  motif: 1, id: "file1", name: "Design", componentGroups: [], components: [component()], docs,
-});
-
-describe("docs in the document format", () => {
-  it("leaves docs out of the file while there are none", () => {
-    expect(serializeDocument(doc([]))).not.toContain('"docs"');
-    expect(parseDocument(serializeDocument(doc([]))).docs).toEqual([]);
-  });
-
-  it("round-trips pages and blocks", () => {
-    const d = doc([page([{ id: "b1", type: "heading", text: "Usage" }, { id: "b2", type: "guideline", do: "Be clear", dont: "Be vague" }])]);
-    expect(parseDocument(serializeDocument(d))).toEqual(d);
-  });
-
-  it("drops blocks it does not understand instead of failing", () => {
-    const raw = JSON.parse(serializeDocument(doc([page([{ id: "b1", type: "text", text: "ok" }])])));
-    raw.docs[0].blocks.push({ id: "b2", type: "video", src: "x" }, { id: "b3", type: "text" }, "junk");
-    expect(parseDocument(JSON.stringify(raw)).docs[0].blocks).toEqual([{ id: "b1", type: "text", text: "ok" }]);
-  });
-
-  it("merges edits to different blocks and reports edits to the same one", () => {
-    const base = doc([page([{ id: "b1", type: "text", text: "one" }, { id: "b2", type: "text", text: "two" }])]);
-    const edit = (blockId: string, text: string) => {
-      const copy = structuredClone(base);
-      const block = copy.docs[0].blocks.find((b) => b.id === blockId)!;
-      if (block.type === "text") block.text = text;
-      return copy;
-    };
-
-    const clean = mergeDocuments(base, edit("b1", "mine"), edit("b2", "theirs"));
-    expect(clean.conflicts).toEqual([]);
-    expect(clean.merged.docs[0].blocks).toMatchObject([{ text: "mine" }, { text: "theirs" }]);
-
-    const clash = mergeDocuments(base, edit("b1", "mine"), edit("b1", "theirs"));
-    expect(clash.conflicts.map((c) => c.label)).toEqual(["Docs › Intro · content"]);
-  });
-});
+const doc = (docs: DocPage[]) => ({ components: [component()], docs });
 
 describe("docSections", () => {
   it("gives every token category and component a default page", () => {

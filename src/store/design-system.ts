@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
@@ -153,82 +152,39 @@ const DEFAULT_SETS: TokenSet[] = [
   },
 ];
 
-function mkColor(id: string, name: string, value: string, group: string): ColorToken {
-  return { id, name, value, group, setId: DEFAULT_SET_ID, themeValues: { [DEFAULT_THEME_ID]: value } };
+// What a project keeps of the token store. A new project starts with one empty set: its tokens come from the
+// repository (Sync tokens) or are added by hand.
+export interface TokenData {
+  sets: TokenSet[];
+  colors: ColorToken[];
+  typography: TypographyToken[];
+  spacing: SpacingToken[];
+  radii: RadiusToken[];
+  shadows: ShadowToken[];
+  components: ComponentDefinition[];
 }
 
-const DEFAULT_COLORS: ColorToken[] = [
-  mkColor("c1", "primary-50", "#eef2ff", "primary"),
-  mkColor("c2", "primary-100", "#e0e7ff", "primary"),
-  mkColor("c3", "primary-200", "#c7d2fe", "primary"),
-  mkColor("c4", "primary-300", "#a5b4fc", "primary"),
-  mkColor("c5", "primary-400", "#818cf8", "primary"),
-  mkColor("c6", "primary-500", "#6366f1", "primary"),
-  mkColor("c7", "primary-600", "#4f46e5", "primary"),
-  mkColor("c8", "primary-700", "#4338ca", "primary"),
-  mkColor("n1", "neutral-50", "#fafafa", "neutral"),
-  mkColor("n2", "neutral-100", "#f5f5f5", "neutral"),
-  mkColor("n3", "neutral-200", "#e5e5e5", "neutral"),
-  mkColor("n4", "neutral-300", "#d4d4d4", "neutral"),
-  mkColor("n5", "neutral-400", "#a3a3a3", "neutral"),
-  mkColor("n6", "neutral-500", "#737373", "neutral"),
-  mkColor("n7", "neutral-700", "#404040", "neutral"),
-  mkColor("n8", "neutral-900", "#171717", "neutral"),
-  mkColor("s1", "success", "#22c55e", "semantic"),
-  mkColor("s2", "warning", "#f59e0b", "semantic"),
-  mkColor("s3", "error", "#ef4444", "semantic"),
-  mkColor("s4", "info", "#3b82f6", "semantic"),
-];
-
-function mkTypo(id: string, name: string, fontFamily: string, fontSize: number, fontWeight: number, lineHeight: number): TypographyToken {
-  return { id, name, fontFamily, fontSize, fontWeight, lineHeight, setId: DEFAULT_SET_ID };
+export function emptyTokenData(): TokenData {
+  return {
+    sets: DEFAULT_SETS.map((set) => ({ ...set, themes: [...set.themes] })),
+    colors: [],
+    typography: [],
+    spacing: [],
+    radii: [],
+    shadows: [],
+    components: [],
+  };
 }
 
-const DEFAULT_TYPOGRAPHY: TypographyToken[] = [
-  mkTypo("t1", "display-xl", "Inter", 48, 700, 56),
-  mkTypo("t2", "display-lg", "Inter", 36, 700, 44),
-  mkTypo("t3", "heading-xl", "Inter", 30, 600, 38),
-  mkTypo("t4", "heading-lg", "Inter", 24, 600, 32),
-  mkTypo("t5", "heading-md", "Inter", 20, 600, 28),
-  mkTypo("t6", "heading-sm", "Inter", 16, 600, 24),
-  mkTypo("t7", "body-lg", "Inter", 16, 400, 24),
-  mkTypo("t8", "body-md", "Inter", 14, 400, 20),
-  mkTypo("t9", "body-sm", "Inter", 12, 400, 18),
-  mkTypo("t10", "label-lg", "Inter", 14, 500, 20),
-  mkTypo("t11", "label-sm", "Inter", 12, 500, 16),
-  mkTypo("t12", "caption", "Inter", 11, 400, 16),
-];
-
-const DEFAULT_SPACING: SpacingToken[] = [
-  { id: "sp1", name: "space-1", value: 4, setId: DEFAULT_SET_ID },
-  { id: "sp2", name: "space-2", value: 8, setId: DEFAULT_SET_ID },
-  { id: "sp3", name: "space-3", value: 12, setId: DEFAULT_SET_ID },
-  { id: "sp4", name: "space-4", value: 16, setId: DEFAULT_SET_ID },
-  { id: "sp5", name: "space-5", value: 20, setId: DEFAULT_SET_ID },
-  { id: "sp6", name: "space-6", value: 24, setId: DEFAULT_SET_ID },
-  { id: "sp7", name: "space-8", value: 32, setId: DEFAULT_SET_ID },
-  { id: "sp8", name: "space-10", value: 40, setId: DEFAULT_SET_ID },
-  { id: "sp9", name: "space-12", value: 48, setId: DEFAULT_SET_ID },
-  { id: "sp10", name: "space-16", value: 64, setId: DEFAULT_SET_ID },
-];
-
-const DEFAULT_RADII: RadiusToken[] = [
-  { id: "r1", name: "radius-none", value: 0, setId: DEFAULT_SET_ID },
-  { id: "r2", name: "radius-sm", value: 2, setId: DEFAULT_SET_ID },
-  { id: "r3", name: "radius-md", value: 4, setId: DEFAULT_SET_ID },
-  { id: "r4", name: "radius-lg", value: 8, setId: DEFAULT_SET_ID },
-  { id: "r5", name: "radius-xl", value: 12, setId: DEFAULT_SET_ID },
-  { id: "r6", name: "radius-2xl", value: 16, setId: DEFAULT_SET_ID },
-  { id: "r7", name: "radius-full", value: 9999, setId: DEFAULT_SET_ID },
-];
-
-const DEFAULT_SHADOWS: ShadowToken[] = [
-  { id: "sh1", name: "shadow-sm", x: 0, y: 1, blur: 2, spread: 0, color: "rgba(0,0,0,0.05)", group: "default", setId: DEFAULT_SET_ID },
-  { id: "sh2", name: "shadow-md", x: 0, y: 4, blur: 6, spread: -1, color: "rgba(0,0,0,0.1)", group: "default", setId: DEFAULT_SET_ID },
-  { id: "sh3", name: "shadow-lg", x: 0, y: 10, blur: 15, spread: -3, color: "rgba(0,0,0,0.1)", group: "default", setId: DEFAULT_SET_ID },
-  { id: "sh4", name: "shadow-xl", x: 0, y: 20, blur: 25, spread: -5, color: "rgba(0,0,0,0.1)", group: "default", setId: DEFAULT_SET_ID },
-  { id: "sh5", name: "shadow-inner", x: 0, y: 2, blur: 4, spread: 0, color: "rgba(0,0,0,0.06)", group: "inner", setId: DEFAULT_SET_ID },
-];
+export const snapshotTokens = (s: TokenData): TokenData => ({
+  sets: s.sets,
+  colors: s.colors,
+  typography: s.typography,
+  spacing: s.spacing,
+  radii: s.radii,
+  shadows: s.shadows,
+  components: s.components,
+});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -244,16 +200,10 @@ function resolveColor(token: ColorToken, sets: TokenSet[]): string {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
+// Held in memory for the project that is open; the project keeps it (see store/project-session.ts).
 export const useDesignSystemStore = create<DesignSystemStore>()(
-  persist(
-    (set, get) => ({
-      sets: DEFAULT_SETS,
-      colors: DEFAULT_COLORS,
-      typography: DEFAULT_TYPOGRAPHY,
-      spacing: DEFAULT_SPACING,
-      radii: DEFAULT_RADII,
-      shadows: DEFAULT_SHADOWS,
-      components: [],
+  (set, get) => ({
+      ...emptyTokenData(),
 
       // ── Set management ──────────────────────────────────────────────────────
 
@@ -568,32 +518,5 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         }
         return { imported, errors };
       },
-    }),
-    {
-      name: "motif-design-system",
-      merge: (persisted: unknown, current) => {
-        const p = persisted as Partial<DesignSystemStore> | null;
-        if (!p) return current;
-        // Migrate old ColorTokens that lack setId/themeValues
-        const colors = (p.colors ?? current.colors).map((c: ColorToken) => ({
-          ...c,
-          setId: c.setId ?? DEFAULT_SET_ID,
-          themeValues: c.themeValues ?? { [DEFAULT_THEME_ID]: c.value },
-        }));
-        // Migrate other token types
-        const migrateSetId = <T extends { setId?: string }>(arr: T[]): T[] =>
-          arr.map((t) => ({ setId: DEFAULT_SET_ID, ...t }));
-        return {
-          ...current,
-          ...p,
-          sets: p.sets ?? current.sets,
-          colors,
-          typography: migrateSetId(p.typography ?? current.typography),
-          spacing: migrateSetId(p.spacing ?? current.spacing),
-          radii: migrateSetId(p.radii ?? current.radii),
-          shadows: migrateSetId(p.shadows ?? current.shadows),
-        };
-      },
-    }
-  )
+  })
 );

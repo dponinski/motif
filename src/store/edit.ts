@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { safeStorage } from "../lib/safe-storage";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 // Changes made to a repository's source in the component stage, kept until they are sent as a pull request.
@@ -42,13 +43,6 @@ interface EditStore {
 }
 
 const START: Entry = { texts: {}, selection: null, summary: "" };
-
-// Storage that never throws: a full or blocked browser store just means the changes aren't kept past this page.
-const safeStorage = {
-  getItem: (name: string) => { try { return localStorage.getItem(name); } catch { return null; } },
-  setItem: (name: string, value: string) => { try { localStorage.setItem(name, value); } catch { /* not kept */ } },
-  removeItem: (name: string) => { try { localStorage.removeItem(name); } catch { /* nothing to remove */ } },
-};
 
 export const useEditStore = create<EditStore>()(
   persist(
