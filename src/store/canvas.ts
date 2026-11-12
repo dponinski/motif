@@ -6,10 +6,18 @@ export interface ComponentGroup {
   name: string;
 }
 
+export interface VariantProp {
+  id: string;
+  name: string;
+  values: string[];
+  default: string;
+}
+
 export interface ComponentDef {
   id: string;
   name: string;
   groupId: string | null;
+  variantProps: VariantProp[];
 }
 
 const MAIN_COMPONENT_ID = "comp-main";
@@ -24,7 +32,7 @@ export type Tool =
 
 export interface CanvasElement {
   id: string;
-  type: "frame" | "rectangle" | "ellipse" | "text" | "group";
+  type: "frame" | "rectangle" | "ellipse" | "text" | "group" | "instance";
   name: string;
   x: number;
   y: number;
@@ -49,6 +57,9 @@ export interface CanvasElement {
   children?: string[];
   locked?: boolean;
   visible?: boolean;
+  // instance
+  componentId?: string;
+  instanceProps?: Record<string, string>;
 }
 
 interface HistoryEntry {
@@ -115,6 +126,14 @@ interface CanvasStore {
   createGroup: (name: string) => string;
   deleteGroup: (id: string) => void;
   renameGroup: (id: string, name: string) => void;
+
+  // Variant props
+  addVariantProp: (componentId: string, name: string) => void;
+  updateVariantProp: (componentId: string, propId: string, patch: Partial<Omit<VariantProp, "id">>) => void;
+  removeVariantProp: (componentId: string, propId: string) => void;
+
+  // Instances
+  placeInstance: (componentId: string) => void;
 }
 
 const DEFAULT_ELEMENTS: CanvasElement[] = [
@@ -212,7 +231,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   clipboard: [],
 
   componentGroups: [],
-  componentDefs: [{ id: MAIN_COMPONENT_ID, name: "Main", groupId: null }],
+  componentDefs: [{ id: MAIN_COMPONENT_ID, name: "Main", groupId: null, variantProps: [] }],
   activeComponentId: MAIN_COMPONENT_ID,
   componentScenes: {
     [MAIN_COMPONENT_ID]: { elements: initElements, order: initOrder },
@@ -486,7 +505,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   createComponent: (name, groupId = null) => {
     const id = nanoid(8);
     set((state) => ({
-      componentDefs: [...state.componentDefs, { id, name, groupId: groupId ?? null }],
+      componentDefs: [...state.componentDefs, { id, name, groupId: groupId ?? null, variantProps: [] }],
       componentScenes: { ...state.componentScenes, [id]: { elements: {}, order: [] } },
     }));
     return id;
@@ -545,6 +564,70 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set((state) => ({
       componentGroups: state.componentGroups.map((g) => (g.id === id ? { ...g, name } : g)),
     }));
+  },
+
+  addVariantProp: (componentId, name) => {
+    const id = nanoid(6);
+    const prop: VariantProp = { id, name, values: ["Default"], default: "Default" };
+    set((state) => ({
+      componentDefs: state.componentDefs.map((c) =>
+        c.id === componentId ? { ...c, variantProps: [...c.variantProps, prop] } : c
+      ),
+    }));
+  },
+
+  updateVariantProp: (componentId, propId, patch) => {
+    set((state) => ({
+      componentDefs: state.componentDefs.map((c) =>
+        c.id === componentId
+          ? {
+              ...c,
+              variantProps: c.variantProps.map((p) =>
+                p.id === propId ? { ...p, ...patch } : p
+              ),
+            }
+          : c
+      ),
+    }));
+  },
+
+  removeVariantProp: (componentId, propId) => {
+    set((state) => ({
+      componentDefs: state.componentDefs.map((c) =>
+        c.id === componentId
+          ? { ...c, variantProps: c.variantProps.filter((p) => p.id !== propId) }
+          : c
+      ),
+    }));
+  },
+
+  placeInstance: (componentId) => {
+    const { componentDefs } = get();
+    const def = componentDefs.find((c) => c.id === componentId);
+    if (!def) return;
+    const instanceProps: Record<string, string> = {};
+    for (const p of def.variantProps) instanceProps[p.name] = p.default;
+    const id = nanoid(8);
+    const el: CanvasElement = {
+      id,
+      type: "instance",
+      name: `${def.name} instance`,
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 80,
+      fill: "rgba(99,102,241,0.08)",
+      opacity: 1,
+      rotation: 0,
+      componentId,
+      instanceProps,
+    };
+    set((state) => ({
+      elements: { ...state.elements, [id]: el },
+      order: [...state.order, id],
+      selectedIds: [id],
+    }));
+    get().pushHistory();
   },
 
   loadElements: (elList) => {

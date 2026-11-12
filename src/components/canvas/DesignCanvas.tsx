@@ -144,6 +144,18 @@ function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, Canva
       fontFamily: typo?.fontFamily ?? el.fontFamily ?? "Inter",
     });
   }
+  if (el.type === "instance") {
+    return new m.Rect({
+      ...common,
+      width: el.width,
+      height: el.height,
+      fill: "rgba(99,102,241,0.08)",
+      stroke: "#6366f1",
+      strokeWidth: 1.5,
+      strokeDashArray: [5, 4],
+      rx: 6, ry: 6,
+    });
+  }
   return null;
 }
 
@@ -175,6 +187,8 @@ function applyProps(obj: FObj, el: CanvasElement, elements: Record<string, Canva
       fontFamily: typo?.fontFamily ?? el.fontFamily ?? "Inter",
       text: el.content ?? "",
     });
+  } else if (el.type === "instance") {
+    obj.set({ width: el.width, height: el.height, scaleX: 1, scaleY: 1 });
   }
 }
 
