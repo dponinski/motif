@@ -73,6 +73,7 @@
       var registry = createRegistry(data, externals);
       var lastRender = null;
       var editOn = false;
+      var canvasOn = false;
       var selectedKey = null;
       var hovered = null;
       var updates = Promise.resolve();
@@ -229,6 +230,8 @@
             registry = createRegistry(data, externals);
             renderLast();
           }).catch(fail);
+        } else if (message.type === 'canvas') {
+          canvasOn = !!message.on;
         } else if (message.type === 'edit') {
           editOn = !!message.on;
           selectedKey = message.selected || null;
@@ -236,6 +239,37 @@
           draw();
         }
       }
+
+      // On a canvas that pans and zooms, the wheel and the Space key go to the page under the pointer, not to the
+      // canvas around it, so they are passed up: scrolling and pinching move the canvas, Space turns dragging
+      // into panning. A component that scrolls inside itself keeps its own scrolling.
+      function scrollsItself(el, dx, dy) {
+        for (; el && el.nodeType === 1 && el !== document.documentElement; el = el.parentElement) {
+          var style = getComputedStyle(el);
+          if (dy && /auto|scroll/.test(style.overflowY) && el.scrollHeight > el.clientHeight &&
+              (dy < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1)) return true;
+          if (dx && /auto|scroll/.test(style.overflowX) && el.scrollWidth > el.clientWidth &&
+              (dx < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1)) return true;
+        }
+        return false;
+      }
+      var typing = function (el) {
+        var tag = el && el.tagName;
+        return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A' || !!(el && el.isContentEditable);
+      };
+      window.addEventListener('wheel', function (event) {
+        if (!canvasOn) return;
+        if (!event.ctrlKey && !event.metaKey && scrollsItself(event.target, event.deltaX, event.deltaY)) return;
+        event.preventDefault();
+        post({ type: 'wheel', deltaX: event.deltaX, deltaY: event.deltaY, deltaMode: event.deltaMode, ctrlKey: event.ctrlKey, metaKey: event.metaKey, clientX: event.clientX, clientY: event.clientY });
+      }, { passive: false, capture: true });
+      window.addEventListener('keydown', function (event) {
+        if (!canvasOn || event.key !== ' ' || typing(event.target)) return;
+        event.preventDefault();
+        if (!event.repeat) post({ type: 'space', down: true });
+      }, true);
+      window.addEventListener('keyup', function (event) { if (canvasOn && event.key === ' ') post({ type: 'space', down: false }); }, true);
+      window.addEventListener('blur', function () { if (canvasOn) post({ type: 'space', down: false }); });
 
       window.addEventListener('message', function (event) {
         if (event.source !== window.parent) return;

@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, BookOpen, Download, Plus, Trash2, X } from "lucide-
 import { nanoid } from "nanoid";
 import { cn, downloadString } from "@/lib/utils";
 import {
-  BLOCK_TYPES, TOKEN_KINDS, createBlock, docSections, isBuiltInPage, pageComponentId, pageRepoRef, previewKey, repoKey,
+  BLOCK_TYPES, TOKEN_KINDS, createBlock, docSections, isBuiltInPage, pageRepoRef, previewKey, repoKey,
   type BlockType, type DocSection,
 } from "@/lib/docs";
 import { DOCS_CSS, blockHtml, renderDocsSite, type DocsContext } from "@/lib/docs-html";
@@ -16,7 +16,6 @@ import { useLibraryStore } from "@/store/library";
 import { createGitHubClient } from "@/lib/github";
 import { buildPreviews } from "@/components/stage/docs-previews";
 import RepoDocPreview from "./RepoDocPreview";
-import { useCanvasStore } from "@/store/canvas";
 import { useDesignSystemStore } from "@/store/design-system";
 import { useDocsStore } from "@/store/docs";
 import { useProjectsStore } from "@/store/projects";
@@ -28,20 +27,14 @@ function useRepoComponents() {
 
 function useDocsContext(): DocsContext {
   const repo = useRepoComponents();
-  const elements = useCanvasStore((s) => s.elements);
-  const order = useCanvasStore((s) => s.order);
-  const defs = useCanvasStore((s) => s.componentDefs);
-  const scenes = useCanvasStore((s) => s.componentScenes);
   const { colors, typography, spacing, radii, shadows } = useDesignSystemStore();
 
   return useMemo(
     () => ({
-      components: useCanvasStore.getState().getDocumentContent().components,
       tokens: { colors, typography, spacing, radii, shadows },
       repo: repo.length ? { components: repo } : undefined,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [elements, order, defs, scenes, colors, typography, spacing, radii, shadows, repo]
+    [colors, typography, spacing, radii, shadows, repo]
   );
 }
 
@@ -173,13 +166,6 @@ function BlockPicker({ block, ctx, onChange }: { block: DocBlock; ctx: DocsConte
       </>
     );
   }
-  if (block.type === "preview" || block.type === "props" || block.type === "code") {
-    return (
-      <select className={pickerClass} aria-label="Component" value={block.componentId} onChange={(e) => onChange({ componentId: e.target.value })}>
-        {ctx.components.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
-    );
-  }
   return null;
 }
 
@@ -187,7 +173,6 @@ function BlockPicker({ block, ctx, onChange }: { block: DocBlock; ctx: DocsConte
 
 function PageEditor({ page, ctx }: { page: DocPage; ctx: DocsContext }) {
   const savePage = useDocsStore((s) => s.savePage);
-  const defaultComponent = pageComponentId(page.id) ?? ctx.components[0]?.id ?? "";
   const first = ctx.repo?.components[0];
   const defaultRef: RepoRef = pageRepoRef(page.id) ?? (first ? { file: first.file, name: first.name } : { file: "", name: "" });
 
@@ -196,7 +181,7 @@ function PageEditor({ page, ctx }: { page: DocPage; ctx: DocsContext }) {
     setBlocks(page.blocks.map((b) => (b.id === id ? ({ ...b, ...patch } as DocBlock) : b)));
   const insert = (type: BlockType, after: number) => {
     const blocks = [...page.blocks];
-    blocks.splice(after + 1, 0, createBlock(type, nanoid(6), defaultComponent, defaultRef));
+    blocks.splice(after + 1, 0, createBlock(type, nanoid(6), defaultRef));
     setBlocks(blocks);
   };
   const move = (index: number, delta: -1 | 1) => {
@@ -302,8 +287,8 @@ export default function DocsView({ projectId, onClose }: { projectId: string; on
   const ctx = useDocsContext();
   const repo = useRepoComponents();
   const sections = useMemo(
-    () => docSections(pages, ctx.components, repo.map((c) => ({ file: c.file, name: c.name, hasVariants: c.variants.length > 0 }))),
-    [pages, ctx.components, repo]
+    () => docSections(pages, repo.map((c) => ({ file: c.file, name: c.name, hasVariants: c.variants.length > 0 }))),
+    [pages, repo]
   );
 
   // Live previews of repository components are pages of their own, built when they are needed: to look at the
@@ -392,7 +377,7 @@ export default function DocsView({ projectId, onClose }: { projectId: string; on
         </button>
 
         <div className="h-5 w-px bg-surface-border" />
-        <button onClick={onClose} className="rounded p-1.5 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary" title="Back to canvas">
+        <button onClick={onClose} className="rounded p-1.5 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary" title="Back to the editor">
           <X size={14} />
         </button>
       </div>

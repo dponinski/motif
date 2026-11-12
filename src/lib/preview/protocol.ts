@@ -38,13 +38,23 @@ export interface EditMessage {
   selected: string | null;
 }
 
-export type ToPreview = RenderMessage | ModulesMessage | EditMessage;
+// The preview sits on a canvas that pans and zooms. A page inside an iframe is given the wheel and the keyboard
+// before the page around it, so while this is on it passes scrolling, pinching and holding Space up as messages.
+export interface CanvasMessage {
+  type: "canvas";
+  on: boolean;
+}
+
+export type ToPreview = RenderMessage | ModulesMessage | EditMessage | CanvasMessage;
 
 export type FromPreview =
   | { type: "ready" }
   | { type: "rendered"; id: number; height: number; width?: number }
   | { type: "select"; key: string }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  // Only sent while the canvas asked for it (see CanvasMessage). Positions are in the preview's own pixels.
+  | { type: "wheel"; deltaX: number; deltaY: number; deltaMode: number; ctrlKey: boolean; metaKey: boolean; clientX: number; clientY: number }
+  | { type: "space"; down: boolean };
 
 export const isFromPreview = (data: unknown): data is FromPreview =>
-  typeof data === "object" && data !== null && ["ready", "rendered", "select", "error"].includes((data as { type?: unknown }).type as string);
+  typeof data === "object" && data !== null && ["ready", "rendered", "select", "error", "wheel", "space"].includes((data as { type?: unknown }).type as string);

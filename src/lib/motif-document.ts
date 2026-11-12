@@ -1,14 +1,3 @@
-import type { CanvasElement, ComponentGroup, VariantProp } from "../store/canvas";
-
-export interface DocumentComponent {
-  id: string;
-  name: string;
-  groupId: string | null;
-  variantProps: VariantProp[];
-  elements: Record<string, CanvasElement>;
-  order: string[];
-}
-
 export type TokenKind = "colors" | "typography" | "spacing" | "radii" | "shadows";
 
 // A component of the connected repository, by where it is declared and what it is called.
@@ -20,9 +9,6 @@ export interface RepoRef {
 export type DocBlock =
   | { id: string; type: "heading"; text: string }
   | { id: string; type: "text"; text: string }
-  | { id: string; type: "preview"; componentId: string }
-  | { id: string; type: "props"; componentId: string }
-  | { id: string; type: "code"; componentId: string }
   // The repository's own component, running as it does in the repository. `view` shows one, or every variant.
   | { id: string; type: "repo-preview"; ref: RepoRef; view: "single" | "variants" }
   | { id: string; type: "repo-props"; ref: RepoRef }
@@ -34,12 +20,6 @@ export interface DocPage {
   id: string;
   title: string;
   blocks: DocBlock[];
-}
-
-export interface DocumentContent {
-  componentGroups: ComponentGroup[];
-  components: DocumentComponent[];
-  docs: DocPage[];
 }
 
 type Obj = Record<string, unknown>;

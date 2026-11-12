@@ -15,7 +15,7 @@ export interface LibrarySource {
 interface LibraryStore {
   source: LibrarySource | null;
   components: LibraryComponent[];
-  // The repository component shown in the editor in place of the canvas.
+  // The repository component shown in the editor on the canvas.
   activeId: string | null;
   // Components as they are with the changes made in the editor, read again from the edited text. Not saved:
   // it goes away with the changes.

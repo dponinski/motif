@@ -4,67 +4,25 @@ import { useRef, useEffect } from "react";
 import { Sparkles, Send, Loader2, Wand2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAIStore, type AIMessage } from "@/store/ai";
-import { useCanvasStore } from "@/store/canvas";
+import { useLibraryStore, activeComponent } from "@/store/library";
 import { useDesignSystemStore } from "@/store/design-system";
 
 const QUICK_PROMPTS = [
-  "Generate a login screen",
-  "Create a card component",
-  "Design a navigation bar",
-  "Suggest colors for a fintech app",
-  "Create a user profile layout",
-  "Generate a dashboard layout",
+  "Suggest a color scale for a fintech brand",
+  "Suggest a spacing and type scale",
+  "What would you improve in this component?",
+  "Is this component accessible?",
 ];
 
 function MessageBubble({ message }: { message: AIMessage }) {
   const isUser = message.role === "user";
   const { structured } = message;
-  const { addElement } = useCanvasStore();
   const { loadTokens } = useDesignSystemStore();
 
   const handleApply = () => {
     if (!structured) return;
 
-    if (structured.action === "generate" && structured.elements) {
-      let offsetX = 50;
-      let offsetY = 50;
-
-      const applyElements = (elements: unknown[], parentId?: string) => {
-        for (const rawEl of elements) {
-          const el = rawEl as {
-            type: string; name: string; x: number; y: number;
-            width: number; height: number; fill?: string;
-            cornerRadius?: number; content?: string; fontSize?: number;
-            fontWeight?: string; children?: unknown[];
-          };
-
-          const id = addElement({
-            type: (el.type as "rectangle" | "ellipse" | "text" | "frame") ?? "rectangle",
-            name: el.name ?? "Element",
-            x: (el.x ?? 0) + offsetX,
-            y: (el.y ?? 0) + offsetY,
-            width: el.width ?? 100,
-            height: el.height ?? 50,
-            fill: el.fill ?? "#6366f1",
-            cornerRadius: el.cornerRadius ?? 0,
-            content: el.content,
-            fontSize: el.fontSize,
-            fontWeight: el.fontWeight,
-            fontColor: el.fill,
-            opacity: 1,
-            rotation: 0,
-            parentId,
-            children: el.children ? [] : undefined,
-          });
-
-          if (el.children) applyElements(el.children, id);
-        }
-        offsetX += 20;
-        offsetY += 20;
-      };
-
-      applyElements(structured.elements);
-    } else if (structured.action === "tokens" && structured.tokens) {
+    if (structured.action === "tokens" && structured.tokens) {
       loadTokens(structured.tokens as Parameters<typeof loadTokens>[0]);
     }
   };
@@ -103,7 +61,7 @@ function MessageBubble({ message }: { message: AIMessage }) {
             className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 rounded-md transition-colors"
           >
             <Wand2 size={11} />
-            {structured.action === "generate" ? "Apply to Canvas" : structured.action === "tokens" ? "Apply Tokens" : "Apply"}
+            {structured.action === "tokens" ? "Apply Tokens" : "Apply"}
           </button>
         )}
       </div>
@@ -113,7 +71,7 @@ function MessageBubble({ message }: { message: AIMessage }) {
 
 export default function ChatView() {
   const { messages, isLoading, inputValue, setInputValue, sendMessage, clearMessages } = useAIStore();
-  const { elements, selectedIds } = useCanvasStore();
+  const component = useLibraryStore(activeComponent);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -125,11 +83,10 @@ export default function ChatView() {
     const content = inputValue.trim();
     if (!content || isLoading) return;
 
-    const selectedElements = selectedIds.map((id) => elements[id]).filter(Boolean);
-    const context =
-      selectedElements.length > 0
-        ? { selectedElements: selectedElements.slice(0, 5), totalElements: Object.keys(elements).length }
-        : { totalElements: Object.keys(elements).length };
+    // What is open, so a question about "this component" has something to be about.
+    const context = component
+      ? { component: { name: component.name, file: component.file, props: component.props.map((p) => p.name), variants: component.variants.map((v) => ({ name: v.name, options: v.options })) } }
+      : {};
 
     await sendMessage(content, context);
   };
@@ -156,7 +113,7 @@ export default function ChatView() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-32 gap-2">
             <Sparkles size={20} className="text-accent/40" />
-            <span className="text-xs text-text-tertiary text-center">Ask me to generate UI,<br />suggest tokens, or critique your design</span>
+            <span className="text-xs text-text-tertiary text-center">Ask me to suggest tokens<br />or review a component</span>
           </div>
         )}
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)}

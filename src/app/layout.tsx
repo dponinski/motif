@@ -3,8 +3,8 @@ import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Motif — Design Systems Canvas",
-  description: "A design canvas built for design systems and AI",
+  title: "Motif — Design System Builder",
+  description: "A visual editor for the React components and tokens of a design system",
 };
 
 export default function RootLayout({

@@ -1,9 +1,7 @@
-import type { CanvasElement } from "../store/canvas";
 import type { ColorToken, RadiusToken, ShadowToken, SpacingToken, TypographyToken } from "../store/design-system";
-import { componentInterface, componentJsx } from "./component-code";
 import { previewKey, type DocSection } from "./docs";
 import { componentSnippet } from "./edit/snippets";
-import type { DocBlock, DocPage, DocumentComponent } from "./motif-document";
+import type { DocBlock, DocPage } from "./motif-document";
 import type { RepoComponent } from "./repo-scan/types";
 
 export interface DocsTokens {
@@ -22,7 +20,6 @@ export interface DocsRepo {
 }
 
 export interface DocsContext {
-  components: DocumentComponent[];
   tokens: DocsTokens;
   repo?: DocsRepo;
 }
@@ -37,79 +34,6 @@ const cssValue = (value: unknown, fallback: string) => {
 };
 
 const num = (value: unknown, fallback = 0) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
-
-// ── Component preview ─────────────────────────────────────────────────────────
-
-function absolute(el: CanvasElement, elements: Record<string, CanvasElement>, depth = 0): { x: number; y: number } {
-  const parent = el.parentId ? elements[el.parentId] : undefined;
-  if (!parent || depth > 50) return { x: num(el.x), y: num(el.y) };
-  const p = absolute(parent, elements, depth + 1);
-  return { x: p.x + num(el.x), y: p.y + num(el.y) };
-}
-
-function drawOrder(ids: string[], elements: Record<string, CanvasElement>, seen = new Set<string>()): CanvasElement[] {
-  const out: CanvasElement[] = [];
-  for (const id of ids) {
-    const el = elements[id];
-    if (!el || seen.has(id)) continue;
-    seen.add(id);
-    out.push(el, ...drawOrder(el.children ?? [], elements, seen));
-  }
-  return out;
-}
-
-// Mirrors how the canvas draws a scene: absolute positions, parents before children, no clipping.
-export function sceneToSvg(component: DocumentComponent, ctx: DocsContext): string {
-  const { elements } = component;
-  const visible = drawOrder(component.order, elements).filter((el) => el.visible !== false);
-  if (!visible.length) return "";
-
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const shapes = visible.map((el) => {
-    const { x, y } = absolute(el, elements);
-    const w = Math.max(num(el.width), 0);
-    const h = Math.max(num(el.height), 0);
-    minX = Math.min(minX, x); minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x + w); maxY = Math.max(maxY, y + h);
-
-    const token = el.fillTokenId ? ctx.tokens.colors.find((c) => c.id === el.fillTokenId)?.value : undefined;
-    const fill = esc(cssValue(token ?? el.fill, el.type === "frame" ? "#ffffff" : "#6366f1"));
-    const stroke = el.stroke && num(el.strokeWidth) > 0
-      ? ` stroke="${esc(cssValue(el.stroke, "none"))}" stroke-width="${num(el.strokeWidth)}"`
-      : "";
-    const common = `opacity="${num(el.opacity, 1)}"${el.rotation ? ` transform="rotate(${num(el.rotation)} ${x} ${y})"` : ""}`;
-
-    switch (el.type) {
-      case "ellipse":
-        return `<ellipse cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" fill="${fill}"${stroke} ${common}/>`;
-      case "text": {
-        const typo = el.typographyTokenId ? ctx.tokens.typography.find((t) => t.id === el.typographyTokenId) : undefined;
-        const size = num(typo?.fontSize ?? el.fontSize, 16);
-        const style = [
-          `width:${w}px`,
-          `font-size:${size}px`,
-          `font-weight:${esc(cssValue(typo?.fontWeight ?? el.fontWeight, "400"))}`,
-          `font-family:${esc(cssValue(typo?.fontFamily ?? el.fontFamily, "Inter"))},system-ui,sans-serif`,
-          `color:${esc(cssValue(el.fontColor, "#111111"))}`,
-          "line-height:1.16", "white-space:pre-wrap", "overflow-wrap:break-word",
-        ].join(";");
-        return `<foreignObject x="${x}" y="${y}" width="${w}" height="${Math.max(h, size * 1.2)}" style="overflow:visible" ${common}><div xmlns="http://www.w3.org/1999/xhtml" style="${style}">${esc(el.content ?? "")}</div></foreignObject>`;
-      }
-      case "instance": {
-        const name = ctx.components.find((c) => c.id === el.componentId)?.name ?? "Missing component";
-        return `<g ${common}><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="rgba(99,102,241,0.08)" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" dominant-baseline="central" font-size="12" font-family="Inter,system-ui,sans-serif" fill="#6366f1">${esc(name)}</text></g>`;
-      }
-      default: {
-        const r = num(el.cornerRadius);
-        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}"${stroke} ${common}/>`;
-      }
-    }
-  });
-
-  const width = Math.max(maxX - minX, 1);
-  const height = Math.max(maxY - minY, 1);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX} ${minY} ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${esc(component.name)} preview">${shapes.join("")}</svg>`;
-}
 
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
@@ -200,24 +124,6 @@ export function blockHtml(block: DocBlock, ctx: DocsContext): string {
       return `<div class="md-guideline"><div class="md-do"><strong>Do</strong>${paragraphs(block.do)}</div><div class="md-dont"><strong>Don't</strong>${paragraphs(block.dont)}</div></div>`;
     case "tokens":
       return tokensHtml(block.kind, ctx.tokens);
-    case "preview":
-    case "props":
-    case "code": {
-      const component = ctx.components.find((c) => c.id === block.componentId);
-      if (!component) return empty("This component no longer exists.");
-      if (block.type === "preview") {
-        const svg = sceneToSvg(component, ctx);
-        return `<div class="md-preview">${svg || empty(`${component.name} has nothing on its canvas yet.`)}</div>`;
-      }
-      if (block.type === "code") {
-        const parts = component.variantProps.length ? [componentInterface(component), componentJsx(component)] : [componentJsx(component)];
-        return `<pre><code>${esc(parts.join("\n\n"))}</code></pre>`;
-      }
-      if (!component.variantProps.length) return empty(`${component.name} has no props yet.`);
-      return `<table><thead><tr><th>Prop</th><th>Values</th><th>Default</th></tr></thead><tbody>${component.variantProps.map((p) =>
-        `<tr><td><code>${esc(p.name)}</code></td><td>${p.values.map((v) => `<code class="md-chip">${esc(v)}</code>`).join("")}</td><td><code>${esc(p.default)}</code></td></tr>`
-      ).join("")}</tbody></table>`;
-    }
   }
 }
 
@@ -234,7 +140,6 @@ export const DOCS_CSS = `
 .motif-docs .md-block{margin:0 0 24px}
 .motif-docs .md-empty{color:#a1a1aa;font-size:13px}
 .motif-docs .md-preview{display:flex;align-items:center;justify-content:center;padding:32px;background:#f4f4f5;border:1px solid #e4e4e7;border-radius:10px;overflow:hidden}
-.motif-docs .md-preview svg{display:block;max-width:100%;height:auto;max-height:420px}
 .motif-docs table{width:100%;border-collapse:collapse;font-size:13px}
 .motif-docs th{text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#71717a;padding:8px 12px;border-bottom:1px solid #e4e4e7}
 .motif-docs td{padding:8px 12px;border-bottom:1px solid #f4f4f5;vertical-align:top}

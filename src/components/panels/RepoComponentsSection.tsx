@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, LayoutTemplate, Loader2, RefreshCw } from "lucide-react";
+import { Boxes, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeUpdate } from "@/lib/preview/library";
 import { readerSource } from "@/lib/repo-scan/source";
@@ -10,7 +10,6 @@ import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import { useNavRequest } from "@/store/nav";
-import { placeOnCanvas } from "./place";
 
 const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
 const DOT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
@@ -125,14 +124,6 @@ export default function RepoComponentsSection() {
             <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left">
               <span className="flex-1 truncate text-xs">{c.name}</span>
               <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", DOT[c.support.level])} title={DOT_LABEL[c.support.level]} />
-            </button>
-            <button
-              onClick={() => placeOnCanvas(c)}
-              className="mr-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-text-tertiary opacity-0 transition-opacity hover:text-text-primary focus-visible:opacity-100 group-hover:opacity-100"
-              aria-label={`Place ${c.name} on canvas`}
-              title="Place on the design canvas"
-            >
-              <LayoutTemplate size={11} />
             </button>
           </div>
         ))}

@@ -12,7 +12,7 @@ import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import { versionOf } from "./reader";
 
-// What the stage and the design canvas share to run a repository component in a sandboxed page.
+// What the stage and the docs share to run a repository component in a sandboxed page.
 
 // Reading a repository is the slow part, so file lists and graphs are kept for as long as the import is current.
 const trees = new Map<string, Promise<string[]>>();

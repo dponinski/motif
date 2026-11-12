@@ -2,13 +2,13 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 import { safeStorage } from "../lib/safe-storage";
-import type { DocumentContent } from "@/lib/motif-document";
+import type { DocBlock, DocPage } from "../lib/motif-document";
 import { emptyTokenData, type TokenData } from "./design-system";
 import type { GitConnection, RepoState } from "./git";
 import type { LibraryData } from "./library";
 
 // A project is a design system: one GitHub repository and what Motif keeps about it (its tokens, documentation,
-// the components read from it, and the canvas). The repository's code stays the source of truth; nothing here is
+// and the components read from it). The repository's code stays the source of truth; nothing here is
 // sent anywhere except as a pull request.
 export interface Project {
   id: string;
@@ -18,11 +18,12 @@ export interface Project {
   repo: RepoState;
   library: LibraryData;
   tokens: TokenData;
-  content: DocumentContent;
+  // The documentation pages the designer wrote or edited; generated pages exist without being stored.
+  docs: DocPage[];
 }
 
 // The parts of a project the editor works on and writes back.
-export type ProjectData = Pick<Project, "repo" | "library" | "tokens" | "content">;
+export type ProjectData = Pick<Project, "repo" | "library" | "tokens" | "docs">;
 
 interface ProjectsStore {
   projects: Project[];
@@ -31,8 +32,6 @@ interface ProjectsStore {
   rename: (id: string, name: string) => void;
   remove: (id: string) => void;
 }
-
-const emptyContent = (): DocumentContent => ({ componentGroups: [], components: [], docs: [] });
 
 export const useProjectsStore = create<ProjectsStore>()(
   persist(
@@ -49,7 +48,7 @@ export const useProjectsStore = create<ProjectsStore>()(
           repo: { connection, analysis: null, tokenLink: null },
           library: { source: null, components: [] },
           tokens: emptyTokenData(),
-          content: emptyContent(),
+          docs: [],
         };
         set((s) => ({ projects: [...s.projects, project] }));
         return project;
@@ -65,8 +64,21 @@ export const useProjectsStore = create<ProjectsStore>()(
     }),
     {
       name: "motif-projects",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => safeStorage),
+      // Version 1 projects also held a free-form canvas and Motif's own components; only the documentation of the
+      // repository's components and tokens is kept from them.
+      migrate: (persisted) => {
+        const state = persisted as { projects?: (Project & { content?: { docs?: DocPage[] } })[] };
+        const native = new Set(["preview", "props", "code"]);
+        const projects = (state.projects ?? []).map(({ content, ...rest }) => ({
+          ...rest,
+          docs: (rest.docs ?? content?.docs ?? [])
+            .filter((p) => !p.id.startsWith("doc-comp-"))
+            .map((p) => ({ ...p, blocks: p.blocks.filter((b: DocBlock) => !native.has(b.type)) })),
+        }));
+        return { ...state, projects } as ProjectsStore;
+      },
     }
   )
 );

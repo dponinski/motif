@@ -18,11 +18,13 @@ import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/li
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import EditPrDialog from "./EditPrDialog";
+import StageCanvas from "./StageCanvas";
 import { loadTree, useSrcdoc, useTokenOverrides, type Host } from "./preview-core";
 import { readerFor, versionOf } from "./reader";
 
+// "Auto" is the width the view calls for: a component on its own, or a page of them side by side.
 const WIDTHS: { label: string; value: number | null }[] = [
-  { label: "Fit", value: null },
+  { label: "Auto", value: null },
   { label: "375", value: 375 },
   { label: "640", value: 640 },
   { label: "768", value: 768 },
@@ -109,7 +111,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
       else if (data.type === "select") {
         const picked = parseMotifKey(data.key);
         if (picked) useEditStore.getState().select(picked);
-      } else setRuntimeError(data.message);
+      } else if (data.type === "error") setRuntimeError(data.message);
+      // Wheel and Space are for the canvas around the preview, which listens for them itself.
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -180,6 +183,11 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision, component.id, component.file]);
   const post = (message: ToPreview) => iframeRef.current?.contentWindow?.postMessage(message, "*");
+
+  // The preview is on a canvas: scrolling, pinching and Space over it move the canvas, not the page inside.
+  useEffect(() => {
+    if (ready) post({ type: "canvas", on: true });
+  }, [ready]);
 
   // Which element is selected, and whether clicking picks one.
   const selectedKey = editing && selection ? `${selection.path}|${selection.start}` : null;
@@ -316,7 +324,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 overflow-auto">
+      <div className="relative min-h-0 flex-1">
         {unsupported.length > 0 ? (
           <Notice icon={<AlertTriangle size={20} className="text-amber-500" />} title="This component can't be previewed yet">
             <ul className="list-disc text-left">{unsupported.map((r) => <li key={r}>{r}</li>)}</ul>
@@ -327,40 +335,46 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             <p className="break-words font-mono text-2xs">{error}</p>
           </Notice>
         ) : (
-          <>
+          <StageCanvas
+            resetKey={`${component.id}|${mode === "edit" || mode === "playground" ? "one" : mode}|${width ?? "auto"}`}
+            overlay={
+              <>
+                {!rendered && (
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-text-tertiary">
+                    <Loader2 size={16} className="animate-spin" />
+                    {srcdoc ? "Loading packages…" : `Reading ${component.name} from ${source.repo}…`}
+                  </div>
+                )}
+                <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-col gap-2">
+                  {editError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can't run: {editError}</p>}
+                  {runtimeError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
+                </div>
+                {mode === "examples" && examples.list.some((e) => e.notes.length > 0) && (
+                  <ul className="absolute inset-x-3 bottom-3 ml-24 flex max-h-24 flex-col gap-1 overflow-y-auto rounded bg-surface-raised/90 p-2 text-2xs text-text-tertiary">
+                    {examples.list.filter((e) => e.notes.length > 0).map((e) => (
+                      <li key={e.id}>
+                        <a href={`https://github.com/${source.repo}/blob/${source.branch}/${e.file}#L${e.line}`} target="_blank" rel="noreferrer" className="font-mono hover:text-text-secondary">{e.file}:{e.line}</a>
+                        {" "}as shown here, {e.notes.join("; ")}.
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            }
+          >
             {srcdoc && (
-              <div className="flex justify-center p-6">
-                <iframe
-                  ref={iframeRef}
-                  title="Component preview"
-                  // Opaque origin: no access to Motif's storage, tokens or cookies.
-                  sandbox="allow-scripts"
-                  srcDoc={srcdoc}
-                  // Content-box, so a 768 preview is 768 wide inside its border and a `md:` class applies.
-                  style={{ width: width ?? "100%", height: Math.max(height, 80), maxWidth: "100%", boxSizing: width ? "content-box" : "border-box" }}
-                  className="rounded-lg border border-surface-border bg-white shadow-sm"
-                />
-              </div>
+              <iframe
+                ref={iframeRef}
+                title="Component preview"
+                // Opaque origin: no access to Motif's storage, tokens or cookies.
+                sandbox="allow-scripts"
+                srcDoc={srcdoc}
+                // Content-box, so a 768 preview is 768 wide inside its border and a `md:` class applies.
+                style={{ display: "block", width: width ?? (mode === "variants" || mode === "examples" ? 960 : 640), height: Math.max(height, 80), boxSizing: width ? "content-box" : "border-box" }}
+                className="rounded-lg border border-surface-border bg-white shadow-sm"
+              />
             )}
-            {!rendered && (
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-text-tertiary">
-                <Loader2 size={16} className="animate-spin" />
-                {srcdoc ? "Loading packages…" : `Reading ${component.name} from ${source.repo}…`}
-              </div>
-            )}
-            {mode === "examples" && (
-              <ul className="mx-6 mb-6 flex flex-col gap-1.5 text-2xs text-text-tertiary">
-                {examples.list.filter((e) => e.notes.length > 0).map((e) => (
-                  <li key={e.id}>
-                    <a href={`https://github.com/${source.repo}/blob/${source.branch}/${e.file}#L${e.line}`} target="_blank" rel="noreferrer" className="font-mono hover:text-text-secondary">{e.file}:{e.line}</a>
-                    {" "}as shown here, {e.notes.join("; ")}.
-                  </li>
-                ))}
-              </ul>
-            )}
-            {editError && <p className="mx-6 mb-3 break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can't run: {editError}</p>}
-            {runtimeError && <p className="mx-6 mb-6 break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
-          </>
+          </StageCanvas>
         )}
       </div>
       <EditPrDialog open={prOpen} onOpenChange={setPrOpen} connection={connection} source={source} subject={component.name} />

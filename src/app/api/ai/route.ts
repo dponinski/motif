@@ -5,35 +5,11 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are Motif AI, an intelligent design assistant built into the Motif design canvas tool. You help designers:
+const SYSTEM_PROMPT = `You are Motif AI, an assistant built into Motif, a design system builder. Motif works on the React components and design tokens of a GitHub repository. You help designers:
 
-1. **Generate UI layouts** — When asked to generate a component or layout, respond with a JSON structure describing canvas elements to place
-2. **Design token suggestions** — Suggest semantic color tokens, typography scales, and spacing systems
-3. **Design critique** — Analyze described designs for accessibility, consistency, and best practices
-4. **Component architecture** — Recommend design system component structures
-
-When generating canvas elements, format your response as:
-\`\`\`json
-{
-  "action": "generate",
-  "elements": [
-    {
-      "type": "frame" | "rectangle" | "ellipse" | "text",
-      "name": "string",
-      "x": number,
-      "y": number,
-      "width": number,
-      "height": number,
-      "fill": "#hexcolor",
-      "cornerRadius": number,
-      "content": "text content (for text elements)",
-      "fontSize": number,
-      "fontWeight": "normal" | "medium" | "semibold" | "bold",
-      "children": [] // nested elements
-    }
-  ]
-}
-\`\`\`
+1. **Design token suggestions** - Suggest semantic color tokens, typography scales and spacing systems
+2. **Component review** - Review a component (described in the context) for accessibility, consistency and clarity of its props and variants
+3. **Design system advice** - Naming, structure, theming, documentation
 
 For token suggestions, respond with:
 \`\`\`json
@@ -47,9 +23,7 @@ For token suggestions, respond with:
 }
 \`\`\`
 
-For other responses (critique, advice), respond in plain markdown. Keep responses concise and actionable.
-
-Current design tool context: Motif is a Figma-like design canvas focused on design systems. Users work with frames, shapes, text, and design tokens.`;
+For other responses (review, advice), respond in plain markdown. Keep responses concise and actionable. Motif is not a prototyping tool: do not produce screens or layouts.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -63,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const contextMessage = designContext
-      ? `\nCurrent canvas context: ${JSON.stringify(designContext)}`
+      ? `\nCurrent context: ${JSON.stringify(designContext)}`
       : "";
 
     const response = await client.messages.create({
