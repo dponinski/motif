@@ -612,7 +612,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
         <div className="w-px h-5 bg-surface-border" />
 
         {onClose && (
-          <button onClick={onClose} className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-subtle transition-colors" title="Back to canvas">
+          <button onClick={onClose} className="p-1.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-subtle transition-colors" title="Back to the editor">
             <X size={14} />
           </button>
         )}

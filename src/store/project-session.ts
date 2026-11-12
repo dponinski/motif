@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
-import { useCanvasStore } from "./canvas";
 import { useDesignSystemStore, snapshotTokens } from "./design-system";
 import { useDocsStore } from "./docs";
 import { useGitStore } from "./git";
 import { useLibraryStore } from "./library";
-import { loadOpenDocument, snapshotOpenDocument } from "./open-document";
 import { useProjectsStore, type Project, type ProjectData } from "./projects";
 
 // The editor works on one project at a time, in the same stores it always used. These move a project into them
@@ -14,7 +12,7 @@ export function loadProject(project: Project) {
   useGitStore.getState().load(project.repo);
   useLibraryStore.getState().load(project.library);
   useDesignSystemStore.setState(project.tokens);
-  loadOpenDocument(project.content);
+  useDocsStore.getState().setPages(project.docs);
 }
 
 export function snapshotProject(): ProjectData {
@@ -24,7 +22,7 @@ export function snapshotProject(): ProjectData {
     repo: { connection, analysis, tokenLink },
     library: { source, components },
     tokens: snapshotTokens(useDesignSystemStore.getState()),
-    content: snapshotOpenDocument(),
+    docs: useDocsStore.getState().pages,
   };
 }
 
@@ -67,14 +65,6 @@ export function useProjectSession(projectId: string): "loading" | "ready" | "mis
       useDocsStore.subscribe(schedule),
       useLibraryStore.subscribe((s, prev) => {
         if (s.source !== prev.source || s.components !== prev.components) schedule();
-      }),
-      useCanvasStore.subscribe((s, prev) => {
-        if (
-          s.elements !== prev.elements ||
-          s.order !== prev.order ||
-          s.componentDefs !== prev.componentDefs ||
-          s.componentGroups !== prev.componentGroups
-        ) schedule();
       }),
     ];
     window.addEventListener("pagehide", flush);

@@ -13,7 +13,6 @@ describe("documenting repository components", async () => {
   const button = library.find((c) => c.name === "Button")!;
   const card = library.find((c) => c.name === "Card")!;
   const ctx = (previews?: Record<string, string>): DocsContext => ({
-    components: [],
     tokens: { colors: [], typography: [], spacing: [], radii: [], shadows: [] },
     repo: { components: library, previews },
   });
@@ -23,30 +22,29 @@ describe("documenting repository components", async () => {
     const repo = library.map((c) => ({ ...refOf(c), hasVariants: c.variants.length > 0 }));
 
     it("gives every imported component a page, in its own section, after the others", () => {
-      const sections = docSections([], [], repo);
-      expect(sections.map((s) => s.title)).toEqual(["Pages", "Foundations", "Components", "Repository components"]);
-      const pages = sections[3].pages;
+      const sections = docSections([], repo);
+      expect(sections.map((s) => s.title)).toEqual(["Pages", "Foundations", "Repository components"]);
+      const pages = sections[2].pages;
       expect(pages).toHaveLength(library.length);
       expect(pages[0].id).toBe(repoPageId(refOf(library[0])));
       expect(pages.every((p) => isBuiltInPage(p.id))).toBe(true);
     });
 
     it("has no section when nothing is imported", () => {
-      expect(docSections([], [], []).map((s) => s.title)).toEqual(["Pages", "Foundations", "Components"]);
-      expect(docSections([], []).map((s) => s.title)).toEqual(["Pages", "Foundations", "Components"]);
+      expect(docSections([], []).map((s) => s.title)).toEqual(["Pages", "Foundations"]);
     });
 
     it("starts a page with a preview of every variant when there are variants, and the props and usage", () => {
-      const page = docSections([], [], repo)[3].pages.find((p) => p.title === "Button")!;
+      const page = docSections([], repo)[2].pages.find((p) => p.title === "Button")!;
       expect(page.blocks.map((b) => b.type)).toEqual(["text", "repo-preview", "repo-props", "repo-code"]);
       expect(page.blocks[1]).toMatchObject({ view: "variants", ref: refOf(button) });
-      const plain = docSections([], [], repo)[3].pages.find((p) => p.title === "Card")!;
+      const plain = docSections([], repo)[2].pages.find((p) => p.title === "Card")!;
       expect(plain.blocks[1]).toMatchObject({ view: "single" });
     });
 
     it("uses what was stored for a page in place of the default, found by where the component is declared", () => {
       const stored = { id: repoPageId(refOf(button)), title: "Whatever", blocks: [{ id: "x", type: "text" as const, text: "Hello" }] };
-      const page = docSections([stored], [], repo)[3].pages.find((p) => p.id === stored.id)!;
+      const page = docSections([stored], repo)[2].pages.find((p) => p.id === stored.id)!;
       expect(page.blocks).toEqual(stored.blocks);
       expect(page.title).toBe("Button");
     });
@@ -62,9 +60,9 @@ describe("documenting repository components", async () => {
     it("lets the designer add a block of each kind, for the component the page is about", () => {
       for (const type of ["repo-preview", "repo-props", "repo-code"] as const) {
         expect(BLOCK_TYPES.some((b) => b.type === type)).toBe(true);
-        expect(createBlock(type, "b", "", refOf(button))).toMatchObject({ type, ref: refOf(button) });
+        expect(createBlock(type, "b", refOf(button))).toMatchObject({ type, ref: refOf(button) });
       }
-      expect(createBlock("repo-preview", "b", "", refOf(button))).toMatchObject({ view: "single" });
+      expect(createBlock("repo-preview", "b", refOf(button))).toMatchObject({ view: "single" });
     });
   });
 
@@ -115,7 +113,7 @@ describe("documenting repository components", async () => {
   });
 
   describe("the exported site", () => {
-    const sections = docSections([], [], [{ ...refOf(button), hasVariants: true }]);
+    const sections = docSections([], [{ ...refOf(button), hasVariants: true }]);
     const previews = { [previewKey(refOf(button), "variants")]: "<!doctype html><p>x</p>" };
 
     it("carries the small script that sizes each live preview, only when there are some", () => {

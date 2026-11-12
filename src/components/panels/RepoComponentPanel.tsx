@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutTemplate, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { controlsFor, initialProps, type PropControl } from "@/lib/preview/props";
 import type { LibraryComponent } from "@/lib/preview/library";
@@ -10,7 +10,6 @@ import { useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import ElementInspector from "./ElementInspector";
 import PropsEditor from "./PropsEditor";
-import { placeOnCanvas } from "./place";
 
 const SUPPORT_STYLE: Record<Support, string> = {
   editable: "bg-emerald-500/15 text-emerald-500",
@@ -94,14 +93,6 @@ export default function RepoComponentPanel({ component }: { component: LibraryCo
           <span className="flex-1 truncate text-sm font-medium text-text-primary">{component.name}</span>
           <span className={cn("rounded px-1.5 py-0.5 text-2xs", SUPPORT_STYLE[component.support.level])}>{SUPPORT_LABEL[component.support.level]}</span>
         </div>
-        <button
-          onClick={() => placeOnCanvas(component)}
-          className="mt-2 flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-surface-border text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary"
-          aria-label={`Place ${component.name} on canvas`}
-          title="Put this component on the design canvas as the real thing"
-        >
-          <LayoutTemplate size={12} /> Place on canvas
-        </button>
         {component.support.reasons.length > 0 && (
           <ul className="mt-1.5 list-disc pl-4 text-2xs leading-relaxed text-text-tertiary">
             {component.support.reasons.map((r) => <li key={r}>{r}</li>)}

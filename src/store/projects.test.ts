@@ -20,7 +20,7 @@ describe("projects", () => {
     expect(p.library.components).toEqual([]);
     expect(p.tokens.colors).toEqual([]);
     expect(p.tokens.sets).toHaveLength(1);
-    expect(p.content.docs).toEqual([]);
+    expect(p.docs).toEqual([]);
   });
 
   it("gives each project its own token set", () => {
@@ -28,6 +28,30 @@ describe("projects", () => {
     const b = useProjectsStore.getState().create(connection("b"));
     expect(a.tokens.sets).not.toBe(b.tokens.sets);
     expect(a.id).not.toBe(b.id);
+  });
+
+  it("keeps the documentation of the repository's components and tokens when an older project is migrated", () => {
+    const migrate = useProjectsStore.persist.getOptions().migrate!;
+    const old = {
+      projects: [{
+        id: "p", name: "n",
+        content: {
+          componentGroups: [], components: [{ id: "comp-main", name: "Main", elements: {}, order: [] }],
+          docs: [
+            { id: "doc-comp-comp-main", title: "Main", blocks: [{ id: "a", type: "preview", componentId: "comp-main" }] },
+            { id: "mine", title: "Principles", blocks: [
+              { id: "b", type: "heading", text: "Voice" },
+              { id: "c", type: "props", componentId: "comp-main" },
+              { id: "d", type: "repo-props", ref: { file: "a.tsx", name: "A" } },
+            ] },
+          ],
+        },
+      }],
+    };
+    const { projects } = migrate(old, 1) as { projects: { docs: { id: string; blocks: { id: string }[] }[]; content?: unknown }[] };
+    expect(projects[0].content).toBeUndefined();
+    expect(projects[0].docs.map((d) => d.id)).toEqual(["mine"]);
+    expect(projects[0].docs[0].blocks.map((b) => b.id)).toEqual(["b", "d"]);
   });
 
   it("renames and removes", () => {

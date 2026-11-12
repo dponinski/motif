@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { isBuiltInPage } from "@/lib/docs";
 import type { DocPage } from "@/lib/motif-document";
 
-// Documentation pages of the file open in the editor; saved with the file like the canvas.
+// Documentation pages of the project open in the editor; the project keeps them.
 interface DocsStore {
   pages: DocPage[];
   setPages: (pages: DocPage[]) => void;
