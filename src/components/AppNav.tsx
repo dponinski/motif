@@ -1,10 +1,10 @@
 "use client";
 
-import { LayoutTemplate, Palette, Sparkles } from "lucide-react";
+import { GitBranch, LayoutTemplate, Palette, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type NavItem = "components" | "tokens" | "chat";
+export type NavItem = "components" | "tokens" | "chat" | "git";
 
 export default function AppNav({
   activeNav,
@@ -17,6 +17,7 @@ export default function AppNav({
     { id: "components", icon: <LayoutTemplate size={16} />, label: "Components" },
     { id: "tokens", icon: <Palette size={16} />, label: "Tokens" },
     { id: "chat", icon: <Sparkles size={16} />, label: "Chat" },
+    { id: "git", icon: <GitBranch size={16} />, label: "Git" },
   ];
 
   return (

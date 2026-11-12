@@ -6,7 +6,8 @@ import { useFilesStore, type DesignFile, type Folder } from "@/store/files";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import type { CanvasElement } from "@/store/canvas";
 import { cn } from "@/lib/utils";
-import { Sun, Moon, Monitor, FolderPlus, Folder as FolderIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { Sun, Moon, Monitor, FolderPlus, Folder as FolderIcon, ChevronDown, ChevronRight, GitBranch } from "lucide-react";
+import RepoDialog from "@/components/git/RepoDialog";
 
 // ── Mini SVG thumbnail ────────────────────────────────────────────────────────
 
@@ -115,7 +116,8 @@ function FileCard({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const elementCount = Object.keys(file.elements).length;
+  const elementCount = file.components.reduce((n, c) => n + Object.keys(c.elements).length, 0);
+  const cover = file.components[0];
 
   return (
     <div
@@ -129,7 +131,7 @@ function FileCard({
         style={{ aspectRatio: "16/10" }}
         onClick={onOpen}
       >
-        <FileThumbnail elements={file.elements} order={file.order} />
+        <FileThumbnail elements={cover?.elements ?? {}} order={cover?.order ?? []} />
         {hover && (
           <div className="absolute inset-0 bg-black/20 flex items-end justify-start p-2.5">
             <span className="text-[11px] text-white/90 font-medium bg-black/50 px-2 py-1 rounded-md backdrop-blur-sm">
@@ -177,6 +179,12 @@ function FileCard({
               </span>
             )}
           </p>
+          {file.git && (
+            <p className="flex items-center gap-1 text-[11px] text-text-tertiary mt-0.5 min-w-0" title={`${file.git.repo} · ${file.git.path}`}>
+              <GitBranch size={10} className="flex-shrink-0" />
+              <span className="truncate">{file.git.branch}</span>
+            </p>
+          )}
         </div>
 
         {/* Context menu */}
@@ -405,6 +413,8 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+
+          <RepoDialog />
 
           <button
             onClick={handleNewFolder}
