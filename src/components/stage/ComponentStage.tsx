@@ -3,23 +3,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, Palette, Pencil, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
+import { buildGraph } from "@/lib/preview/graph";
 import { parseMotifKey } from "@/lib/edit/instrument";
 import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
-import { tokenOverrides } from "@/lib/preview/overrides";
 import { rescanComponent } from "@/lib/preview/rescan";
-import { readMotifTokens } from "@/lib/token-sync/doc";
 import { initialProps, variantCombinations } from "@/lib/preview/props";
 import { isFromPreview, type RenderItem, type ToPreview } from "@/lib/preview/protocol";
-import { buildSrcdoc, esmUrl, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
+import { esmUrl } from "@/lib/preview/srcdoc";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
-import { useDesignSystemStore } from "@/store/design-system";
 import { changedFiles, useEditStore } from "@/store/edit";
 import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import EditPrDialog from "./EditPrDialog";
+import { loadTree, useSrcdoc, useTokenOverrides, type Host } from "./preview-core";
 import { readerFor, versionOf } from "./reader";
 
 const WIDTHS: { label: string; value: number | null }[] = [
@@ -31,57 +29,7 @@ const WIDTHS: { label: string; value: number | null }[] = [
   { label: "1280", value: 1280 },
 ];
 
-// Reading a repository is the slow part, so file lists and graphs are kept for as long as the import is current.
-const trees = new Map<string, Promise<string[]>>();
-const graphs = new Map<string, Promise<ModuleGraph>>();
 const exampleIndexes = new Map<string, Promise<ExampleIndex>>();
-
-class Unsupported extends Error {}
-
-type Host = ReturnType<typeof useGitHost>;
-type Doc = { srcdoc: string | null; graph: ModuleGraph | null; unsupported: string[]; error: string | null };
-const EMPTY: Doc = { srcdoc: null, graph: null, unsupported: [], error: null };
-
-function loadTree(source: LibrarySource, host: Host): Promise<string[]> {
-  const key = versionOf(source);
-  if (!trees.has(key)) trees.set(key, host.listTree(source.branch).then((t) => t.paths));
-  return trees.get(key)!;
-}
-
-// Builds a page for a module graph. `key` says what the graph is of; `enabled` lets a page wait until it is wanted.
-function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, host: Host, make: (paths: string[]) => Promise<ModuleGraph>): Doc {
-  const [state, setState] = useState<Doc>(EMPTY);
-  const makeRef = useRef(make);
-  makeRef.current = make;
-
-  useEffect(() => {
-    if (!enabled) return;
-    let stale = false;
-    setState(EMPTY);
-    const graphKey = `${versionOf(source)}:${key}`;
-
-    (async () => {
-      try {
-        if (source.tailwindVersion === 3) throw new Unsupported("This repository uses Tailwind v3, which can't be previewed yet");
-        const paths = await loadTree(source, host);
-        if (!graphs.has(graphKey)) graphs.set(graphKey, makeRef.current(paths));
-        const graph = await graphs.get(graphKey)!;
-        if (graph.unsupported.length) throw Object.assign(new Unsupported("unsupported"), { reasons: graph.unsupported });
-        const srcdoc = buildSrcdoc({ graph, tailwindVersion: source.tailwindVersion, runtimeUrl: runtimeUrlFor(window.location.origin), nonce: newNonce() });
-        if (!stale) setState({ srcdoc, graph, unsupported: [], error: null });
-      } catch (err) {
-        trees.delete(versionOf(source));
-        graphs.delete(graphKey);
-        if (stale) return;
-        if (err instanceof Unsupported) setState({ srcdoc: null, graph: null, unsupported: (err as Unsupported & { reasons?: string[] }).reasons ?? [err.message], error: null });
-        else setState({ srcdoc: null, graph: null, unsupported: [], error: errorMessage(err) });
-      }
-    })();
-    return () => { stale = true; };
-  }, [enabled, key, source, host]);
-
-  return state;
-}
 
 // How the repository itself uses the component, from its demo files. Optional: a failure just means no examples.
 function useExamples(component: LibraryComponent, source: LibrarySource, host: Host): { list: RepoExample[]; loading: boolean } {
@@ -139,13 +87,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const { srcdoc, unsupported, error } = mode === "examples" ? exampleDoc : main;
 
   // What Motif has changed in its tokens since the last sync, shown on the repository's own components.
-  const link = useGitStore((s) => s.tokenLink);
-  const { colors, spacing, radii, shadows } = useDesignSystemStore();
-  const motif = useMemo(
-    () => (link && link.repo === source.repo ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes)) : { css: "", changed: [] as string[] }),
-    [link, source.repo, colors, spacing, radii, shadows]
-  );
-  const overridesCss = motifTokens ? motif.css : "";
+  const motif = useTokenOverrides(source.repo);
+  const overridesCss = motif.shown;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const renderId = useRef(0);

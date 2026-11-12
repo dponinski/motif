@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, CSSProperties } from "react";
+import { useEffect, useRef, useState, CSSProperties } from "react";
 import { useCanvasStore, type CanvasElement } from "@/store/canvas";
 import { useDesignSystemStore } from "@/store/design-system";
+import { absPos } from "@/lib/canvas-geometry";
+import RepoInstanceLayer from "./RepoInstanceLayer";
 
 // ── Fabric types ──────────────────────────────────────────────────────────────
 
@@ -54,12 +56,6 @@ async function fab(): Promise<FabricMod> {
 
 // ── Position helpers ──────────────────────────────────────────────────────────
 
-/** Recursively resolve element position to absolute canvas coordinates. */
-function absPos(el: CanvasElement, elements: Record<string, CanvasElement>): { x: number; y: number } {
-  if (!el.parentId || !elements[el.parentId]) return { x: el.x, y: el.y };
-  const parent = absPos(elements[el.parentId], elements);
-  return { x: parent.x + el.x, y: parent.y + el.y };
-}
 
 /**
  * Find the deepest (smallest-area) frame whose bounds contain point (cx, cy).
@@ -149,9 +145,11 @@ function makeObj(el: CanvasElement, m: FabricMod, elements: Record<string, Canva
       ...common,
       width: el.width,
       height: el.height,
-      fill: "rgba(99,102,241,0.08)",
-      stroke: "#6366f1",
-      strokeWidth: 1.5,
+      // A repository component is drawn by the layer above; this is only the box that selects and moves it, and
+      // it has no stroke so its size never drifts by the stroke's width.
+      fill: el.repoComponent ? "rgba(0,0,0,0)" : "rgba(99,102,241,0.08)",
+      stroke: el.repoComponent ? null : "#6366f1",
+      strokeWidth: el.repoComponent ? 0 : 1.5,
       strokeDashArray: [5, 4],
       rx: 6, ry: 6,
     });
@@ -224,6 +222,8 @@ export default function DesignCanvas() {
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const fabricRef = useRef<FCanvas>(null);
   const readyRef = useRef(false);
+  // The canvas once it exists, for the layer of repository components that follows its zoom and pan.
+  const [canvasReady, setCanvasReady] = useState<FCanvas | null>(null);
 
   // Drawing state
   const drawRef = useRef(false);
@@ -275,6 +275,7 @@ export default function DesignCanvas() {
       });
       fabricRef.current = canvas;
       readyRef.current = true;
+      setCanvasReady(canvas);
 
       canvas.on("mouse:down", (opt: { e: MouseEvent; scenePoint?: { x: number; y: number } }) => {
         const tool = useCanvasStore.getState().activeTool;
@@ -439,12 +440,16 @@ export default function DesignCanvas() {
           relY -= pAbs.y;
         }
 
+        const width = Math.round(obj.getScaledWidth());
+        const height = Math.round(obj.getScaledHeight());
         s.updateElement(obj.motifId, {
           x: relX,
           y: relY,
-          width: Math.round(obj.getScaledWidth()),
-          height: Math.round(obj.getScaledHeight()),
+          width,
+          height,
           rotation: Math.round(obj.angle ?? 0),
+          // Resizing a repository component by hand stops it taking the component's own size.
+          ...(el.repoComponent && (Math.abs(width - el.width) > 1 || Math.abs(height - el.height) > 1) ? { autoSize: false } : {}),
         });
         s.pushHistory();
       });
@@ -605,6 +610,7 @@ export default function DesignCanvas() {
       style={{ backgroundColor: "var(--canvas-bg)", ...gridStyle }}
     >
       <canvas ref={canvasElRef} className="absolute inset-0" />
+      <RepoInstanceLayer canvas={canvasReady} />
 
       {/* Status bar */}
       <div className="absolute bottom-3 left-3 text-[11px] text-text-tertiary pointer-events-none select-none flex items-center gap-3">

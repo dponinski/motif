@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 import { useCanvasStore, type VariantProp } from "@/store/canvas";
 import { componentInterface, componentJsx } from "@/lib/component-code";
 import { activeComponent, useLibraryStore } from "@/store/library";
-import RepoComponentPanel from "./RepoComponentPanel";
+import RepoComponentPanel, { Row as PropRow } from "./RepoComponentPanel";
+import { controlsFor, initialProps } from "@/lib/preview/props";
+import { plainProps } from "./place";
 import { formatZoom } from "@/lib/utils";
 import {
   useDesignSystemStore,
@@ -236,7 +238,7 @@ function InstancePanel({ elementId }: { elementId: string }) {
   const def = componentDefs.find((c) => c.id === el.componentId);
   if (!def) return null;
 
-  const props = el.instanceProps ?? {};
+  const props = (el.instanceProps ?? {}) as Record<string, string>;
   const setprop = (name: string, value: string) => {
     updateElement(el.id, { instanceProps: { ...props, [name]: value } });
     pushHistory();
@@ -273,7 +275,7 @@ function InstancePanel({ elementId }: { elementId: string }) {
               <div className="flex-1 relative">
                 <select
                   className="w-full bg-surface-subtle border border-surface-border rounded px-1.5 py-0.5 text-xs text-text-primary outline-none appearance-none pr-5"
-                  value={props[p.name] ?? p.default}
+                  value={String(props[p.name] ?? p.default)}
                   onChange={(e) => setprop(p.name, e.target.value)}
                 >
                   {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
@@ -294,6 +296,85 @@ function InstancePanel({ elementId }: { elementId: string }) {
         <pre className="text-2xs font-mono text-accent bg-surface-subtle rounded p-2 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed select-all">
           {jsxSnippet}
         </pre>
+      </div>
+    </div>
+  );
+}
+
+// ── Repository instance properties ────────────────────────────────────────────
+
+function RepoInstancePanel({ elementId }: { elementId: string }) {
+  const el = useCanvasStore((s) => s.elements[elementId]);
+  const { updateElement, pushHistory } = useCanvasStore();
+  const library = useLibraryStore((s) => s.components);
+  const setActive = useLibraryStore((s) => s.setActive);
+  const ref = el?.repoComponent;
+  if (!el || !ref) return null;
+  const component = library.find((c) => c.file === ref.file && c.name === ref.name);
+  const props = { ...(component ? initialProps(component) : {}), ...(el.instanceProps ?? {}) };
+  const setProp = (name: string, value: unknown) => {
+    const next = { ...(el.instanceProps ?? {}) };
+    if (value === undefined) delete next[name];
+    else next[name] = value;
+    updateElement(el.id, { instanceProps: next });
+    pushHistory();
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto select-text">
+      <div className="px-3 py-2 border-b border-surface-border">
+        <p className="text-2xs text-text-tertiary font-medium uppercase tracking-wider mb-1">Repository component</p>
+        <p className="text-xs text-text-primary font-medium">{ref.name}</p>
+        <p className="mt-0.5 truncate font-mono text-2xs text-text-tertiary" title={`${ref.repo}@${ref.branch}: ${ref.file}`}>{ref.repo} · {ref.file}</p>
+        <div className="mt-2 flex gap-1.5">
+          <button
+            onClick={() => component && setActive(component.id)}
+            disabled={!component}
+            className="h-7 flex-1 rounded-md border border-surface-border text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary disabled:opacity-40"
+            aria-label="Open component"
+            title={component ? "Open it in the component stage to edit it" : "Import the repository's components to open it"}
+          >
+            Open component
+          </button>
+          <button
+            onClick={() => { updateElement(el.id, { instanceProps: component ? plainProps(component) : {} }); pushHistory(); }}
+            disabled={!component}
+            className="h-7 rounded-md border border-surface-border px-2 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary disabled:opacity-40"
+            aria-label="Reset props"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <div className="px-3 py-2 border-b border-surface-border">
+        <p className="text-2xs text-text-tertiary mb-2 font-medium uppercase tracking-wider">Position & Size</p>
+        <div className="grid grid-cols-2 gap-2">
+          <NumberInput label="X" value={el.x} onChange={(v) => updateElement(el.id, { x: v })} onCommit={pushHistory} />
+          <NumberInput label="Y" value={el.y} onChange={(v) => updateElement(el.id, { y: v })} onCommit={pushHistory} />
+          <NumberInput label="W" value={el.width} onChange={(v) => updateElement(el.id, { width: Math.max(1, v), autoSize: false })} onCommit={pushHistory} />
+          <NumberInput label="H" value={el.height} onChange={(v) => updateElement(el.id, { height: Math.max(1, v), autoSize: false })} onCommit={pushHistory} />
+        </div>
+        {el.autoSize === false ? (
+          <button onClick={() => { updateElement(el.id, { autoSize: true }); pushHistory(); }} className="mt-2 text-2xs text-accent hover:underline" aria-label="Fit to component">Fit to the component's size</button>
+        ) : (
+          <p className="mt-2 text-2xs text-text-tertiary">Takes the size of the component until it is resized.</p>
+        )}
+      </div>
+
+      <div className="px-3 py-2">
+        <p className="text-2xs text-text-tertiary mb-2 font-medium uppercase tracking-wider">Props</p>
+        {!component ? (
+          <p className="text-xs text-text-tertiary">Import {ref.repo}'s components in the Git panel to change this component's props.</p>
+        ) : controlsFor(component).length === 0 ? (
+          <p className="text-xs text-text-tertiary">This component has no props of its own.</p>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {controlsFor(component).map((c) => (
+              <PropRow key={c.name} control={c} value={props[c.name]} onChange={(v) => setProp(c.name, v)} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -325,6 +406,7 @@ function PropertiesPanel() {
   if (!el) return null;
 
   // Instance gets its own panel
+  if (el.type === "instance" && el.repoComponent) return <RepoInstancePanel elementId={el.id} />;
   if (el.type === "instance") return <InstancePanel elementId={el.id} />;
 
   const update = (updates: Parameters<typeof updateElement>[1]) => updateElement(el.id, updates);

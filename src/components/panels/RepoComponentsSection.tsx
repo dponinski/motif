@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, Loader2, RefreshCw } from "lucide-react";
+import { Boxes, LayoutTemplate, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeUpdate } from "@/lib/preview/library";
 import { readerSource } from "@/lib/repo-scan/source";
@@ -9,6 +9,7 @@ import type { Support } from "@/lib/repo-scan/types";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
+import { placeOnCanvas } from "./place";
 
 const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
 const DOT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
@@ -67,18 +68,26 @@ export default function RepoComponentsSection() {
       )}
       <div className="min-h-0 flex-1 overflow-y-auto py-1">
         {shown.map((c) => (
-          <button
+          <div
             key={c.id}
-            onClick={() => setActive(c.id === activeId ? null : c.id)}
-            title={`${c.file}:${c.line}`}
             className={cn(
-              "mx-1 flex w-[calc(100%-8px)] items-center gap-1.5 rounded px-2 py-1.5 text-left transition-colors",
+              "group mx-1 flex w-[calc(100%-8px)] items-center rounded transition-colors",
               c.id === activeId ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
             )}
           >
-            <span className="flex-1 truncate text-xs">{c.name}</span>
-            <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", DOT[c.support.level])} title={DOT_LABEL[c.support.level]} />
-          </button>
+            <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left">
+              <span className="flex-1 truncate text-xs">{c.name}</span>
+              <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", DOT[c.support.level])} title={DOT_LABEL[c.support.level]} />
+            </button>
+            <button
+              onClick={() => placeOnCanvas(c)}
+              className="mr-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-text-tertiary opacity-0 transition-opacity hover:text-text-primary focus-visible:opacity-100 group-hover:opacity-100"
+              aria-label={`Place ${c.name} on canvas`}
+              title="Place on the design canvas"
+            >
+              <LayoutTemplate size={11} />
+            </button>
+          </div>
         ))}
         {shown.length === 0 && <p className="px-3 py-2 text-2xs text-text-tertiary">No match.</p>}
       </div>

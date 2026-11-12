@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { DocumentContent } from "@/lib/motif-document";
+import { visibleOrigin } from "../lib/canvas-geometry";
 
 type SceneContent = Omit<DocumentContent, "docs">;
 
@@ -33,6 +34,15 @@ export type Tool =
   | "text"
   | "hand";
 
+// A component in a repository, placed on the canvas as the real thing.
+export interface RepoComponentRef {
+  repo: string;
+  branch: string;
+  file: string;
+  name: string;
+  exported: "named" | "default";
+}
+
 export interface CanvasElement {
   id: string;
   type: "frame" | "rectangle" | "ellipse" | "text" | "group" | "instance";
@@ -62,7 +72,11 @@ export interface CanvasElement {
   visible?: boolean;
   // instance
   componentId?: string;
-  instanceProps?: Record<string, string>;
+  // Values for a Motif component's variant props are text; a repository component's props can be any plain value.
+  instanceProps?: Record<string, unknown>;
+  repoComponent?: RepoComponentRef;
+  // A repository instance takes the size of the component until it is resized by hand.
+  autoSize?: boolean;
 }
 
 interface HistoryEntry {
@@ -138,6 +152,9 @@ interface CanvasStore {
 
   // Instances
   placeInstance: (componentId: string) => void;
+  placeRepoInstance: (ref: RepoComponentRef, props: Record<string, unknown>) => string;
+  // Records a size measured from the preview, without making a step to undo.
+  setMeasuredSize: (id: string, width: number, height: number) => void;
 }
 
 const DEFAULT_ELEMENTS: CanvasElement[] = [
@@ -632,6 +649,46 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       selectedIds: [id],
     }));
     get().pushHistory();
+  },
+
+  placeRepoInstance: (ref, props) => {
+    const { elements, selectedIds, zoom, panX, panY } = get();
+    const id = nanoid(8);
+    // Into the selected frame when there is one, otherwise where it can be seen.
+    const frame = selectedIds.length === 1 && elements[selectedIds[0]]?.type === "frame" ? elements[selectedIds[0]] : null;
+    const where = frame ? { x: 24, y: 24 } : visibleOrigin(zoom, panX, panY);
+    const el: CanvasElement = {
+      id,
+      type: "instance",
+      name: ref.name,
+      ...where,
+      width: 160,
+      height: 48,
+      fill: "transparent",
+      opacity: 1,
+      rotation: 0,
+      repoComponent: ref,
+      instanceProps: props,
+      autoSize: true,
+      parentId: frame?.id,
+    };
+    set((state) => ({
+      elements: {
+        ...state.elements,
+        [id]: el,
+        ...(frame ? { [frame.id]: { ...frame, children: [...(frame.children ?? []), id] } } : {}),
+      },
+      order: frame ? state.order : [...state.order, id],
+      selectedIds: [id],
+    }));
+    get().pushHistory();
+    return id;
+  },
+
+  setMeasuredSize: (id, width, height) => {
+    const el = get().elements[id];
+    if (!el || (Math.round(el.width) === Math.round(width) && Math.round(el.height) === Math.round(height))) return;
+    set((state) => ({ elements: { ...state.elements, [id]: { ...el, width: Math.round(width), height: Math.round(height) } } }));
   },
 
   loadDocument: (content, activeComponentId) => {

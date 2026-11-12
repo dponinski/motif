@@ -106,7 +106,8 @@
       function App(props) {
         var grid = props.layout === 'grid';
         var stack = props.layout === 'stack';
-        var outer = grid ? { display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', padding: 24 }
+        var bare = props.layout === 'bare';
+        var outer = bare ? { display: props.fit ? 'inline-block' : 'block', verticalAlign: 'top' } : grid ? { display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', padding: 24 }
           : stack ? { display: 'flex', flexDirection: 'column', gap: 32, padding: 24 }
           : { padding: 24 };
         return h('div', { style: outer },
@@ -129,12 +130,16 @@
       var reportHeight = function () {
         requestAnimationFrame(function () {
           requestAnimationFrame(function () {
-            post({ type: 'rendered', id: currentId, height: Math.ceil(rootElement.getBoundingClientRect().height) });
+            // A component that fits its content is measured by the box around it, not by the page.
+            var fit = lastRender && lastRender.layout === 'bare' && lastRender.fit && rootElement.firstElementChild;
+            var rect = (fit || rootElement).getBoundingClientRect();
+            post({ type: 'rendered', id: currentId, height: Math.ceil(rect.height), width: Math.ceil(rect.width) });
             draw();
           });
         });
       };
-      if (typeof ResizeObserver !== 'undefined') new ResizeObserver(reportHeight).observe(rootElement);
+      var sizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reportHeight) : null;
+      if (sizeObserver) sizeObserver.observe(rootElement);
 
       // Outlines for the element under the pointer and the selected one, drawn over the page, never part of it.
       var layer = document.createElement('div');
@@ -183,9 +188,15 @@
 
       function renderLast() {
         if (!lastRender) return;
-        root.render(h(App, { items: lastRender.items, layout: lastRender.layout }));
+        root.render(h(App, { items: lastRender.items, layout: lastRender.layout, fit: !!lastRender.fit }));
         reportHeight();
-        requestAnimationFrame(function () { requestAnimationFrame(draw); });
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            // The box around a fitted component changes size without the page changing size.
+            if (sizeObserver && rootElement.firstElementChild) sizeObserver.observe(rootElement.firstElementChild);
+            draw();
+          });
+        });
       }
 
       window.addEventListener('message', function (event) {
@@ -195,6 +206,7 @@
         if (message.type === 'render') {
           currentId = message.id;
           lastRender = message;
+          document.body.style.margin = message.layout === 'bare' ? '0' : '';
           document.documentElement.classList.toggle('dark', !!message.dark);
           document.documentElement.style.colorScheme = message.dark ? 'dark' : 'light';
           overrides.textContent = message.overrides || '';
