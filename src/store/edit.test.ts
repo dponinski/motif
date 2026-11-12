@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { changedFiles, currentText, editLog, useEditStore } from "./edit";
+import { createJSONStorage } from "zustand/middleware";
+import { MAX_HISTORY, changedFiles, currentText, editLog, useEditStore } from "./edit";
 
 const store = () => useEditStore.getState();
 const base = { text: "a", sha: "s1" };
 
 describe("edit history", () => {
-  beforeEach(() => { useEditStore.setState({ version: null }); store().adopt("v1"); });
+  beforeEach(() => { useEditStore.setState({ scope: null }); store().adopt("v1"); });
 
   it("records changes, undoes and redoes them, and keeps the selection of each state", () => {
     store().change("f.tsx", "b", { path: "f.tsx", start: 4 }, "one", base);
@@ -61,5 +62,85 @@ describe("edit history", () => {
     store().adopt("v2");
     expect(store().history).toHaveLength(1);
     expect(store().bases).toEqual({});
+  });
+});
+
+describe("keeping changes across a reload", () => {
+  const memory = new Map<string, string>();
+  const storage = { getItem: (k: string) => memory.get(k) ?? null, setItem: (k: string, v: string) => void memory.set(k, v), removeItem: (k: string) => void memory.delete(k) };
+
+  beforeEach(() => {
+    memory.clear();
+    useEditStore.persist.setOptions({ storage: createJSONStorage(() => storage) });
+    useEditStore.setState({ scope: null });
+    store().adopt("acme/ds@main");
+    store().clear();
+  });
+
+  const reload = async () => {
+    // What a reload does: the page starts empty (which must not overwrite what was saved) and reads it.
+    const saved = memory.get("motif-edits");
+    useEditStore.setState({ scope: null, bases: {}, history: [{ texts: {}, selection: null, summary: "" }], index: 0, selection: null });
+    if (saved !== undefined) memory.set("motif-edits", saved);
+    await useEditStore.persist.rehydrate();
+  };
+
+  it("brings the changes, their history and the files' original text back", async () => {
+    store().change("f.tsx", "b", { path: "f.tsx", start: 4 }, "one", base);
+    store().change("f.tsx", "c", { path: "f.tsx", start: 4 }, "two");
+    await reload();
+    expect(store().scope).toBe("acme/ds@main");
+    expect(currentText(store(), "f.tsx")).toBe("c");
+    expect(changedFiles(store())).toEqual([{ path: "f.tsx", before: "a", after: "c", sha: "s1" }]);
+    expect(editLog(store())).toEqual(["one", "two"]);
+    store().undo();
+    expect(currentText(store(), "f.tsx")).toBe("b");
+  });
+
+  it("doesn't keep which element was selected", async () => {
+    store().change("f.tsx", "b", { path: "f.tsx", start: 4 }, "one", base);
+    await reload();
+    expect(store().selection).toBeNull();
+    expect(store().history.every((e) => e.selection === null)).toBe(true);
+  });
+
+  it("keeps changes across an update of the repository's components, and drops them for another branch", async () => {
+    store().change("f.tsx", "b", null, "one", base);
+    store().adopt("acme/ds@main");
+    expect(currentText(store(), "f.tsx")).toBe("b");
+    store().adopt("acme/ds@other");
+    expect(currentText(store(), "f.tsx")).toBeNull();
+    expect(store().bases).toEqual({});
+  });
+
+  it("is not trusted when what was saved isn't well formed", async () => {
+    memory.set("motif-edits", JSON.stringify({ state: { scope: "x", bases: null, history: [], index: 3 }, version: 1 }));
+    await reload();
+    expect(store().scope).toBeNull();
+    expect(store().history).toHaveLength(1);
+    memory.set("motif-edits", "not json");
+    await reload();
+    expect(store().history).toHaveLength(1);
+  });
+
+  it("keeps the history to a size that can be saved, newest last", () => {
+    for (let i = 0; i < MAX_HISTORY + 20; i++) store().change("f.tsx", `v${i}`, null, `step ${i}`, i === 0 ? base : undefined);
+    expect(store().history).toHaveLength(MAX_HISTORY);
+    expect(store().index).toBe(MAX_HISTORY - 1);
+    expect(currentText(store(), "f.tsx")).toBe(`v${MAX_HISTORY + 19}`);
+    store().undo();
+    expect(currentText(store(), "f.tsx")).toBe(`v${MAX_HISTORY + 18}`);
+  });
+
+  it("gives up the changes to chosen files and keeps the others", () => {
+    store().change("f.tsx", "b", null, "one", base);
+    store().change("g.tsx", "y", null, "two", { text: "x", sha: "s2" });
+    store().discard(["f.tsx"]);
+    expect(changedFiles(store()).map((f) => f.path)).toEqual(["g.tsx"]);
+    expect(store().bases["f.tsx"]).toBeUndefined();
+    expect(currentText(store(), "f.tsx")).toBeNull();
+    expect(store().index).toBe(0);
+    store().undo();
+    expect(currentText(store(), "g.tsx")).toBe("y");
   });
 });

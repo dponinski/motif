@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, Palette, Pencil, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { gitBlobSha } from "@/lib/github";
 import { buildGraph } from "@/lib/preview/graph";
 import { parseMotifKey } from "@/lib/edit/instrument";
 import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
@@ -73,7 +74,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const graphInput = { repo: source.repo, ref: source.branch, tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles };
   // Elements are marked with where they are in the source, so one can be picked in edit mode.
   const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader, entry: component.file, paths, instrument: true, ...graphInput }));
-  useEffect(() => { useEditStore.getState().adopt(versionOf(source)); }, [source]);
+  useEffect(() => { useEditStore.getState().adopt(`${source.repo}@${source.branch}`); }, [source]);
 
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
@@ -141,6 +142,22 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const canRedo = useEditStore((s) => s.index < s.history.length - 1);
   const changed = useEditStore((s) => changedFiles(s).length);
   const [prOpen, setPrOpen] = useState(false);
+
+  // Files that were edited earlier (maybe before a reload) and that the repository has changed since, which a
+  // pull request couldn't be made for without losing the repository's change.
+  const [stale, setStale] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const out: string[] = [];
+      for (const f of changedFiles(useEditStore.getState())) {
+        const text = await reader.readText(f.path, source.branch).catch(() => null);
+        if (text === null || (await gitBlobSha(text)) !== f.sha) out.push(f.path);
+      }
+      if (alive) setStale(out);
+    })();
+    return () => { alive = false; };
+  }, [reader, source.branch, changed]);
   const [editError, setEditError] = useState<string | null>(null);
 
   // The props and variants shown for a component follow the edits made to its file.
@@ -282,6 +299,22 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           {WIDTHS.map((w) => <option key={w.label} value={w.value ?? ""}>{w.label}</option>)}
         </select>
       </div>
+
+      {stale.length > 0 && (
+        <div role="alert" className="flex flex-shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-500">
+          <AlertTriangle size={12} className="flex-shrink-0" />
+          <span className="min-w-0 flex-1 truncate" title={stale.join(", ")}>
+            {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} A pull request can't be made for them as they are.
+          </span>
+          <button
+            onClick={() => useEditStore.getState().discard(stale)}
+            className="flex-shrink-0 rounded border border-amber-500/40 px-2 py-0.5 hover:bg-amber-500/15"
+            aria-label="Discard edits to changed files"
+          >
+            Discard those edits
+          </button>
+        </div>
+      )}
 
       <div className="relative min-h-0 flex-1 overflow-auto">
         {unsupported.length > 0 ? (
