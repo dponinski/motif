@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, LayoutTemplate, Loader2, RefreshCw } from "lucide-react";
+import { Boxes, GitBranch, LayoutTemplate, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeUpdate } from "@/lib/preview/library";
 import { readerSource } from "@/lib/repo-scan/source";
@@ -9,6 +9,7 @@ import type { Support } from "@/lib/repo-scan/types";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
+import { useNavRequest } from "@/store/nav";
 import { placeOnCanvas } from "./place";
 
 const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
@@ -41,6 +42,61 @@ function UpdateButton({ connection, onResult }: { connection: GitConnection; onR
   );
 }
 
+// Where a repository's components are first brought in: connect, then scan and import in one step, from the
+// Components panel where they will appear. (The Git panel has the same, with the scan report and the branch.)
+function ImportPrompt() {
+  const connection = useGitStore((s) => s.connection);
+  const analysis = useGitStore((s) => s.analysis);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", dir: "", defaultBranch: "" });
+
+  if (!connection) {
+    return (
+      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border px-3 py-3">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary"><Boxes size={12} className="text-text-tertiary" /> Repository components</p>
+        <p className="text-2xs leading-relaxed text-text-tertiary">Bring in the React components from a GitHub repository, to preview, document, edit and place them in designs.</p>
+        <button onClick={() => useNavRequest.getState().ask("git")} className="flex h-7 items-center justify-center gap-1.5 rounded-md border border-surface-border text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary" aria-label="Connect a repository">
+          <GitBranch size={12} /> Connect a repository
+        </button>
+      </div>
+    );
+  }
+
+  const slug = repoSlug(connection);
+  const run = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      // A scan made in the Git panel is used as it is; otherwise the default branch is scanned.
+      let result = analysis?.repo === slug ? analysis : null;
+      if (!result) {
+        const { scanRepository } = await import("@/lib/repo-scan");
+        result = await scanRepository(readerSource(host, connection.defaultBranch), { repo: slug, ref: connection.defaultBranch });
+        useGitStore.getState().setAnalysis(result);
+      }
+      const n = useLibraryStore.getState().importComponents(result);
+      if (n === 0) setMessage({ text: `No React components were found in ${slug}${result.stack.framework ? "" : ". It may not be a React project, or its components may be private (a private repository needs an access token)"}.`, ok: false });
+    } catch (err) {
+      setMessage({ text: errorMessage(err), ok: false });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border px-3 py-3">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary"><Boxes size={12} className="text-text-tertiary" /> Repository components</p>
+      <p className="text-2xs leading-relaxed text-text-tertiary">Scan {slug} and bring its components in. They appear here, under Repository.</p>
+      <button onClick={run} disabled={busy} className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-accent text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-60" aria-label={`Scan and import components from ${slug}`}>
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <Boxes size={12} />} {busy ? "Scanning…" : "Scan and import components"}
+      </button>
+      <button onClick={() => useNavRequest.getState().ask("git")} className="self-start text-2xs text-text-tertiary underline hover:text-text-primary">Choose a branch or see the report in Git</button>
+      {message && <p className={cn("text-2xs leading-relaxed", message.ok ? "text-text-tertiary" : "text-red-400")} role="status">{message.text}</p>}
+    </div>
+  );
+}
+
 export default function RepoComponentsSection() {
   const components = useLibraryStore((s) => s.components);
   const source = useLibraryStore((s) => s.source);
@@ -50,7 +106,7 @@ export default function RepoComponentsSection() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
 
-  if (!source || components.length === 0) return null;
+  if (!source || components.length === 0) return <ImportPrompt />;
   const shown = components.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
   return (

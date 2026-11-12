@@ -28,6 +28,8 @@ Connect a GitHub repository from the Git panel and press Scan to see how it is b
 
 Nothing is written to the repository by a scan. Only React repositories are read so far.
 
+**Where to start.** With no repository components imported, the Components panel has a **Repository components** section: **Connect a repository** takes you to the Git panel, and once one is connected **Scan and import components** scans its default branch and brings the components in, in one step. They then appear in the same panel under **Repository**. A repository with no React components says so, and a private one needs an access token. The Git panel has the same scan with its report, a choice of branch, and a separate Import button.
+
 ## Previewing repository components
 
 After a scan, **Import components** (Git panel or the repository view) adds the repository's components to the **Repository** group under Components. Opening one replaces the canvas with a stage that runs the real component from the repository, with its own styles and tokens.
