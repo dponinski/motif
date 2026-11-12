@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SlidersHorizontal, X, Minus, Plus } from "lucide-react";
+import { SlidersHorizontal, X, Minus, Plus, Code2, Trash2, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCanvasStore } from "@/store/canvas";
+import { useCanvasStore, type VariantProp } from "@/store/canvas";
 import { formatZoom } from "@/lib/utils";
 import {
   useDesignSystemStore,
@@ -92,13 +92,225 @@ function TokenColorPicker({ selectedId, onSelect }: { selectedId?: string; onSel
   );
 }
 
+// ── Component props editor (no selection state) ───────────────────────────────
+
+function ComponentPropsPanel() {
+  const { activeComponentId, componentDefs, addVariantProp, updateVariantProp, removeVariantProp } =
+    useCanvasStore();
+  const def = componentDefs.find((c) => c.id === activeComponentId);
+  if (!def) return null;
+
+  const addProp = () => addVariantProp(def.id, `prop${def.variantProps.length + 1}`);
+
+  const tsxSignature = `interface ${def.name.replace(/\s+/g, "")}Props {\n${def.variantProps
+    .map((p) => `  ${p.name}?: ${p.values.map((v) => `"${v}"`).join(" | ")};`)
+    .join("\n")}\n}`;
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {/* Variant props */}
+      <div className="px-3 py-2 border-b border-surface-border">
+        <div className="flex items-center mb-2">
+          <p className="text-2xs text-text-tertiary font-medium uppercase tracking-wider flex-1">Props</p>
+          <button
+            onClick={addProp}
+            className="text-2xs text-accent hover:text-accent/80 flex items-center gap-0.5 px-1 rounded hover:bg-accent/10 transition-colors"
+          >
+            <Plus size={9} /> Add
+          </button>
+        </div>
+        {def.variantProps.length === 0 && (
+          <p className="text-xs text-text-tertiary">No props yet. Add one to define variants.</p>
+        )}
+        {def.variantProps.map((prop) => (
+          <VariantPropRow
+            key={prop.id}
+            prop={prop}
+            onUpdate={(patch) => updateVariantProp(def.id, prop.id, patch)}
+            onRemove={() => removeVariantProp(def.id, prop.id)}
+          />
+        ))}
+      </div>
+
+      {/* Code output */}
+      {def.variantProps.length > 0 && (
+        <div className="px-3 py-2">
+          <div className="flex items-center gap-1 mb-2">
+            <Code2 size={11} className="text-text-tertiary" />
+            <p className="text-2xs text-text-tertiary font-medium uppercase tracking-wider">Interface</p>
+          </div>
+          <pre className="text-2xs font-mono text-text-secondary bg-surface-subtle rounded p-2 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+            {tsxSignature}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VariantPropRow({
+  prop,
+  onUpdate,
+  onRemove,
+}: {
+  prop: VariantProp;
+  onUpdate: (patch: Partial<Omit<VariantProp, "id">>) => void;
+  onRemove: () => void;
+}) {
+  const [valInput, setValInput] = useState("");
+
+  const addValue = () => {
+    const v = valInput.trim();
+    if (!v || prop.values.includes(v)) return;
+    onUpdate({ values: [...prop.values, v] });
+    setValInput("");
+  };
+
+  const removeValue = (v: string) => {
+    const next = prop.values.filter((x) => x !== v);
+    onUpdate({
+      values: next,
+      default: next.includes(prop.default) ? prop.default : (next[0] ?? ""),
+    });
+  };
+
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="flex items-center gap-1 mb-1">
+        <input
+          className="flex-1 bg-surface-subtle border border-surface-border rounded px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-accent"
+          value={prop.name}
+          onChange={(e) => onUpdate({ name: e.target.value })}
+          placeholder="prop name"
+        />
+        <button onClick={onRemove} className="p-0.5 rounded hover:bg-surface-subtle text-text-tertiary hover:text-red-400">
+          <Trash2 size={10} />
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1 mb-1">
+        {prop.values.map((v) => (
+          <span
+            key={v}
+            className={cn(
+              "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-2xs cursor-pointer transition-colors",
+              v === prop.default
+                ? "bg-accent/15 text-accent"
+                : "bg-surface-subtle text-text-secondary hover:bg-surface-overlay"
+            )}
+            onClick={() => onUpdate({ default: v })}
+            title="Click to set as default"
+          >
+            {v}
+            <button
+              onClick={(e) => { e.stopPropagation(); removeValue(v); }}
+              className="hover:text-red-400 leading-none"
+            >
+              <X size={8} />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <input
+          className="flex-1 bg-surface-subtle border border-surface-border rounded px-1.5 py-0.5 text-2xs text-text-primary outline-none focus:border-accent"
+          value={valInput}
+          onChange={(e) => setValInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") addValue(); e.stopPropagation(); }}
+          placeholder="add value…"
+        />
+        <button onClick={addValue} className="px-1.5 rounded bg-surface-subtle text-text-tertiary hover:text-text-primary text-2xs">
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Instance properties ───────────────────────────────────────────────────────
+
+function InstancePanel({ elementId }: { elementId: string }) {
+  const { elements, updateElement, pushHistory, componentDefs } = useCanvasStore();
+  const el = elements[elementId];
+  if (!el || el.type !== "instance" || !el.componentId) return null;
+  const def = componentDefs.find((c) => c.id === el.componentId);
+  if (!def) return null;
+
+  const props = el.instanceProps ?? {};
+  const setprop = (name: string, value: string) => {
+    updateElement(el.id, { instanceProps: { ...props, [name]: value } });
+    pushHistory();
+  };
+
+  const jsxProps = def.variantProps
+    .map((p) => `${p.name}="${props[p.name] ?? p.default}"`)
+    .join(" ");
+  const jsxSnippet = `<${def.name.replace(/\s+/g, "")}${jsxProps ? " " + jsxProps : ""} />`;
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {/* Instance header */}
+      <div className="px-3 py-2 border-b border-surface-border">
+        <p className="text-2xs text-text-tertiary font-medium uppercase tracking-wider mb-1">Component</p>
+        <p className="text-xs text-text-primary font-medium">{def.name}</p>
+      </div>
+
+      {/* Position & size */}
+      <div className="px-3 py-2 border-b border-surface-border">
+        <p className="text-2xs text-text-tertiary mb-2 font-medium uppercase tracking-wider">Position & Size</p>
+        <div className="grid grid-cols-2 gap-2">
+          <NumberInput label="X" value={el.x} onChange={(v) => updateElement(el.id, { x: v })} onCommit={pushHistory} />
+          <NumberInput label="Y" value={el.y} onChange={(v) => updateElement(el.id, { y: v })} onCommit={pushHistory} />
+          <NumberInput label="W" value={el.width} onChange={(v) => updateElement(el.id, { width: Math.max(1, v) })} onCommit={pushHistory} />
+          <NumberInput label="H" value={el.height} onChange={(v) => updateElement(el.id, { height: Math.max(1, v) })} onCommit={pushHistory} />
+        </div>
+      </div>
+
+      {/* Props */}
+      {def.variantProps.length > 0 && (
+        <div className="px-3 py-2 border-b border-surface-border">
+          <p className="text-2xs text-text-tertiary mb-2 font-medium uppercase tracking-wider">Props</p>
+          {def.variantProps.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs text-text-secondary w-16 flex-shrink-0 truncate">{p.name}</span>
+              <div className="flex-1 relative">
+                <select
+                  className="w-full bg-surface-subtle border border-surface-border rounded px-1.5 py-0.5 text-xs text-text-primary outline-none appearance-none pr-5"
+                  value={props[p.name] ?? p.default}
+                  onChange={(e) => setprop(p.name, e.target.value)}
+                >
+                  {p.values.map((v) => <option key={v} value={v}>{v}</option>)}
+                </select>
+                <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* JSX code */}
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-1 mb-2">
+          <Code2 size={11} className="text-text-tertiary" />
+          <p className="text-2xs text-text-tertiary font-medium uppercase tracking-wider">JSX</p>
+        </div>
+        <pre className="text-2xs font-mono text-accent bg-surface-subtle rounded p-2 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed select-all">
+          {jsxSnippet}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
 // ── Properties panel ──────────────────────────────────────────────────────────
 
 function PropertiesPanel() {
-  const { elements, selectedIds, updateElement, pushHistory } = useCanvasStore();
+  const { elements, selectedIds, updateElement, pushHistory, activeComponentId, componentDefs } = useCanvasStore();
   const { colors, typography } = useDesignSystemStore();
 
   if (!selectedIds.length) {
+    // Show component props editor when no element selected
+    const def = componentDefs.find((c) => c.id === activeComponentId);
+    if (def) return <ComponentPropsPanel />;
     return (
       <div className="flex flex-col items-center justify-center h-32 gap-2">
         <SlidersHorizontal size={18} className="text-text-tertiary" />
@@ -113,6 +325,9 @@ function PropertiesPanel() {
 
   const el = elements[selectedIds[0]];
   if (!el) return null;
+
+  // Instance gets its own panel
+  if (el.type === "instance") return <InstancePanel elementId={el.id} />;
 
   const update = (updates: Parameters<typeof updateElement>[1]) => updateElement(el.id, updates);
   const commit = () => pushHistory();

@@ -26,6 +26,7 @@ import {
   type CanvasElement,
   type ComponentDef,
   type ComponentGroup,
+  type VariantProp,
 } from "@/store/canvas";
 
 // ── Component Browser ─────────────────────────────────────────────────────────
@@ -36,12 +37,14 @@ function ComponentRow({
   onActivate,
   onRename,
   onDelete,
+  onPlaceInstance,
 }: {
   def: ComponentDef;
   isActive: boolean;
   onActivate: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
+  onPlaceInstance: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(def.name);
@@ -60,6 +63,15 @@ function ComponentRow({
     setEditing(false);
   };
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    if (isActive) {
+      startEdit(e);
+    } else {
+      e.stopPropagation();
+      onPlaceInstance();
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -69,7 +81,7 @@ function ComponentRow({
           : "text-text-secondary hover:text-text-primary hover:bg-surface-subtle"
       )}
       onClick={onActivate}
-      onDoubleClick={startEdit}
+      onDoubleClick={handleDoubleClick}
     >
       <Component
         size={11}
@@ -199,6 +211,7 @@ function ComponentsSection() {
     createGroup,
     deleteGroup,
     renameGroup,
+    placeInstance,
   } = useCanvasStore();
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -266,6 +279,7 @@ function ComponentsSection() {
                       onActivate={() => setActiveComponent(def.id)}
                       onRename={(name) => renameComponent(def.id, name)}
                       onDelete={() => deleteComponent(def.id)}
+                      onPlaceInstance={() => placeInstance(def.id)}
                     />
                   </div>
                 ))}
@@ -292,6 +306,7 @@ function ComponentsSection() {
             onActivate={() => setActiveComponent(def.id)}
             onRename={(name) => renameComponent(def.id, name)}
             onDelete={() => deleteComponent(def.id)}
+            onPlaceInstance={() => placeInstance(def.id)}
           />
         ))}
 
@@ -313,6 +328,7 @@ const ELEMENT_ICONS: Record<CanvasElement["type"], React.ReactNode> = {
   text: <Type size={11} />,
   frame: <Frame size={11} />,
   group: <Layers size={11} />,
+  instance: <Component size={11} />,
 };
 
 function LayerItem({ id, depth = 0 }: { id: string; depth?: number }) {
