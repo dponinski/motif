@@ -36,6 +36,18 @@ export interface RepoReader {
   readText(path: string, ref: string): Promise<string | null>;
 }
 
+export interface PullRequestInfo {
+  number: number;
+  url: string;
+  state: "open" | "closed";
+  merged: boolean;
+}
+
+export interface PrHost {
+  createPullRequest(args: { title: string; body: string; head: string; base: string }): Promise<{ number: number; url: string }>;
+  getPullRequest(number: number): Promise<PullRequestInfo>;
+}
+
 export class GitHostError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -70,7 +82,7 @@ function fromBase64(encoded: string): string {
 const encodePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 
 // Public repositories can be read without a token; an empty token means that.
-export function createGitHubClient(conn: { owner: string; repo: string; token: string }): GitHost & RepoReader {
+export function createGitHubClient(conn: { owner: string; repo: string; token: string }): GitHost & RepoReader & PrHost {
   const root = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}`;
   const authed = conn.token.length > 0;
 
@@ -166,6 +178,23 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
       if (res.status === 404) return null;
       if (!res.ok) throw new GitHostError(`GitHub request failed (${res.status})`, res.status);
       return res.text();
+    },
+
+    async createPullRequest({ title, body, head, base }) {
+      try {
+        const pr = await request<{ number: number; html_url: string }>("/pulls", { method: "POST", body: { title, body, head, base } });
+        return { number: pr!.number, url: pr!.html_url };
+      } catch (err) {
+        if (err instanceof GitHostError && (err.status === 403 || err.status === 404)) {
+          throw new GitHostError("The token can't open pull requests. It needs Pull requests: read and write.", err.status);
+        }
+        throw err;
+      }
+    },
+
+    async getPullRequest(number) {
+      const pr = await request<{ number: number; html_url: string; state: string; merged?: boolean; merged_at?: string | null }>(`/pulls/${number}`);
+      return { number: pr!.number, url: pr!.html_url, state: pr!.state === "open" ? "open" : "closed", merged: pr!.merged ?? Boolean(pr!.merged_at) };
     },
 
     async putFile({ path, branch, text, message, sha }) {

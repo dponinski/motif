@@ -3,8 +3,9 @@
 import { useState } from "react";
 import {
   Plus, Trash2, ChevronDown, ChevronRight, X, Pencil,
-  Download, Upload, Palette, Check,
+  Download, Upload, Palette, Check, GitBranch,
 } from "lucide-react";
+import TokenSyncDialog from "@/components/git/TokenSyncDialog";
 import { cn } from "@/lib/utils";
 import {
   useDesignSystemStore,
@@ -578,6 +579,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   const [activeTab, setActiveTab] = useState<TokenTab>("colors");
   const [showImport, setShowImport] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   const activeSet = sets.find((s) => s.id === activeSetId) ?? sets[0];
 
@@ -590,6 +592,9 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
 
         {/* Export actions */}
         <div className="flex items-center gap-1">
+          <button onClick={() => setSyncOpen(true)} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors">
+            <GitBranch size={11} /> Repo sync
+          </button>
           <button onClick={() => setShowImport(!showImport)} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors">
             <Upload size={11} /> Import
           </button>
@@ -677,6 +682,8 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
           )}
         </div>
       </div>
+
+      <TokenSyncDialog open={syncOpen} onOpenChange={setSyncOpen} />
     </div>
   );
 }

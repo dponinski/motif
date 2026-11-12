@@ -23,6 +23,17 @@ Connect a GitHub repository from the Git panel and press Scan to see how it is b
 
 Nothing is written to the repository and nothing is imported into Motif yet. Only React repositories are read so far.
 
+## Syncing tokens with a repository
+
+Open **Sync tokens** in the Git panel (or **Repo sync** in the Tokens view) with a repository connected. Opening pull requests needs a token with Contents and Pull requests read and write.
+
+- **The repository has tokens**: import them into a new Motif set, one theme per repository theme. Colors (in `oklch`, `hsl`, `rgb` or hex), radius, spacing and shadows are synced; fonts and other tokens are listed as left out.
+- **Later syncs**: *Check* compares Motif and the repository against the last sync. Changes from the repository are applied to Motif; changes made in Motif go back as a pull request that edits the stylesheet in place, in the notation it already uses, so the diff is only the values you changed. New tokens are added following the repository's own conventions (variables per theme, the Tailwind alias, `@theme`).
+- **Conflicts**: when both sides changed the same value you choose which to keep.
+- **The repository has no tokens**: send a Motif set as a pull request that adds a `tokens.css` of CSS variables (wired into Tailwind v4 and imported from its stylesheet when there is one).
+- **Syncing never deletes a token from a repository.** A token deleted in Motif comes back on the next sync, and one removed in the repository is removed from Motif.
+- Tokens defined in a Tailwind v3 config or a token JSON file are read, but writing changes back to them is not supported yet.
+
 ```bash
 npm test
 ```

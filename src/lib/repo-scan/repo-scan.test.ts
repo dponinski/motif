@@ -55,6 +55,24 @@ describe("motif-test-system (React 19, Vite, Tailwind v4, cva)", async () => {
     expect(token(a, "font-sans").values.light).toBe('"Inter", ui-sans-serif, system-ui, sans-serif');
   });
 
+  it("records where every theme's value is written", () => {
+    const css = loadFixture("motif-test-system")["src/styles/motif.css"].split("\n");
+    const lineOf = (needle: string, nth = 0) => css.flatMap((l, i) => (l.includes(needle) ? [i + 1] : []))[nth];
+    expect(token(a, "primary").locations).toEqual({
+      light: { file: "src/styles/motif.css", line: lineOf("--primary: oklch(0.52"), container: "css-var" },
+      dark: { file: "src/styles/motif.css", line: lineOf("--primary: oklch(0.65"), container: "css-var" },
+    });
+    expect(token(a, "radius-lg").locations).toEqual({ light: { file: "src/styles/motif.css", line: lineOf("--radius-lg"), container: "theme" } });
+    expect(lineOf("--primary: oklch(0.52")).not.toBe(lineOf("--primary: oklch(0.65"));
+  });
+
+  it("can skip components when only tokens are wanted", async () => {
+    const quick = await scanRepository(memorySource(loadFixture("motif-test-system")), { repo: "x/y", ref: "main" }, { tokensOnly: true });
+    expect(quick.components).toEqual([]);
+    expect(quick.tokens).toEqual(a.tokens);
+    expect(quick.stack.framework?.name).toBe("react");
+  });
+
   it("finds all 22 components, every one public, and skips the demo app", () => {
     expect(a.components.map((c) => c.name).sort()).toEqual([
       "Alert", "Avatar", "Badge", "Button", "Card", "CardContent", "CardDescription", "CardFooter", "CardHeader", "CardTitle",
@@ -149,6 +167,7 @@ describe("other repository setups", () => {
     });
     expect(a.themes).toEqual(["default"]);
     expect(token(a, "color-brand").tailwind).toBe("color-brand");
+    expect(token(a, "color-brand").locations.default).toMatchObject({ file: "tailwind.config.js", container: "config" });
   });
 
   it("reads themes from several selector styles and ignores component-scoped variables", async () => {

@@ -81,7 +81,11 @@ async function publicExports(entries: string[], resolver: Resolver): Promise<Set
   return pub;
 }
 
-export async function scanRepository(source: RepoSource, meta: { repo: string; ref: string }): Promise<RepoAnalysis> {
+export async function scanRepository(
+  source: RepoSource,
+  meta: { repo: string; ref: string },
+  options: { tokensOnly?: boolean } = {}
+): Promise<RepoAnalysis> {
   let reads = 0;
   const counted: RepoSource = {
     listFiles: () => source.listFiles(),
@@ -141,7 +145,8 @@ export async function scanRepository(source: RepoSource, meta: { repo: string; r
   const usage: Partial<Record<StylingSystem, number>> = {};
   let libraryFiles = 0;
 
-  if (early.supported) {
+  const readComponents = !options.tokensOnly;
+  if (readComponents && early.supported) {
     const all = paths.filter((p) => /\.[jt]sx$/.test(p) && isLibraryPath(p));
     if (all.length > MAX_COMPONENT_FILES) warnings.push(`Only the first ${MAX_COMPONENT_FILES} of ${all.length} component files were read`);
     const results = await mapLimit(all.slice(0, MAX_COMPONENT_FILES), 8, async (path) => {
@@ -157,7 +162,7 @@ export async function scanRepository(source: RepoSource, meta: { repo: string; r
         usage[system] = (usage[system] ?? 0) + 1;
       }
     }
-  } else {
+  } else if (readComponents) {
     warnings.push(
       early.framework
         ? `Components are not read yet: ${early.framework.name} repositories are not supported, only React`
@@ -168,7 +173,7 @@ export async function scanRepository(source: RepoSource, meta: { repo: string; r
   const stack = detectStack({ ...baseInput, usage, libraryFiles });
   if (stack.styling.primary === "sass" || paths.some((p) => /\.s[ac]ss$/.test(p))) warnings.push("Sass variables are not read as tokens yet");
 
-  const publicSet = entries.length ? await publicExports(entries, resolver) : null;
+  const publicSet = entries.length && !options.tokensOnly ? await publicExports(entries, resolver) : null;
   const components = scanned
     .map(({ local, classKinds, ...c }) => ({
       ...c,
@@ -185,6 +190,8 @@ export async function scanRepository(source: RepoSource, meta: { repo: string; r
     themes,
     tokens,
     components,
+    styleFiles: cssPaths,
+    tailwindEntry: cssFiles.find((f) => /@import\s+["']tailwindcss["']/.test(f.text))?.path ?? null,
     warnings: [...new Set(warnings)],
     stats: { filesInRepo: listing.paths.length, filesRead: reads, truncated: listing.truncated },
   };

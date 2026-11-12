@@ -25,6 +25,8 @@ export interface ColorToken {
   group: string;
   setId: string;
   themeValues: Record<string, string>; // themeId -> hex/rgba
+  // Name of the repository token this one is synced with, when it came from (or went to) a repo.
+  repoName?: string;
 }
 
 export interface TypographyToken {
@@ -43,6 +45,7 @@ export interface SpacingToken {
   name: string;
   value: number;
   setId: string;
+  repoName?: string;
 }
 
 export interface RadiusToken {
@@ -50,6 +53,7 @@ export interface RadiusToken {
   name: string;
   value: number;
   setId: string;
+  repoName?: string;
 }
 
 export interface ShadowToken {
@@ -62,6 +66,10 @@ export interface ShadowToken {
   color: string;
   group: string;
   setId: string;
+  repoName?: string;
+  inset?: boolean;
+  // The whole value of a multi-layer shadow as canonical text; the fields above hold its first layer.
+  raw?: string;
 }
 
 export interface ComponentDefinition {
