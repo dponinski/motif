@@ -36,6 +36,8 @@ export interface ElementInfo {
   classes: string;
   text: { start: number; end: number; value: string } | null;
   canDelete: boolean;
+  // Exactly one element inside it, so taking the wrapper off leaves that element.
+  canUnwrap: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
 }
@@ -50,7 +52,7 @@ export interface EditResult {
 const CN_NAMES = new Set(["cn", "clsx", "cx", "classnames", "classNames", "twMerge", "tw", "cls"]);
 const CVA_SOURCES: Record<string, string> = { "class-variance-authority": "cva", "tailwind-variants": "tv" };
 
-interface FileContext {
+export interface FileContext {
   code: string;
   program: AnyNode;
   parents: Map<AnyNode, AnyNode | null>;
@@ -58,7 +60,7 @@ interface FileContext {
   cvas: Map<string, AnyNode>;
 }
 
-async function context(path: string, code: string): Promise<FileContext> {
+export async function context(path: string, code: string): Promise<FileContext> {
   const program = (await parseModule(code, path)).program as unknown as AnyNode;
   const parents = new Map<AnyNode, AnyNode | null>();
   walk(program, (node, parent) => { parents.set(node, parent); });
@@ -158,7 +160,7 @@ function classNameSlots(ctx: FileContext, expr: AnyNode, values: Record<string, 
   return slots.length ? { slots, reason: null } : { slots: [], reason: "Its classes are built at runtime or come from another file, so they can't be edited here" };
 }
 
-function findElement(ctx: FileContext, start: number): AnyNode | null {
+export function findElement(ctx: FileContext, start: number): AnyNode | null {
   let found: AnyNode | null = null;
   walk(ctx.program, (node) => {
     if (found) return false;
@@ -180,7 +182,7 @@ function textOf(code: string, el: AnyNode): ElementInfo["text"] {
   return { start, end, value: code.slice(start, end) };
 }
 
-const siblings = (ctx: FileContext, el: AnyNode): { parent: AnyNode; list: AnyNode[]; index: number } | null => {
+export const siblings = (ctx: FileContext, el: AnyNode): { parent: AnyNode; list: AnyNode[]; index: number } | null => {
   const parent = ctx.parents.get(el) ?? null;
   if (!parent || (parent.type !== "JSXElement" && parent.type !== "JSXFragment")) return null;
   const list = (parent.children as AnyNode[]).filter((c) => c.type === "JSXElement") as AnyNode[];
@@ -214,6 +216,10 @@ export async function analyze(path: string, code: string, start: number, values:
     classes: slots.filter((s) => s.active).map(slotText).join(" "),
     text: textOf(code, el),
     canDelete: !!sib,
+    canUnwrap: (() => {
+      const kids = (el.children as AnyNode[]).filter((c) => !(c.type === "JSXText" && String(c.value).trim() === ""));
+      return kids.length === 1 && kids[0].type === "JSXElement" && !!el.closingElement;
+    })(),
     canMoveUp: !!sib && sib.index > 0,
     canMoveDown: !!sib && sib.index >= 0 && sib.index < sib.list.length - 1,
   };

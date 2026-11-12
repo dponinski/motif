@@ -75,6 +75,7 @@
       var editOn = false;
       var selectedKey = null;
       var hovered = null;
+      var updates = Promise.resolve();
       var rootElement = document.getElementById('root');
       var overrides = document.getElementById('motif-overrides');
       var root = createRoot(rootElement);
@@ -199,10 +200,23 @@
           overrides.textContent = message.overrides || '';
           renderLast();
         } else if (message.type === 'modules') {
-          Object.assign(data.modules, message.modules);
-          // A fresh registry runs the changed modules again; the old one is dropped.
-          registry = createRegistry(data, externals);
-          renderLast();
+          // New code can need packages the page didn't start with; they are loaded before it runs. Messages are
+          // handled one after another so a slow load can't be overtaken by the next edit.
+          var extra = message.externals || {};
+          var wanted = Object.keys(extra).filter(function (spec) { return !externals[spec]; });
+          updates = updates.then(function () {
+            return Promise.all(wanted.map(function (spec) {
+              return import(extra[spec]).then(
+                function (ns) { externals[spec] = toCjs(ns); },
+                function (error) { throw new Error('Could not load "' + spec + '" from the CDN: ' + ((error && error.message) || error)); }
+              );
+            }));
+          }).then(function () {
+            Object.assign(data.modules, message.modules);
+            // A fresh registry runs the changed modules again; the old one is dropped.
+            registry = createRegistry(data, externals);
+            renderLast();
+          }).catch(fail);
         } else if (message.type === 'edit') {
           editOn = !!message.on;
           selectedKey = message.selected || null;
