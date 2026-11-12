@@ -16,9 +16,17 @@ import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useDocsStore } from "@/store/docs";
 import { useFilesStore } from "@/store/files";
 import { loadOpenDocument, snapshotOpenDocument } from "@/store/open-document";
+import { useNavRequest } from "@/store/nav";
 
 export default function Editor({ fileId }: { fileId?: string }) {
   const [activeNav, setActiveNav] = useState<NavItem | null>("components");
+  // A panel can ask for another one to be shown.
+  const navRequest = useNavRequest((s) => s.request);
+  useEffect(() => {
+    if (!navRequest) return;
+    setActiveNav(navRequest);
+    useNavRequest.getState().clear();
+  }, [navRequest]);
   // Canvas shortcuts must not fire while a full-screen view covers the canvas.
   const canvasHidden = useRef(false);
   const stageActive = useLibraryStore((s) => s.activeId !== null && s.components.some((c) => c.id === s.activeId));
