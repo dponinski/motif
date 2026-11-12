@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
-import Toolbar from "./toolbar/Toolbar";
 import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import DesignCanvas from "./canvas/DesignCanvas";
 import AppNav, { type NavItem } from "./AppNav";
 import ActivityPanel from "./ActivityPanel";
 import VerticalToolbar from "./toolbar/VerticalToolbar";
+import TokensView from "./views/TokensView";
 import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useFilesStore } from "@/store/files";
 
@@ -171,34 +171,35 @@ export default function Editor({ fileId }: { fileId?: string }) {
   }, [fileId]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-surface-base select-none">
-      {/* Top toolbar */}
-      <Toolbar />
+    <div className="flex h-screen w-screen overflow-hidden bg-surface-base select-none">
+      {/* Far-left nav icon rail */}
+      <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
 
-      {/* Main area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Far-left nav icon rail */}
-        <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
+      {activeNav === "tokens" ? (
+        /* Full-screen token editor */
+        <TokensView onClose={() => setActiveNav(null)} />
+      ) : (
+        <>
+          {/* Chat activity panel */}
+          {activeNav === "chat" && (
+            <ActivityPanel activeNav="chat" onClose={() => setActiveNav(null)} />
+          )}
 
-        {/* Activity panel (components / tokens / chat) */}
-        {activeNav && (
-          <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} />
-        )}
+          {/* Layers + components panel */}
+          <LeftPanel />
 
-        {/* Layers panel */}
-        <LeftPanel />
+          {/* Vertical draw tools */}
+          <VerticalToolbar />
 
-        {/* Vertical draw tools */}
-        <VerticalToolbar />
+          {/* Canvas */}
+          <main className="flex-1 relative overflow-hidden">
+            <DesignCanvas />
+          </main>
 
-        {/* Canvas */}
-        <main className="flex-1 relative overflow-hidden">
-          <DesignCanvas />
-        </main>
-
-        {/* Right properties panel */}
-        <RightPanel />
-      </div>
+          {/* Right properties panel */}
+          <RightPanel />
+        </>
+      )}
     </div>
   );
 }

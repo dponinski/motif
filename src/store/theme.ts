@@ -11,7 +11,7 @@ interface ThemeStore {
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set) => ({
-      mode: "dark",
+      mode: "system",
       setMode: (mode) => set({ mode }),
     }),
     { name: "motif-theme" }

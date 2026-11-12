@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal, X, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCanvasStore } from "@/store/canvas";
+import { formatZoom } from "@/lib/utils";
 import {
   useDesignSystemStore,
   type ColorToken,
@@ -243,10 +244,33 @@ function PropertiesPanel() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+function ZoomControls() {
+  const { zoom, setZoom } = useCanvasStore();
+  return (
+    <div className="flex items-center gap-1 px-3 h-9 border-b border-surface-border flex-shrink-0">
+      <span className="text-2xs text-text-tertiary flex-1">Zoom</span>
+      <button onClick={() => setZoom(Math.max(0.05, zoom / 1.25))} className="tool-btn" title="Zoom out">
+        <Minus size={11} />
+      </button>
+      <button
+        onClick={() => setZoom(1)}
+        className="px-1.5 h-6 text-xs text-text-secondary hover:text-text-primary transition-colors min-w-[46px] text-center"
+        title="Reset zoom"
+      >
+        {formatZoom(zoom)}
+      </button>
+      <button onClick={() => setZoom(Math.min(32, zoom * 1.25))} className="tool-btn" title="Zoom in">
+        <Plus size={11} />
+      </button>
+    </div>
+  );
+}
+
 export default function RightPanel() {
   return (
     <aside className="w-[260px] flex-shrink-0 flex flex-col border-l border-surface-border bg-surface-raised overflow-hidden">
-      <div className="flex items-center gap-1.5 px-3 h-10 border-b border-surface-border flex-shrink-0">
+      <ZoomControls />
+      <div className="flex items-center gap-1.5 px-3 h-9 border-b border-surface-border flex-shrink-0">
         <SlidersHorizontal size={12} className="text-text-tertiary" />
         <span className="text-xs font-medium text-text-secondary">Properties</span>
       </div>
