@@ -7,6 +7,7 @@ import { gitBlobSha, type GitHost } from "@/lib/github";
 import { finishMerge, pull, push, type GitLink, type PendingMerge, type SyncOutcome } from "@/lib/git-sync";
 import { DOCUMENT_EXTENSION, serializeDocument, type MotifDocument } from "@/lib/motif-document";
 import { useCanvasStore } from "@/store/canvas";
+import { loadOpenDocument, snapshotOpenDocument } from "@/store/open-document";
 import { toDocument, useFilesStore, type DesignFile } from "@/store/files";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import GitConnectForm from "@/components/git/GitConnectForm";
@@ -166,8 +167,7 @@ function SyncPanel({ file, link, host }: { file: DesignFile; link: GitLink; host
 
   const applyDoc = (doc: MotifDocument) => {
     applyDocument(file.id, doc);
-    const canvas = useCanvasStore.getState();
-    canvas.loadDocument(doc, canvas.activeComponentId);
+    loadOpenDocument(doc, useCanvasStore.getState().activeComponentId);
   };
 
   const handle = (outcome: SyncOutcome, at: GitLink, local: MotifDocument) => {
@@ -205,7 +205,7 @@ function SyncPanel({ file, link, host }: { file: DesignFile; link: GitLink; host
     setNotice(null);
     try {
       // Flush edits the debounced auto-save has not written yet.
-      saveFile(file.id, useCanvasStore.getState().getDocumentContent());
+      saveFile(file.id, snapshotOpenDocument());
       const local = toDocument(useFilesStore.getState().files.find((f) => f.id === file.id)!);
       handle(await action(local), at, local);
     } catch (err) {

@@ -1,10 +1,10 @@
 "use client";
 
-import { GitBranch, LayoutTemplate, Palette, Sparkles } from "lucide-react";
+import { BookOpen, GitBranch, LayoutTemplate, Palette, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type NavItem = "components" | "tokens" | "chat" | "git";
+export type NavItem = "components" | "tokens" | "docs" | "chat" | "git";
 
 export default function AppNav({
   activeNav,
@@ -16,6 +16,7 @@ export default function AppNav({
   const items: { id: NavItem; icon: React.ReactNode; label: string }[] = [
     { id: "components", icon: <LayoutTemplate size={16} />, label: "Components" },
     { id: "tokens", icon: <Palette size={16} />, label: "Tokens" },
+    { id: "docs", icon: <BookOpen size={16} />, label: "Docs" },
     { id: "chat", icon: <Sparkles size={16} />, label: "Chat" },
     { id: "git", icon: <GitBranch size={16} />, label: "Git" },
   ];

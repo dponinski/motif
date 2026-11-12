@@ -8,11 +8,19 @@ import AppNav, { type NavItem } from "./AppNav";
 import ActivityPanel from "./ActivityPanel";
 import VerticalToolbar from "./toolbar/VerticalToolbar";
 import TokensView from "./views/TokensView";
+import DocsView from "./views/DocsView";
 import { useCanvasStore, type Tool } from "@/store/canvas";
+import { useDocsStore } from "@/store/docs";
 import { useFilesStore } from "@/store/files";
+import { loadOpenDocument, snapshotOpenDocument } from "@/store/open-document";
 
 export default function Editor({ fileId }: { fileId?: string }) {
   const [activeNav, setActiveNav] = useState<NavItem | null>("components");
+  // Canvas shortcuts must not fire while a full-screen view covers the canvas.
+  const canvasHidden = useRef(false);
+  useEffect(() => {
+    canvasHidden.current = activeNav === "tokens" || activeNav === "docs";
+  }, [activeNav]);
 
   const { undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool } =
     useCanvasStore();
@@ -33,6 +41,14 @@ export default function Editor({ fileId }: { fileId?: string }) {
 
       if (isInput) return;
 
+      const ctrl = e.metaKey || e.ctrlKey;
+      if (ctrl && e.key === "k") {
+        e.preventDefault();
+        setActiveNav((prev) => prev === "chat" ? null : "chat");
+        return;
+      }
+      if (canvasHidden.current) return;
+
       // Spacebar: hold to pan, release to restore
       if (e.key === " " && !e.repeat && !spaceDown.current) {
         e.preventDefault();
@@ -41,8 +57,6 @@ export default function Editor({ fileId }: { fileId?: string }) {
         setActiveTool("hand");
         return;
       }
-
-      const ctrl = e.metaKey || e.ctrlKey;
 
       if (ctrl && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
@@ -96,9 +110,6 @@ export default function Editor({ fileId }: { fileId?: string }) {
         setActiveTool("frame");
       } else if (e.key === "h") {
         setActiveTool("hand");
-      } else if (ctrl && e.key === "k") {
-        e.preventDefault();
-        setActiveNav((prev) => prev === "chat" ? null : "chat");
       }
     },
     [undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool, setActiveNav]
@@ -138,7 +149,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
     }
     const file = useFilesStore.getState().files.find((f) => f.id === fileId);
     if (file) {
-      useCanvasStore.getState().loadDocument(file);
+      loadOpenDocument(file);
     } else {
       useCanvasStore.getState().pushHistory();
     }
@@ -148,23 +159,27 @@ export default function Editor({ fileId }: { fileId?: string }) {
   useEffect(() => {
     if (!fileId) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const save = () =>
-      useFilesStore.getState().saveFile(fileId, useCanvasStore.getState().getDocumentContent());
+    const save = () => useFilesStore.getState().saveFile(fileId, snapshotOpenDocument());
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(save, 1500);
+    };
 
-    const unsub = useCanvasStore.subscribe((state, prev) => {
+    const unsubCanvas = useCanvasStore.subscribe((state, prev) => {
       if (
         state.elements === prev.elements &&
         state.order === prev.order &&
         state.componentDefs === prev.componentDefs &&
         state.componentGroups === prev.componentGroups
       ) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(save, 1500);
+      schedule();
     });
+    const unsubDocs = useDocsStore.subscribe(schedule);
 
     return () => {
       if (timer) clearTimeout(timer);
-      unsub();
+      unsubCanvas();
+      unsubDocs();
       // Final sync on unmount
       save();
     };
@@ -178,6 +193,8 @@ export default function Editor({ fileId }: { fileId?: string }) {
       {activeNav === "tokens" ? (
         /* Full-screen token editor */
         <TokensView onClose={() => setActiveNav(null)} />
+      ) : activeNav === "docs" ? (
+        <DocsView fileId={fileId} onClose={() => setActiveNav(null)} />
       ) : (
         <>
           {/* Chat / Git activity panel */}

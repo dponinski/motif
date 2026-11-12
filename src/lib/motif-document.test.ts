@@ -18,6 +18,7 @@ function doc(elements: CanvasElement[], order?: string[]): MotifDocument {
     id: "file1",
     name: "Design",
     componentGroups: [],
+    docs: [],
     components: [{
       id: "comp-main",
       name: "Main",

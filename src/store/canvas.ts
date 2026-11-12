@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { DocumentContent } from "@/lib/motif-document";
 
+type SceneContent = Omit<DocumentContent, "docs">;
+
 export interface ComponentGroup {
   id: string;
   name: string;
@@ -117,8 +119,8 @@ interface CanvasStore {
   undo: () => void;
   redo: () => void;
   clearCanvas: () => void;
-  loadDocument: (content: DocumentContent, activeComponentId?: string) => void;
-  getDocumentContent: () => DocumentContent;
+  loadDocument: (content: SceneContent, activeComponentId?: string) => void;
+  getDocumentContent: () => SceneContent;
 
   // Component management
   setActiveComponent: (id: string) => void;

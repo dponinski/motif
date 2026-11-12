@@ -11,9 +11,27 @@ export interface DocumentComponent {
   order: string[];
 }
 
+export type TokenKind = "colors" | "typography" | "spacing" | "radii" | "shadows";
+
+export type DocBlock =
+  | { id: string; type: "heading"; text: string }
+  | { id: string; type: "text"; text: string }
+  | { id: string; type: "preview"; componentId: string }
+  | { id: string; type: "props"; componentId: string }
+  | { id: string; type: "code"; componentId: string }
+  | { id: string; type: "tokens"; kind: TokenKind }
+  | { id: string; type: "guideline"; do: string; dont: string };
+
+export interface DocPage {
+  id: string;
+  title: string;
+  blocks: DocBlock[];
+}
+
 export interface DocumentContent {
   componentGroups: ComponentGroup[];
   components: DocumentComponent[];
+  docs: DocPage[];
 }
 
 export interface MotifDocument extends DocumentContent {
@@ -54,6 +72,8 @@ export function serializeDocument(doc: MotifDocument): string {
     name: doc.name,
     componentGroups: canonical(doc.componentGroups),
     components: canonical(doc.components),
+    // Left out while empty so files written before docs existed keep the same blob.
+    ...(doc.docs.length ? { docs: canonical(doc.docs) } : {}),
   };
   return JSON.stringify(ordered, null, 2) + "\n";
 }
@@ -89,7 +109,33 @@ export function parseDocument(text: string): MotifDocument {
     name: raw.name,
     componentGroups: Array.isArray(raw.componentGroups) ? (raw.componentGroups as ComponentGroup[]) : [],
     components,
+    docs: Array.isArray(raw.docs) ? raw.docs.flatMap(parseDocPage) : [],
   };
+}
+
+function isDocBlock(block: unknown): block is DocBlock {
+  if (!isObj(block) || typeof block.id !== "string") return false;
+  switch (block.type) {
+    case "heading":
+    case "text":
+      return typeof block.text === "string";
+    case "guideline":
+      return typeof block.do === "string" && typeof block.dont === "string";
+    case "preview":
+    case "props":
+    case "code":
+      return typeof block.componentId === "string";
+    case "tokens":
+      return ["colors", "typography", "spacing", "radii", "shadows"].includes(block.kind as string);
+    default:
+      return false;
+  }
+}
+
+function parseDocPage(page: unknown): DocPage[] {
+  if (!isObj(page) || typeof page.id !== "string" || !Array.isArray(page.blocks)) return [];
+  const title = typeof page.title === "string" ? page.title : "";
+  return [{ id: page.id, title, blocks: page.blocks.filter(isDocBlock) }];
 }
 
 // ── Three-way merge ───────────────────────────────────────────────────────────
@@ -177,6 +223,11 @@ function describe(path: string[], mine: MotifDocument, theirs: MotifDocument): s
   if (root === "componentGroups") {
     const g = mine.componentGroups.find((x) => x.id === id) ?? theirs.componentGroups.find((x) => x.id === id);
     return [`Group "${g?.name ?? id}"`, section].filter(Boolean).join(" · ");
+  }
+  if (root === "docs") {
+    const page = mine.docs.find((x) => x.id === id) ?? theirs.docs.find((x) => x.id === id);
+    const what = section === "blocks" ? "content" : section;
+    return [`Docs › ${page?.title || id}`, what].filter(Boolean).join(" · ");
   }
   if (root === "components") {
     const mc = mine.components.find((c) => c.id === id);
