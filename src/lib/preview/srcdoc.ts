@@ -1,4 +1,5 @@
 import type { ModuleGraph } from "./graph";
+import type { RenderMessage } from "./protocol";
 import { packageName } from "./graph";
 
 const ESM = "https://esm.sh";
@@ -34,17 +35,22 @@ export interface SrcdocInput {
   // Where the runtime script is served from, e.g. "http://localhost:3000/motif-preview-runtime.js".
   runtimeUrl: string;
   nonce: string;
+  // The runtime's own code, for a page that has to run without Motif being there (an exported docs site): it is
+  // put in the page instead of being loaded from `runtimeUrl`.
+  runtimeSource?: string;
+  // What to show when the page loads, for a page with no parent to ask it (a preview in an exported docs site).
+  initial?: RenderMessage;
 }
 
 export const runtimeUrlFor = (origin: string) => `${origin}${RUNTIME_PATH}`;
 
-export function csp(runtimeUrl: string, nonce: string): string {
-  const url = new URL(runtimeUrl);
-  // `file:` has no host to allow, so a local page lists the scheme.
-  const self = url.protocol === "file:" ? "file:" : url.origin;
+export function csp(runtimeUrl: string | null, nonce: string): string {
+  // `file:` has no host to allow, so a local page lists the scheme. A page with its runtime inline needs no host.
+  const url = runtimeUrl ? new URL(runtimeUrl) : null;
+  const self = url ? (url.protocol === "file:" ? "file:" : url.origin) : "";
   return [
     "default-src 'none'",
-    `script-src 'nonce-${nonce}' 'unsafe-eval' 'wasm-unsafe-eval' ${ESM} https://cdn.jsdelivr.net ${self}`,
+    `script-src 'nonce-${nonce}' 'unsafe-eval' 'wasm-unsafe-eval' ${ESM} https://cdn.jsdelivr.net${self ? ` ${self}` : ""}`,
     "style-src 'unsafe-inline' https://fonts.googleapis.com",
     "font-src https://fonts.gstatic.com data:",
     "img-src https: data: blob:",
@@ -54,7 +60,7 @@ export function csp(runtimeUrl: string, nonce: string): string {
   ].join("; ");
 }
 
-export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce }: SrcdocInput): string {
+export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtimeSource, initial }: SrcdocInput): string {
   if (tailwindVersion === 3) throw new Error("Tailwind v3 repositories can't be previewed yet");
 
   const specs = [...new Set([...ALWAYS, ...graph.bare])];
@@ -62,13 +68,16 @@ export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce }: Srcdo
   const importMap = { imports: Object.fromEntries(ALWAYS.map((spec) => [spec, externals[spec]])) };
 
   const css = graph.css.map((c) => c.text).join("\n\n");
-  const data = { entry: graph.entry, modules: graph.modules, externals };
+  const data = { entry: graph.entry, modules: graph.modules, externals, initial: initial ?? null };
+  const runtime = runtimeSource !== undefined
+    ? `<script nonce="${nonce}">${runtimeSource.replace(/<\/script/gi, "<\\/script")}</script>`
+    : `<script nonce="${nonce}" src="${attr(runtimeUrl)}"></script>`;
 
   return `<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="${attr(csp(runtimeUrl, nonce))}">
+<meta http-equiv="Content-Security-Policy" content="${attr(csp(runtimeSource !== undefined ? null : runtimeUrl, nonce))}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script type="importmap" nonce="${nonce}">${json(importMap)}</script>
 ${tailwindVersion === 4 ? `<script nonce="${nonce}" src="${TAILWIND_BROWSER}@4"></script>` : ""}
@@ -78,7 +87,7 @@ ${tailwindVersion === 4 ? `<script nonce="${nonce}" src="${TAILWIND_BROWSER}@4">
 <body>
 <div id="root"></div>
 <script type="application/json" id="motif-data">${json(data)}</script>
-<script nonce="${nonce}" src="${attr(runtimeUrl)}"></script>
+${runtime}
 </body>
 </html>`;
 }

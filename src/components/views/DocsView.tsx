@@ -1,22 +1,33 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { ArrowDown, ArrowUp, BookOpen, Download, Plus, Trash2, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import { cn, downloadString } from "@/lib/utils";
 import {
-  BLOCK_TYPES, TOKEN_KINDS, createBlock, docSections, isBuiltInPage, pageComponentId,
+  BLOCK_TYPES, TOKEN_KINDS, createBlock, docSections, isBuiltInPage, pageComponentId, pageRepoRef, previewKey, repoKey,
   type BlockType, type DocSection,
 } from "@/lib/docs";
 import { DOCS_CSS, blockHtml, renderDocsSite, type DocsContext } from "@/lib/docs-html";
-import type { DocBlock, DocPage, TokenKind } from "@/lib/motif-document";
+import type { DocBlock, DocPage, RepoRef, TokenKind } from "@/lib/motif-document";
+import { repoSlug, useGitStore } from "@/store/git";
+import { useLibraryStore } from "@/store/library";
+import { createGitHubClient } from "@/lib/github";
+import { buildPreviews } from "@/components/stage/docs-previews";
+import RepoDocPreview from "./RepoDocPreview";
 import { useCanvasStore } from "@/store/canvas";
 import { useDesignSystemStore } from "@/store/design-system";
 import { useDocsStore } from "@/store/docs";
 import { useFilesStore } from "@/store/files";
 
+// The connected repository's components, for pages that document them. Empty until some are imported.
+function useRepoComponents() {
+  return useLibraryStore((s) => s.components);
+}
+
 function useDocsContext(): DocsContext {
+  const repo = useRepoComponents();
   const elements = useCanvasStore((s) => s.elements);
   const order = useCanvasStore((s) => s.order);
   const defs = useCanvasStore((s) => s.componentDefs);
@@ -27,9 +38,10 @@ function useDocsContext(): DocsContext {
     () => ({
       components: useCanvasStore.getState().getDocumentContent().components,
       tokens: { colors, typography, spacing, radii, shadows },
+      repo: repo.length ? { components: repo } : undefined,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [elements, order, defs, scenes, colors, typography, spacing, radii, shadows]
+    [elements, order, defs, scenes, colors, typography, spacing, radii, shadows, repo]
   );
 }
 
@@ -122,6 +134,8 @@ function BlockBody({ block, ctx, onChange }: { block: DocBlock; ctx: DocsContext
           </div>
         </div>
       );
+    case "repo-preview":
+      return <RepoDocPreview block={block} />;
     default:
       // blockHtml escapes everything it takes from the document.
       return <div dangerouslySetInnerHTML={{ __html: blockHtml(block, ctx) }} />;
@@ -134,6 +148,29 @@ function BlockPicker({ block, ctx, onChange }: { block: DocBlock; ctx: DocsConte
       <select className={pickerClass} aria-label="Token type" value={block.kind} onChange={(e) => onChange({ kind: e.target.value as TokenKind })}>
         {TOKEN_KINDS.map(({ kind, title }) => <option key={kind} value={kind}>{title}</option>)}
       </select>
+    );
+  }
+  if (block.type === "repo-preview" || block.type === "repo-props" || block.type === "repo-code") {
+    const components = ctx.repo?.components ?? [];
+    const key = repoKey(block.ref);
+    return (
+      <>
+        <select
+          className={pickerClass}
+          aria-label="Repository component"
+          value={components.some((c) => repoKey(c) === key) ? key : ""}
+          onChange={(e) => { const c = components.find((x) => repoKey(x) === e.target.value); if (c) onChange({ ref: { file: c.file, name: c.name } }); }}
+        >
+          {!components.some((c) => repoKey(c) === key) && <option value="">{block.ref.name || "Choose…"}</option>}
+          {components.map((c) => <option key={repoKey(c)} value={repoKey(c)}>{c.name}</option>)}
+        </select>
+        {block.type === "repo-preview" && (
+          <select className={pickerClass} aria-label="Preview shows" value={block.view} onChange={(e) => onChange({ view: e.target.value as "single" | "variants" })}>
+            <option value="single">One</option>
+            <option value="variants">All variants</option>
+          </select>
+        )}
+      </>
     );
   }
   if (block.type === "preview" || block.type === "props" || block.type === "code") {
@@ -151,13 +188,15 @@ function BlockPicker({ block, ctx, onChange }: { block: DocBlock; ctx: DocsConte
 function PageEditor({ page, ctx }: { page: DocPage; ctx: DocsContext }) {
   const savePage = useDocsStore((s) => s.savePage);
   const defaultComponent = pageComponentId(page.id) ?? ctx.components[0]?.id ?? "";
+  const first = ctx.repo?.components[0];
+  const defaultRef: RepoRef = pageRepoRef(page.id) ?? (first ? { file: first.file, name: first.name } : { file: "", name: "" });
 
   const setBlocks = (blocks: DocBlock[]) => savePage({ ...page, blocks });
   const update = (id: string, patch: Partial<DocBlock>) =>
     setBlocks(page.blocks.map((b) => (b.id === id ? ({ ...b, ...patch } as DocBlock) : b)));
   const insert = (type: BlockType, after: number) => {
     const blocks = [...page.blocks];
-    blocks.splice(after + 1, 0, createBlock(type, nanoid(6), defaultComponent));
+    blocks.splice(after + 1, 0, createBlock(type, nanoid(6), defaultComponent, defaultRef));
     setBlocks(blocks);
   };
   const move = (index: number, delta: -1 | 1) => {
@@ -261,9 +300,51 @@ export default function DocsView({ fileId, onClose }: { fileId?: string; onClose
   const fileName = useFilesStore((s) => s.files.find((f) => f.id === fileId)?.name) ?? "Design system";
   const pages = useDocsStore((s) => s.pages);
   const ctx = useDocsContext();
-  const sections = useMemo(() => docSections(pages, ctx.components), [pages, ctx.components]);
+  const repo = useRepoComponents();
+  const sections = useMemo(
+    () => docSections(pages, ctx.components, repo.map((c) => ({ file: c.file, name: c.name, hasVariants: c.variants.length > 0 }))),
+    [pages, ctx.components, repo]
+  );
+
+  // Live previews of repository components are pages of their own, built when they are needed: to look at the
+  // documentation as it will be exported, and to export it.
+  const source = useLibraryStore((s) => s.source);
+  const connection = useGitStore((s) => s.connection);
+  const host = useMemo(
+    () => (connection ? createGitHubClient({ owner: connection.owner, repo: connection.repo, token: connection.token }) : null),
+    [connection]
+  );
+  const connected = !!connection && !!source && repoSlug(connection) === source.repo;
+  const wanted = useMemo(() => {
+    const out: { component: (typeof repo)[number]; view: "single" | "variants" }[] = [];
+    for (const block of sections.flatMap((s) => s.pages).flatMap((p) => p.blocks)) {
+      if (block.type !== "repo-preview") continue;
+      const component = repo.find((c) => c.file === block.ref.file && c.name === block.ref.name);
+      if (component) out.push({ component, view: block.view });
+    }
+    return out;
+  }, [sections, repo]);
+  const wantedKey = wanted.map((w) => previewKey(w.component, w.view)).sort().join("\n");
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [preparing, setPreparing] = useState(false);
+  const prepare = async (): Promise<Record<string, string>> => {
+    if (!connected || !source || !host || wanted.length === 0) return {};
+    setPreparing(true);
+    try {
+      const out = await buildPreviews(wanted, source, host);
+      setPreviews(out);
+      return out;
+    } finally {
+      setPreparing(false);
+    }
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"edit" | "preview">("edit");
+
+  useEffect(() => {
+    if (mode === "preview") void prepare();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, wantedKey, connected]);
 
   const all = sections.flatMap((s) => s.pages);
   const page = all.find((p) => p.id === selectedId) ?? all[0];
@@ -275,9 +356,12 @@ export default function DocsView({ fileId, onClose }: { fileId?: string; onClose
     setMode("edit");
   };
 
-  const exportSite = () => {
+  const withPreviews = (live: Record<string, string>): DocsContext => ({ ...ctx, repo: ctx.repo ? { ...ctx.repo, previews: live } : undefined });
+
+  const exportSite = async () => {
     const slug = fileName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "design-system";
-    downloadString(renderDocsSite(fileName, sections, ctx), `${slug}-docs.html`, "text/html");
+    const live = await prepare();
+    downloadString(renderDocsSite(fileName, sections, withPreviews(live)), `${slug}-docs.html`, "text/html");
   };
 
   return (
@@ -303,8 +387,8 @@ export default function DocsView({ fileId, onClose }: { fileId?: string; onClose
             </button>
           ))}
         </div>
-        <button onClick={exportSite} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary">
-          <Download size={11} /> Export HTML
+        <button onClick={exportSite} disabled={preparing} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
+          <Download size={11} /> {preparing ? "Preparing previews…" : "Export HTML"}
         </button>
 
         <div className="h-5 w-px bg-surface-border" />
@@ -314,13 +398,17 @@ export default function DocsView({ fileId, onClose }: { fileId?: string; onClose
       </div>
 
       {mode === "preview" ? (
-        <iframe
-          title="Documentation preview"
-          sandbox=""
-          // Without this base, "#page" links resolve against the app's URL and load the app inside the frame.
-          srcDoc={renderDocsSite(fileName, sections, ctx).replace("<head>", '<head><base href="about:srcdoc">')}
-          className="w-full flex-1 bg-white"
-        />
+        <div className="relative flex flex-1 flex-col">
+          <iframe
+            title="Documentation preview"
+            // Scripts only run for the live previews, which are frames of their own with the same restriction.
+            sandbox={Object.keys(previews).length ? "allow-scripts" : ""}
+            // Without this base, "#page" links resolve against the app's URL and load the app inside the frame.
+            srcDoc={renderDocsSite(fileName, sections, withPreviews(previews)).replace("<head>", '<head><base href="about:srcdoc">')}
+            className="w-full flex-1 bg-white"
+          />
+          {preparing && <p role="status" className="pointer-events-none absolute right-4 top-3 rounded bg-surface-raised px-2 py-1 text-xs text-text-secondary shadow">Preparing live previews…</p>}
+        </div>
       ) : (
         <div className="flex flex-1 overflow-hidden">
           <Sidebar sections={sections} selectedId={page.id} onSelect={setSelectedId} onAddPage={addPage} />

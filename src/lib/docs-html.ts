@@ -1,8 +1,10 @@
 import type { CanvasElement } from "../store/canvas";
 import type { ColorToken, RadiusToken, ShadowToken, SpacingToken, TypographyToken } from "../store/design-system";
 import { componentInterface, componentJsx } from "./component-code";
-import type { DocSection } from "./docs";
+import { previewKey, type DocSection } from "./docs";
+import { componentSnippet } from "./edit/snippets";
 import type { DocBlock, DocPage, DocumentComponent } from "./motif-document";
+import type { RepoComponent } from "./repo-scan/types";
 
 export interface DocsTokens {
   colors: ColorToken[];
@@ -12,9 +14,17 @@ export interface DocsTokens {
   shadows: ShadowToken[];
 }
 
+// The connected repository's components, for blocks that document them.
+export interface DocsRepo {
+  components: RepoComponent[];
+  // Each live preview as a complete page that runs by itself, by `previewKey`. Without one a preview says why.
+  previews?: Record<string, string>;
+}
+
 export interface DocsContext {
   components: DocumentComponent[];
   tokens: DocsTokens;
+  repo?: DocsRepo;
 }
 
 // Documents can arrive from a shared repository, so nothing from them reaches markup unescaped.
@@ -145,8 +155,42 @@ function tokensHtml(kind: Extract<DocBlock, { type: "tokens" }>["kind"], tokens:
   }
 }
 
+const stem = (file: string) => file.replace(/\.(tsx?|jsx?|mjs)$/, "");
+
+function repoBlockHtml(block: Extract<DocBlock, { type: "repo-preview" | "repo-props" | "repo-code" }>, ctx: DocsContext): string {
+  const component = ctx.repo?.components.find((c) => c.file === block.ref.file && c.name === block.ref.name);
+  if (!component) return empty(ctx.repo ? `${block.ref.name} isn't among the imported repository components.` : "Connect and import the repository to document its components.");
+
+  if (block.type === "repo-preview") {
+    const page = ctx.repo?.previews?.[previewKey(block.ref, block.view)];
+    if (!page) return `<div class="md-preview">${empty(`${component.name} runs here when the page is shown or exported from Motif with the repository connected.`)}</div>`;
+    return `<div class="md-preview md-live"><iframe data-md-live title="${esc(component.name)} preview" sandbox="allow-scripts" srcdoc="${esc(page)}" style="height:120px"></iframe></div>`;
+  }
+
+  if (block.type === "repo-code") {
+    const { jsx, imp } = componentSnippet(component);
+    const from = `./${stem(component.file)}`;
+    const line = imp.exported === "default" ? `import ${imp.name} from "${from}";` : `import { ${imp.name} } from "${from}";`;
+    const notes = component.variants.map((v) => `// ${v.name}: ${v.options.join(" | ")}${v.default ? ` (default ${v.default})` : ""}`);
+    return `<pre><code>${esc([line, "", ...notes, jsx].join("\n"))}</code></pre>`;
+  }
+
+  if (!component.props.length) return empty(`${component.name} has no props of its own.`);
+  // A variant group is a prop too, with the options and default the component's variants say.
+  return `<table><thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Description</th></tr></thead><tbody>${component.props.map((p) => {
+    const variant = component.variants.find((v) => v.name === p.name);
+    const options = p.options?.length ? p.options : variant?.options ?? null;
+    const dflt = p.default ?? variant?.default ?? null;
+    return `<tr><td><code>${esc(p.name)}</code>${p.required ? ' <span title="Required">*</span>' : ""}</td><td>${options?.length ? options.map((o) => `<code class="md-chip">${esc(o)}</code>`).join("") : `<code>${esc(p.type)}</code>`}</td><td>${dflt !== null ? `<code>${esc(dflt)}</code>` : ""}</td><td>${esc(p.description ?? "")}</td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+
 export function blockHtml(block: DocBlock, ctx: DocsContext): string {
   switch (block.type) {
+    case "repo-preview":
+    case "repo-props":
+    case "repo-code":
+      return repoBlockHtml(block, ctx);
     case "heading":
       return block.text.trim() ? `<h2>${esc(block.text)}</h2>` : "";
     case "text":
@@ -196,6 +240,8 @@ export const DOCS_CSS = `
 .motif-docs td{padding:8px 12px;border-bottom:1px solid #f4f4f5;vertical-align:top}
 .motif-docs code,.motif-docs pre{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12px}
 .motif-docs pre{margin:0;padding:16px;background:#18181b;color:#e4e4e7;border-radius:10px;overflow-x:auto;line-height:1.6}
+.motif-docs .md-live{display:block;padding:0;background:#fff;overflow:hidden}
+.motif-docs .md-live iframe{display:block;width:100%;border:0}
 .motif-docs .md-chip{display:inline-block;background:#f4f4f5;border-radius:4px;padding:1px 6px;margin:0 4px 4px 0}
 .motif-docs .md-group{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#71717a;margin:16px 0 8px}
 .motif-docs .md-group:first-child{margin-top:0}
@@ -246,6 +292,11 @@ export function renderDocsSite(name: string, sections: DocSection[], ctx: DocsCo
     `<div class="md-nav-section">${esc(s.title)}</div>${s.pages.map((p) => `<a href="#${esc(p.id)}">${esc(p.title || "Untitled")}</a>`).join("")}`
   ).join("");
   const pages = shown.flatMap((s) => s.pages.map((p) => pageHtml(p, ctx))).join("");
+  // A live preview reports how tall it is; this is the only script on the page, and it is not from the document.
+  const live = Object.keys(ctx.repo?.previews ?? {}).length > 0;
+  const script = live
+    ? `<script>window.addEventListener("message",function(e){var d=e.data;if(!d||d.type!=="rendered")return;var f=document.querySelectorAll("iframe[data-md-live]");for(var i=0;i<f.length;i++){if(f[i].contentWindow===e.source)f[i].style.height=Math.max(d.height,40)+"px";}});</script>`
+    : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -259,6 +310,7 @@ export function renderDocsSite(name: string, sections: DocSection[], ctx: DocsCo
 <nav class="md-nav"><div class="md-nav-title">${esc(name)}</div>${nav}</nav>
 <main class="md-main">${pages}</main>
 </div>
+${script}
 </body>
 </html>
 `;

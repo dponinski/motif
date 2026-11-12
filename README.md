@@ -12,6 +12,11 @@ Pushing or pulling when the branch has moved runs a three-way merge against the 
 
 The Docs view in the editor builds design system documentation from the file itself. Every component and token category has a page from the start (preview, props table, usage code, token specimens); add your own pages and blocks for principles, guidelines and do / don't examples. Preview shows the finished site and Export HTML downloads it as a single file. Docs are stored in the design file, so they sync and merge through Git with everything else.
 
+
+**Repository components in the documentation.** Once a repository's components are imported, the documentation has a **Repository components** section with a page for each one: its name, a live preview of every variant (or just the one, for a component without variants), a props table (types, defaults, the options of each variant and the descriptions from the code) and usage code with the import and the variants it can take. The preview is the real component running as it does in the repository, in a sandboxed frame; it is a block like any other, so the designer can add one to any page (**Add block**, then *Repository component preview*, *props* or *usage*), pick which component it shows, and switch it between one and all variants. The page for a component is named after where it is declared, so everyone who edits it edits the same page.
+
+- **Preview** shows the site as it will be exported, with the live previews running, and **Export HTML** includes them: each preview is a page that carries its own runtime and is told what to show, so the exported file runs anywhere with network access to the package CDN, with no dependency on Motif being online. Without the repository connected the editor says what is missing, and the props and usage are still shown.
+- Parts of a compound component (such as `TabsTrigger`) can't be shown without their parent, so their default page's preview shows the component's own error; change or remove that block, or document the parent.
 ## Reading a repository
 
 Connect a GitHub repository from the Git panel and press Scan to see how it is built. No token is needed for public repositories; private ones need a token with Contents read access. Motif parses the code without running it and reports:

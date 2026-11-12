@@ -1,4 +1,4 @@
-import type { DocBlock, DocPage, TokenKind } from "./motif-document";
+import type { DocBlock, DocPage, RepoRef, TokenKind } from "./motif-document";
 
 export const TOKEN_KINDS: { kind: TokenKind; title: string }[] = [
   { kind: "colors", title: "Colors" },
@@ -12,12 +12,43 @@ export const TOKEN_KINDS: { kind: TokenKind; title: string }[] = [
 // editing the same one end up with the same page and their edits merge.
 const COMPONENT_PREFIX = "doc-comp-";
 const TOKEN_PREFIX = "doc-tokens-";
+const REPO_PREFIX = "doc-repo-";
 
 export const componentPageId = (componentId: string) => COMPONENT_PREFIX + componentId;
 export const pageComponentId = (pageId: string) =>
   pageId.startsWith(COMPONENT_PREFIX) ? pageId.slice(COMPONENT_PREFIX.length) : null;
 export const isBuiltInPage = (pageId: string) =>
-  pageId.startsWith(COMPONENT_PREFIX) || pageId.startsWith(TOKEN_PREFIX);
+  pageId.startsWith(COMPONENT_PREFIX) || pageId.startsWith(TOKEN_PREFIX) || pageId.startsWith(REPO_PREFIX);
+
+// A repository component's page is named after where it is declared, so everyone who documents it edits the same page.
+export const repoKey = (ref: RepoRef) => `${ref.file}::${ref.name}`;
+// A live preview depends only on the component and what is shown of it, so blocks that show the same share one.
+export const previewKey = (ref: RepoRef, view: "single" | "variants") => `${repoKey(ref)}|${view}`;
+export const repoPageId = (ref: RepoRef) => REPO_PREFIX + repoKey(ref);
+export function pageRepoRef(pageId: string): RepoRef | null {
+  if (!pageId.startsWith(REPO_PREFIX)) return null;
+  const key = pageId.slice(REPO_PREFIX.length);
+  const at = key.lastIndexOf("::");
+  return at < 1 ? null : { file: key.slice(0, at), name: key.slice(at + 2) };
+}
+
+export interface RepoDocComponent extends RepoRef {
+  hasVariants: boolean;
+}
+
+function repoPage(c: RepoDocComponent): DocPage {
+  const ref = { file: c.file, name: c.name };
+  return {
+    id: repoPageId(ref),
+    title: c.name,
+    blocks: [
+      { id: "intro", type: "text", text: "" },
+      { id: "preview", type: "repo-preview", ref, view: c.hasVariants ? "variants" : "single" },
+      { id: "props", type: "repo-props", ref },
+      { id: "code", type: "repo-code", ref },
+    ],
+  };
+}
 
 function componentPage(component: { id: string; name: string }): DocPage {
   return {
@@ -49,8 +80,11 @@ export interface DocSection {
 }
 
 // Every component and token category has a page; a stored page replaces its generated default.
-export function docSections(stored: DocPage[], components: { id: string; name: string }[]): DocSection[] {
+export function docSections(stored: DocPage[], components: { id: string; name: string }[], repo: RepoDocComponent[] = []): DocSection[] {
   const byId = new Map(stored.map((p) => [p.id, p]));
+  const repoSection: DocSection[] = repo.length
+    ? [{ title: "Repository components", pages: repo.map((c) => ({ ...(byId.get(repoPageId(c)) ?? repoPage(c)), title: c.name })) }]
+    : [];
   return [
     { title: "Pages", pages: stored.filter((p) => !isBuiltInPage(p.id)) },
     {
@@ -61,6 +95,7 @@ export function docSections(stored: DocPage[], components: { id: string; name: s
       title: "Components",
       pages: components.map((c) => ({ ...(byId.get(componentPageId(c.id)) ?? componentPage(c)), title: c.name })),
     },
+    ...repoSection,
   ];
 }
 
@@ -73,10 +108,13 @@ export const BLOCK_TYPES: { type: BlockType; label: string }[] = [
   { type: "preview", label: "Component preview" },
   { type: "props", label: "Props table" },
   { type: "code", label: "Usage code" },
+  { type: "repo-preview", label: "Repository component preview" },
+  { type: "repo-props", label: "Repository component props" },
+  { type: "repo-code", label: "Repository component usage" },
   { type: "tokens", label: "Tokens" },
 ];
 
-export function createBlock(type: BlockType, id: string, componentId: string): DocBlock {
+export function createBlock(type: BlockType, id: string, componentId: string, ref: RepoRef = { file: "", name: "" }): DocBlock {
   switch (type) {
     case "heading":
     case "text":
@@ -89,5 +127,10 @@ export function createBlock(type: BlockType, id: string, componentId: string): D
     case "props":
     case "code":
       return { id, type, componentId };
+    case "repo-preview":
+      return { id, type, ref, view: "single" };
+    case "repo-props":
+    case "repo-code":
+      return { id, type, ref };
   }
 }

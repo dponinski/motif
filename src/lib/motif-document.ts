@@ -13,12 +13,22 @@ export interface DocumentComponent {
 
 export type TokenKind = "colors" | "typography" | "spacing" | "radii" | "shadows";
 
+// A component of the connected repository, by where it is declared and what it is called.
+export interface RepoRef {
+  file: string;
+  name: string;
+}
+
 export type DocBlock =
   | { id: string; type: "heading"; text: string }
   | { id: string; type: "text"; text: string }
   | { id: string; type: "preview"; componentId: string }
   | { id: string; type: "props"; componentId: string }
   | { id: string; type: "code"; componentId: string }
+  // The repository's own component, running as it does in the repository. `view` shows one, or every variant.
+  | { id: string; type: "repo-preview"; ref: RepoRef; view: "single" | "variants" }
+  | { id: string; type: "repo-props"; ref: RepoRef }
+  | { id: string; type: "repo-code"; ref: RepoRef }
   | { id: string; type: "tokens"; kind: TokenKind }
   | { id: string; type: "guideline"; do: string; dont: string };
 
@@ -113,6 +123,8 @@ export function parseDocument(text: string): MotifDocument {
   };
 }
 
+const isRepoRef = (ref: unknown): ref is RepoRef => isObj(ref) && typeof ref.file === "string" && typeof ref.name === "string";
+
 function isDocBlock(block: unknown): block is DocBlock {
   if (!isObj(block) || typeof block.id !== "string") return false;
   switch (block.type) {
@@ -125,6 +137,11 @@ function isDocBlock(block: unknown): block is DocBlock {
     case "props":
     case "code":
       return typeof block.componentId === "string";
+    case "repo-preview":
+      return isRepoRef(block.ref) && (block.view === "single" || block.view === "variants");
+    case "repo-props":
+    case "repo-code":
+      return isRepoRef(block.ref);
     case "tokens":
       return ["colors", "typography", "spacing", "radii", "shadows"].includes(block.kind as string);
     default:
