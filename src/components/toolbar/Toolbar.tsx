@@ -1,44 +1,15 @@
 "use client";
 
-import {
-  MousePointer2,
-  Square,
-  Circle,
-  Type,
-  Hand,
-  Frame,
-  Minus,
-  Plus,
-  Undo2,
-  Redo2,
-  Grid,
-  Sparkles,
-  Download,
-  Sun,
-  Moon,
-  Monitor,
-} from "lucide-react";
+import { Minus, Plus, Grid, Download, Sun, Moon, Monitor } from "lucide-react";
 import Link from "next/link";
 import { cn, formatZoom } from "@/lib/utils";
-import { useCanvasStore, type Tool } from "@/store/canvas";
-import { useAIStore } from "@/store/ai";
+import { useCanvasStore } from "@/store/canvas";
 import { useDesignSystemStore } from "@/store/design-system";
 import { downloadString } from "@/lib/utils";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 
-const tools: { id: Tool; icon: React.ReactNode; label: string; key: string }[] = [
-  { id: "select", icon: <MousePointer2 size={14} />, label: "Select (V)", key: "V" },
-  { id: "frame", icon: <Frame size={14} />, label: "Frame (F)", key: "F" },
-  { id: "rectangle", icon: <Square size={14} />, label: "Rectangle (R)", key: "R" },
-  { id: "ellipse", icon: <Circle size={14} />, label: "Ellipse (O)", key: "O" },
-  { id: "text", icon: <Type size={14} />, label: "Text (T)", key: "T" },
-  { id: "hand", icon: <Hand size={14} />, label: "Hand (H)", key: "H" },
-];
-
 export default function Toolbar() {
-  const { activeTool, setActiveTool, zoom, setZoom, toggleGrid, showGrid, undo, redo } =
-    useCanvasStore();
-  const { setOpen: setAIOpen, isOpen: aiOpen } = useAIStore();
+  const { zoom, setZoom, toggleGrid, showGrid } = useCanvasStore();
   const { exportTokens } = useDesignSystemStore();
   const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
 
@@ -65,37 +36,6 @@ export default function Toolbar() {
         </div>
         <span className="text-sm font-semibold text-text-primary">Motif</span>
       </Link>
-
-      <div className="w-px h-5 bg-surface-border" />
-
-      {/* Tools */}
-      <div className="flex items-center gap-0.5">
-        {tools.map((tool) => (
-          <button
-            key={tool.id}
-            onClick={() => setActiveTool(tool.id)}
-            title={tool.label}
-            className={cn(
-              "tool-btn",
-              activeTool === tool.id && "active"
-            )}
-          >
-            {tool.icon}
-          </button>
-        ))}
-      </div>
-
-      <div className="w-px h-5 bg-surface-border" />
-
-      {/* History */}
-      <div className="flex items-center gap-0.5">
-        <button onClick={undo} title="Undo (⌘Z)" className="tool-btn">
-          <Undo2 size={14} />
-        </button>
-        <button onClick={redo} title="Redo (⌘⇧Z)" className="tool-btn">
-          <Redo2 size={14} />
-        </button>
-      </div>
 
       <div className="w-px h-5 bg-surface-border" />
 
@@ -169,21 +109,6 @@ export default function Toolbar() {
         ))}
       </div>
 
-      <div className="w-px h-5 bg-surface-border" />
-
-      {/* AI button */}
-      <button
-        onClick={() => setAIOpen(!aiOpen)}
-        className={cn(
-          "flex items-center gap-1.5 h-7 px-3 text-xs font-medium rounded transition-all",
-          aiOpen
-            ? "bg-accent text-white"
-            : "bg-accent/15 text-accent hover:bg-accent/25 border border-accent/30"
-        )}
-      >
-        <Sparkles size={12} />
-        <span>AI</span>
-      </button>
     </header>
   );
 }
