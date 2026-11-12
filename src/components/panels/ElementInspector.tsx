@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, MousePointer2, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { gitBlobSha } from "@/lib/github";
-import { GROUPS, SECTIONS, readGroup, type ClassGroup } from "@/lib/edit/classes";
+import { BREAKPOINT_WIDTH, GROUPS, MODIFIERS, SECTIONS, readGroup, type ClassGroup } from "@/lib/edit/classes";
 import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlotClasses, setText, slotText, type EditResult, type ElementInfo } from "@/lib/edit/element";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { cssName } from "@/lib/token-sync/doc";
@@ -50,7 +50,7 @@ function Field({ label, children, onRemove }: { label: string; children: React.R
 }
 
 // Text that is committed when you leave the field or press Enter, so half-typed class names are never written.
-function Commit({ value, onCommit, label, list, multiline }: { value: string; onCommit: (value: string) => void; label: string; list?: string; multiline?: boolean }) {
+function Commit({ value, onCommit, label, list, multiline, placeholder }: { value: string; onCommit: (value: string) => void; label: string; list?: string; multiline?: boolean; placeholder?: string }) {
   const [text, setTextValue] = useState(value);
   // What was last sent, so Enter followed by the blur it causes is one change.
   const sent = useRef(value);
@@ -75,6 +75,7 @@ function Commit({ value, onCommit, label, list, multiline }: { value: string; on
     <input
       className="input-sm w-full"
       aria-label={label}
+      placeholder={placeholder}
       list={list}
       value={text}
       onChange={(e) => setTextValue(e.target.value)}
@@ -95,6 +96,17 @@ export default function ElementInspector({ component, source, connection }: { co
 
   const [info, setInfo] = useState<ElementInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which state the controls edit: the plain classes, or the ones that apply on hover, in dark mode, at md and up.
+  const [modifier, setModifier] = useState("");
+  const { setDark, setWidth } = usePreviewStore();
+  const chooseState = (id: string) => {
+    // The preview is put where the state can be seen: dark theme, or a width the breakpoint applies at.
+    if (id === "dark:") setDark(true);
+    else if (modifier === "dark:") setDark(false);
+    if (BREAKPOINT_WIDTH[id]) setWidth(BREAKPOINT_WIDTH[id]);
+    else if (BREAKPOINT_WIDTH[modifier]) setWidth(null);
+    setModifier(id);
+  };
 
   // What variant choices are showing, so the classes of the variant on screen are the ones edited.
   const values = useMemo(
@@ -157,12 +169,13 @@ export default function ElementInspector({ component, source, connection }: { co
   const editable = info.className !== "dynamic";
   const classes = info.classes;
   const groupsFor = (section: string) => {
-    const set = GROUPS.filter((g) => g.section === section && readGroup(classes, g) !== null).map((g) => g.id);
+    const set = GROUPS.filter((g) => g.section === section && readGroup(classes, g, modifier) !== null).map((g) => g.id);
     const shown = [...new Set([...SHOWN[section], ...set])];
     const ordered = GROUPS.filter((g) => g.section === section && shown.includes(g.id));
     return { ordered, rest: GROUPS.filter((g) => g.section === section && !shown.includes(g.id)) };
   };
-  const change = (g: ClassGroup, value: string | null) => run((code, start) => setGroup(selection.path, code, start, g.id, value, values));
+  const change = (g: ClassGroup, value: string | null) => run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier));
+  const state = MODIFIERS.find((m) => m.id === modifier);
   const line = source ? `${selection.path}` : "";
 
   return (
@@ -186,6 +199,17 @@ export default function ElementInspector({ component, source, connection }: { co
 
       {error && <p className="mx-3 mb-2 break-words rounded border border-red-400/30 bg-red-400/10 px-2 py-1.5 text-2xs text-red-400">{error}</p>}
 
+      {editable && (
+        <div className="border-t border-surface-border px-3 py-2.5">
+          <Field label="State">
+            <select className="input-sm w-full" aria-label="State" value={modifier} onChange={(e) => chooseState(e.target.value)}>
+              {MODIFIERS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </Field>
+          {state?.hint && <p className="mt-1.5 text-2xs leading-relaxed text-text-tertiary">{state.hint}</p>}
+        </div>
+      )}
+
       {info.text && (
         <div className="px-3 pb-2.5">
           <Field label="Text"><Commit label="Text" value={info.text.value} onCommit={(v) => run((c, s) => setText(selection.path, c, s, v))} /></Field>
@@ -203,17 +227,19 @@ export default function ElementInspector({ component, source, connection }: { co
                 <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">{section.label}</p>
                 <div className="flex flex-col gap-1.5">
                   {ordered.map((g) => {
-                    const value = readGroup(classes, g);
+                    const value = readGroup(classes, g, modifier);
+                    // Under a state, what the plain class gives is what applies until the state sets its own.
+                    const inherited = modifier ? readGroup(classes, g, "") : null;
                     return (
                       <Field key={g.id} label={g.label} onRemove={value !== null ? () => change(g, null) : undefined}>
                         {g.control === "color" ? (
                           <>
-                            <Commit label={g.label} list={`motif-colors-${g.id}`} value={value ?? ""} onCommit={(v) => change(g, v.trim() || null)} />
+                            <Commit label={g.label} list={`motif-colors-${g.id}`} placeholder={inherited ? `inherits ${inherited}` : undefined} value={value ?? ""} onCommit={(v) => change(g, v.trim() || null)} />
                             <datalist id={`motif-colors-${g.id}`}>{tokenNames.map((n) => <option key={n} value={n} />)}</datalist>
                           </>
                         ) : (
                           <select className="input-sm w-full" aria-label={g.label} value={value ?? ""} onChange={(e) => change(g, e.target.value || null)}>
-                            <option value="">—</option>
+                            <option value="">{inherited ? `inherits ${inherited === "DEFAULT" ? "default" : inherited}` : "—"}</option>
                             {value !== null && !g.options!.includes(value) && <option value={value}>{value}</option>}
                             {g.options!.map((o) => <option key={o} value={o}>{o === "DEFAULT" ? "default" : o}</option>)}
                           </select>

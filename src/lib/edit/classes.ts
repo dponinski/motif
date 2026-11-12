@@ -167,38 +167,73 @@ export interface ClassToken {
   text: string;
   start: number;
   end: number;
-  // The class without its modifiers, or null when the class has modifiers or `!` and so isn't a plain utility.
+  // What comes before the utility: "" for a plain class, "hover:", "md:", "dark:hover:", ...
+  modifier: string;
+  // The class without its modifiers, or null when it isn't a plain utility (`!p-2`, `-mt-2`).
   utility: string | null;
+}
+
+// Splits at the last colon that isn't inside brackets or parentheses, so `bg-[url(a:b)]` has no modifier.
+function splitModifier(word: string): { modifier: string; utility: string } {
+  let depth = 0;
+  let cut = -1;
+  for (let i = 0; i < word.length; i++) {
+    const c = word[i];
+    if (c === "[" || c === "(") depth++;
+    else if (c === "]" || c === ")") depth = Math.max(0, depth - 1);
+    else if (c === ":" && depth === 0) cut = i;
+  }
+  return { modifier: word.slice(0, cut + 1), utility: word.slice(cut + 1) };
 }
 
 export function tokenize(text: string): ClassToken[] {
   const out: ClassToken[] = [];
   for (const m of text.matchAll(/\S+/g)) {
     const word = m[0];
-    const plain = !word.includes(":") && !word.startsWith("!") && !word.endsWith("!") && !word.startsWith("-") ? word : null;
-    // A colon inside brackets belongs to an arbitrary value (`bg-[url(a:b)]`), not a modifier.
-    const bracketed = word.includes("[") && !/^[^[]*:/.test(word);
-    out.push({ text: word, start: m.index!, end: m.index! + word.length, utility: plain ?? (bracketed && !word.startsWith("!") ? word : null) });
+    const { modifier, utility } = splitModifier(word);
+    const plain = !utility.startsWith("!") && !utility.endsWith("!") && !utility.startsWith("-") && utility !== "";
+    out.push({ text: word, start: m.index!, end: m.index! + word.length, modifier, utility: plain ? utility : null });
   }
   return out;
 }
 
-export function readGroup(text: string, group: ClassGroup): string | null {
+// The modifiers the inspector offers, in the order a designer thinks of them.
+export const MODIFIERS: { id: string; label: string; hint: string | null }[] = [
+  { id: "", label: "Default", hint: null },
+  { id: "hover:", label: "Hover", hint: "Hover the element in the preview to see this." },
+  { id: "focus:", label: "Focus", hint: "Focus can't be forced in a browser; the classes are edited but not shown." },
+  { id: "active:", label: "Active", hint: "Pressed state; the classes are edited but not shown." },
+  { id: "disabled:", label: "Disabled", hint: "Applies while the element is disabled." },
+  { id: "dark:", label: "Dark", hint: "Shown with the dark theme." },
+  { id: "sm:", label: "sm (640px)", hint: "Shown when the preview is at least this wide." },
+  { id: "md:", label: "md (768px)", hint: "Shown when the preview is at least this wide." },
+  { id: "lg:", label: "lg (1024px)", hint: "Shown when the preview is at least this wide." },
+  { id: "xl:", label: "xl (1280px)", hint: "Shown when the preview is at least this wide." },
+];
+
+// The preview width that shows a breakpoint, in px.
+export const BREAKPOINT_WIDTH: Record<string, number> = { "sm:": 640, "md:": 768, "lg:": 1024, "xl:": 1280 };
+
+const inGroup = (t: ClassToken, group: ClassGroup, modifier: string) => t.modifier === modifier && t.utility !== null && group.read(t.utility) !== null;
+
+// The value a group has under a modifier ("" for the plain class), or null when it isn't set there.
+export function readGroup(text: string, group: ClassGroup, modifier = ""): string | null {
   let found: string | null = null;
   for (const t of tokenize(text)) {
-    const value = t.utility === null ? null : group.read(t.utility);
-    if (value !== null) found = value;
+    if (!inGroup(t, group, modifier)) continue;
+    found = group.read(t.utility!);
   }
   return found;
 }
 
-export const hasGroup = (text: string, group: ClassGroup) => tokenize(text).some((t) => t.utility !== null && group.read(t.utility) !== null);
+export const hasGroup = (text: string, group: ClassGroup, modifier = "") => tokenize(text).some((t) => inGroup(t, group, modifier));
 
 // Sets a group in a class string, keeping every other class and the spacing between them. The new class takes
 // the place of the first one it replaces; with none to replace it goes at the end. A null value removes the group.
-export function writeGroup(text: string, group: ClassGroup, value: string | null): string {
-  const matches = tokenize(text).filter((t) => t.utility !== null && group.read(t.utility) !== null);
-  const next = value === null ? null : group.write(value);
+// Under a modifier only classes with exactly that modifier count, so `hover:bg-x` and `bg-x` are separate.
+export function writeGroup(text: string, group: ClassGroup, value: string | null, modifier = ""): string {
+  const matches = tokenize(text).filter((t) => inGroup(t, group, modifier));
+  const next = value === null ? null : `${modifier}${group.write(value)}`;
 
   if (matches.length === 0) {
     if (next === null) return text;

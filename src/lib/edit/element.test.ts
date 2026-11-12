@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadFixture } from "../repo-scan/fixtures";
 import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlotClasses, setText, slotText } from "./element";
+import { groupById, readGroup } from "./classes";
 import { instrument, parseMotifKey } from "./instrument";
 
 const files = loadFixture("motif-test-system");
@@ -147,6 +148,50 @@ describe("changing classes", () => {
     expect(out.code).toContain('cn("flex flex-col gap-2 p-6 pb-0", className)');
     const quoted = (await setSlotClasses("Card.tsx", card, info.start, "0", 'a "b" c'))!;
     expect(quoted.code).toContain('cn("a b c", className)');
+  });
+});
+
+describe("changing a state", () => {
+  it("changes the hover class of the variant that is showing, and nothing else", async () => {
+    const start = at(button, "<button");
+    const info = (await analyze("Button.tsx", button, start, { variant: "primary" }))!;
+    expect(readGroup(info.classes, groupById("bg"), "hover:")).toBe("primary/90");
+    const out = (await setGroup("Button.tsx", button, start, "bg", "muted", { variant: "primary" }, "hover:"))!;
+    expect(out.code).toContain('primary: "bg-primary text-primary-foreground hover:bg-muted"');
+    expect(out.summary).toBe("button: hover background primary/90 → muted");
+    const diff = out.code.split("\n").filter((l, i) => l !== button.split("\n")[i]);
+    expect(diff).toHaveLength(1);
+  });
+
+  it("adds a state to the element's own classes when it has none", async () => {
+    const start = at(card, "<div className", 0);
+    const hover = (await setGroup("Card.tsx", card, start, "shadow", "lg", {}, "hover:"))!;
+    expect(hover.code).toContain('cn("rounded-lg border border-border bg-surface shadow-card hover:shadow-lg", className)');
+    const dark = (await setGroup("Card.tsx", card, start, "bg", "background", {}, "dark:"))!;
+    expect(dark.code).toContain("shadow-card dark:bg-background");
+    const md = (await setGroup("Card.tsx", card, start, "p", "8", {}, "md:"))!;
+    expect(md.code).toContain("shadow-card md:p-8");
+    expect(md.summary).toBe("div: md padding none → 8");
+  });
+
+  it("puts a new state beside the plain class it belongs to, in the variant that has it", async () => {
+    const start = at(button, "<button");
+    const dark = (await setGroup("Button.tsx", button, start, "bg", "danger", { variant: "primary" }, "dark:"))!;
+    expect(dark.code).toContain('primary: "bg-primary text-primary-foreground hover:bg-primary/90 dark:bg-danger"');
+    const gap = (await setGroup("Button.tsx", button, start, "gap", "6", { variant: "primary" }, "md:"))!;
+    expect(gap.code).toContain('cursor-pointer md:gap-6"');
+  });
+
+  it("removes a state without removing the plain class", async () => {
+    const start = at(button, "<button");
+    const out = (await setGroup("Button.tsx", button, start, "bg", null, { variant: "primary" }, "hover:"))!;
+    expect(out.code).toContain('primary: "bg-primary text-primary-foreground"');
+  });
+
+  it("puts a state on a className that doesn't exist yet", async () => {
+    const code = "export const A = () => <div>x</div>;";
+    const out = (await setGroup("A.tsx", code, code.indexOf("<div"), "bg", "primary", {}, "hover:"))!;
+    expect(out.code).toBe('export const A = () => <div className="hover:bg-primary">x</div>;');
   });
 });
 

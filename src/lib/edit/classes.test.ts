@@ -37,7 +37,8 @@ describe("reading utilities", () => {
     expect(read("hover:bg-muted md:p-8 dark:text-white !p-2 -mt-2", "bg")).toBeNull();
     expect(read("hover:bg-muted bg-primary", "bg")).toBe("primary");
     expect(hasGroup("md:p-8", groupById("p"))).toBe(false);
-    expect(tokenize("a hover:b").map((t) => t.utility)).toEqual(["a", null]);
+    expect(tokenize("a hover:b").map((t) => [t.modifier, t.utility])).toEqual([["", "a"], ["hover:", "b"]]);
+    expect(tokenize("!p-2 -mt-2").map((t) => t.utility)).toEqual([null, null]);
   });
 
   it("keeps a color with an opacity and an arbitrary value whole", () => {
@@ -87,5 +88,45 @@ describe("writing utilities", () => {
 
   it("has a group id for every control", () => {
     expect(new Set(GROUPS.map((g) => g.id)).size).toBe(GROUPS.length);
+  });
+});
+
+describe("states and breakpoints", () => {
+  const read2 = (text: string, id: string, modifier: string) => readGroup(text, groupById(id), modifier);
+  const write2 = (text: string, id: string, value: string | null, modifier: string) => writeGroup(text, groupById(id), value, modifier);
+
+  it("reads a group under the modifier it is written with", () => {
+    const text = "bg-primary hover:bg-primary/90 dark:bg-muted md:p-8 dark:hover:bg-red-500";
+    expect(read2(text, "bg", "")).toBe("primary");
+    expect(read2(text, "bg", "hover:")).toBe("primary/90");
+    expect(read2(text, "bg", "dark:")).toBe("muted");
+    expect(read2(text, "bg", "dark:hover:")).toBe("red-500");
+    expect(read2(text, "p", "md:")).toBe("8");
+    expect(read2(text, "p", "")).toBeNull();
+    expect(read2(text, "bg", "focus:")).toBeNull();
+  });
+
+  it("writes a state without touching the plain class, and the other way round", () => {
+    expect(write2("bg-primary hover:bg-primary/90", "bg", "danger", "hover:")).toBe("bg-primary hover:bg-danger");
+    expect(write2("bg-primary hover:bg-primary/90", "bg", "danger", "")).toBe("bg-danger hover:bg-primary/90");
+    expect(write2("flex", "gap", "4", "md:")).toBe("flex md:gap-4");
+    expect(write2("gap-2 md:gap-4", "gap", null, "md:")).toBe("gap-2");
+    expect(write2("gap-2 md:gap-4", "gap", null, "")).toBe("md:gap-4");
+    expect(write2("dark:hover:bg-a", "bg", "b", "dark:")).toBe("dark:hover:bg-a dark:bg-b");
+  });
+
+  it("keeps a colon inside brackets out of the modifier", () => {
+    expect(tokenize("bg-[url(a:b)]")[0]).toMatchObject({ modifier: "", utility: "bg-[url(a:b)]" });
+    expect(tokenize("md:bg-[url(a:b)]")[0]).toMatchObject({ modifier: "md:", utility: "bg-[url(a:b)]" });
+  });
+
+  it("round-trips every group's options under a modifier", () => {
+    for (const g of GROUPS.filter((x) => x.options)) {
+      for (const option of g.options!) {
+        const out = writeGroup("", g, option, "hover:");
+        expect(readGroup(out, g, "hover:"), `${g.id}=${option}`).toBe(option);
+        expect(readGroup(out, g, ""), `${g.id} plain`).toBeNull();
+      }
+    }
   });
 });
