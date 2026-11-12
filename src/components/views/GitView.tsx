@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, GitBranch, Loader2, Palette, Plus, ScanSearch } from "lucide-react";
+import { ArrowDown, ArrowUp, Boxes, GitBranch, Loader2, Palette, Plus, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createGitHubClient, gitBlobSha, type GitHost } from "@/lib/github";
 import { readerSource } from "@/lib/repo-scan/source";
 import { stackLine, stylingLine, supportCounts } from "@/lib/repo-scan/summary";
+import { importable } from "@/lib/preview/library";
+import { useLibraryStore } from "@/store/library";
 import { finishMerge, pull, push, type GitLink, type PendingMerge, type SyncOutcome } from "@/lib/git-sync";
 import { DOCUMENT_EXTENSION, serializeDocument, type MotifDocument } from "@/lib/motif-document";
 import { useCanvasStore } from "@/store/canvas";
@@ -361,7 +363,10 @@ function ScanSection({ connection, host, initialBranch, onOpenReport }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [imported, setImported] = useState<string | null>(null);
+  const library = useLibraryStore((s) => s.source);
   const result = analysis?.repo === repoSlug(connection) ? analysis : null;
+  const importCount = result ? importable(result.components).length : 0;
 
   const scan = async () => {
     setBusy(true);
@@ -406,6 +411,18 @@ function ScanSection({ connection, host, initialBranch, onOpenReport }: {
           <button className={cn(btnPrimary, "mt-1")} onClick={onOpenReport}>Open report</button>
         </div>
       )}
+      {result && importCount > 0 && (
+        <button
+          className={btnSecondary}
+          onClick={() => {
+            const n = useLibraryStore.getState().importComponents(result);
+            setImported(`Imported ${n} components. They are under Components, in the Repository group.`);
+          }}
+        >
+          <Boxes size={12} /> {library?.repo === result.repo ? "Re-import" : "Import"} components ({importCount})
+        </button>
+      )}
+      {imported && <p className="text-2xs leading-relaxed text-emerald-500" role="status">{imported}</p>}
       <button className={btnSecondary} onClick={() => setSyncOpen(true)}>
         <Palette size={12} /> Sync tokens
       </button>

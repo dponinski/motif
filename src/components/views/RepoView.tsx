@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, RefreshCw, ScanSearch, X } from "lucide-react";
+import { Boxes, ChevronDown, ChevronRight, Loader2, RefreshCw, ScanSearch, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { readerSource } from "@/lib/repo-scan/source";
 import {
   STYLING_LABEL, isColorValue, stackLine, stylingLine, supportCounts,
 } from "@/lib/repo-scan/summary";
 import type { RepoAnalysis, RepoComponent, RepoToken, RepoTokenKind, Support } from "@/lib/repo-scan/types";
+import { importable } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { useLibraryStore } from "@/store/library";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 
 type Tab = "setup" | "tokens" | "components" | "warnings";
@@ -254,6 +256,8 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
   const [tab, setTab] = useState<Tab>("setup");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imported, setImported] = useState<number | null>(null);
+  const importCount = importable(analysis.components).length;
 
   const rescan = async () => {
     setBusy(true);
@@ -283,6 +287,14 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
         <span className="truncate text-xs text-text-tertiary">{analysis.repo} · {analysis.ref}</span>
         <div className="flex-1" />
         {error && <span className="text-xs text-red-400">{error}</span>}
+        {importCount > 0 && (
+          <button
+            onClick={() => setImported(useLibraryStore.getState().importComponents(analysis))}
+            className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary"
+          >
+            <Boxes size={11} /> {imported === null ? `Import ${importCount} components` : `Imported ${imported}`}
+          </button>
+        )}
         <button onClick={rescan} disabled={busy} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
           {busy ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Rescan
         </button>

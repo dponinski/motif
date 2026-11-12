@@ -28,6 +28,8 @@ import {
   type ComponentGroup,
   type VariantProp,
 } from "@/store/canvas";
+import { useLibraryStore } from "@/store/library";
+import RepoComponentsSection from "./RepoComponentsSection";
 
 // ── Component Browser ─────────────────────────────────────────────────────────
 
@@ -204,7 +206,7 @@ function ComponentsSection() {
     componentGroups,
     componentDefs,
     activeComponentId,
-    setActiveComponent,
+    setActiveComponent: setActiveInCanvas,
     createComponent,
     deleteComponent,
     renameComponent,
@@ -213,6 +215,13 @@ function ComponentsSection() {
     renameGroup,
     placeInstance,
   } = useCanvasStore();
+
+  // Opening one of Motif's own components returns from a repository component to the canvas.
+  const libraryActive = useLibraryStore((s) => s.activeId !== null);
+  const setActiveComponent = (id: string) => {
+    useLibraryStore.getState().setActive(null);
+    setActiveInCanvas(id);
+  };
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
@@ -275,7 +284,7 @@ function ComponentsSection() {
                   <div key={def.id} className="pl-3">
                     <ComponentRow
                       def={def}
-                      isActive={def.id === activeComponentId}
+                      isActive={!libraryActive && def.id === activeComponentId}
                       onActivate={() => setActiveComponent(def.id)}
                       onRename={(name) => renameComponent(def.id, name)}
                       onDelete={() => deleteComponent(def.id)}
@@ -302,7 +311,7 @@ function ComponentsSection() {
           <ComponentRow
             key={def.id}
             def={def}
-            isActive={def.id === activeComponentId}
+            isActive={!libraryActive && def.id === activeComponentId}
             onActivate={() => setActiveComponent(def.id)}
             onRename={(name) => renameComponent(def.id, name)}
             onDelete={() => deleteComponent(def.id)}
@@ -469,6 +478,7 @@ export default function LeftPanel() {
   return (
     <aside className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
       <ComponentsSection />
+      <RepoComponentsSection />
       <LayersSection />
     </aside>
   );

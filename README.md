@@ -21,7 +21,17 @@ Connect a GitHub repository from the Git panel and press Scan to see how it is b
 - React components with their props, defaults, doc comments, variants (from `cva` / `tailwind-variants` tables, `keyof typeof` lookups and string unions), hooks, and whether the package entry exports them
 - how editable each component will be in the visual editor, and why
 
-Nothing is written to the repository and nothing is imported into Motif yet. Only React repositories are read so far.
+Nothing is written to the repository by a scan. Only React repositories are read so far.
+
+## Previewing repository components
+
+After a scan, **Import components** (Git panel or the repository view) adds the repository's components to the **Repository** group under Components. Opening one replaces the canvas with a stage that runs the real component from the repository, with its own styles and tokens.
+
+- **Props**: the right panel has a control for each prop (dropdowns from `cva` variants and string unions, switches for booleans, text) plus the content inside the component. **All variants** shows every combination side by side, and the stage has Light/Dark and width switches.
+- **Update from repository** rescans and reports what is new, changed or gone.
+- **How it runs**: the code is fetched in the browser, compiled with Sucrase and run in a sandboxed iframe with no access to Motif's storage or GitHub token, a Content Security Policy that blocks network requests and loads only React and the repository's packages from esm.sh and Tailwind's browser build from jsDelivr. Previews need network access to those CDNs, and image requests to https hosts are allowed.
+- **Not supported yet** (the stage says so): CSS modules, Tailwind v3, Sass and `next/*` imports. Compound parts such as `TabsTrigger` need their parent to render, which the examples work will provide.
+- Nothing is written to the repository.
 
 ## Syncing tokens with a repository
 
