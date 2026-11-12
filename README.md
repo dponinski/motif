@@ -48,6 +48,15 @@ Open a repository component and press **Edit** in the stage toolbar. Click any e
 - **Undo and redo** step through every change, and **Create pull request** (toolbar) shows the diff of each file, then opens a branch and a pull request from the branch that was imported. Nothing is written to a branch directly, and a file that changed in the repository in the meantime stops the pull request instead of being overwritten.
 - Edits live in the browser session until they are sent. After the pull request is merged, press Update from repository.
 
+## Repository components on the design canvas
+
+A repository component can be placed in a design as the real thing. **Place on canvas** (the icon on a row in the Repository list, or the button in the component panel) puts it where you are looking, or in the corner of the selected frame, and shows the canvas. The component is drawn by a layer of sandboxed pages above the canvas that follows its zoom and pan exactly, so it stays sharp at any zoom; the canvas keeps selecting, moving, resizing, undoing and saving it through a box of the same size underneath.
+
+- **Size**: it takes the component's own size (a button is as wide as its text) until you resize it by hand, after which the component fills the size you set. **Fit to the component's size** in the panel goes back.
+- **Props**: selecting it shows the component's props and variants as controls (the same ones as in the stage), kept in the document as plain values. Reset restores the starting values. **Open component** goes to the stage for it, in Edit mode if you like, to change the component itself.
+- **In the document**: it is saved with the design (repository, branch, file, name and props), so it comes back after a reload. Without the repository connected, or when its components aren't imported, it shows a labelled box saying what is missing.
+- **Limits**: repository components are drawn above the canvas, so they sit over Motif's own shapes whatever their order; at most twelve are live at once, the rest show a labelled box; they show the repository's version of the component (not unsent edits from the stage), with the stage's theme and Motif's token changes; and a Docs block for them isn't there yet.
+
 ## Syncing tokens with a repository
 
 Open **Sync tokens** in the Git panel (or **Repo sync** in the Tokens view) with a repository connected. Opening pull requests needs a token with Contents and Pull requests read and write.

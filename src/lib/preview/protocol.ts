@@ -15,7 +15,9 @@ export interface RenderMessage {
   type: "render";
   id: number;
   items: RenderItem[];
-  layout: "single" | "grid" | "stack";
+  // "bare" is for a component placed in a design: no padding, and with `fit` it is as big as the component is.
+  layout: "single" | "grid" | "stack" | "bare";
+  fit?: boolean;
   dark: boolean;
   // CSS appended after the repository's own, used to show Motif's token values.
   overrides: string;
@@ -40,7 +42,7 @@ export type ToPreview = RenderMessage | ModulesMessage | EditMessage;
 
 export type FromPreview =
   | { type: "ready" }
-  | { type: "rendered"; id: number; height: number }
+  | { type: "rendered"; id: number; height: number; width?: number }
   | { type: "select"; key: string }
   | { type: "error"; message: string };
 
