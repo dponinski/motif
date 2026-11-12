@@ -24,8 +24,10 @@ import { readerFor, versionOf } from "./reader";
 const WIDTHS: { label: string; value: number | null }[] = [
   { label: "Fit", value: null },
   { label: "375", value: 375 },
+  { label: "640", value: 640 },
   { label: "768", value: 768 },
   { label: "1024", value: 1024 },
+  { label: "1280", value: 1280 },
 ];
 
 // Reading a repository is the slow part, so file lists and graphs are kept for as long as the import is current.
@@ -332,7 +334,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                   // Opaque origin: no access to Motif's storage, tokens or cookies.
                   sandbox="allow-scripts"
                   srcDoc={srcdoc}
-                  style={{ width: width ?? "100%", height: Math.max(height, 80), maxWidth: "100%" }}
+                  // Content-box, so a 768 preview is 768 wide inside its border and a `md:` class applies.
+                  style={{ width: width ?? "100%", height: Math.max(height, 80), maxWidth: "100%", boxSizing: width ? "content-box" : "border-box" }}
                   className="rounded-lg border border-surface-border bg-white shadow-sm"
                 />
               </div>
