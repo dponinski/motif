@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   Layers,
-  Component,
   ChevronRight,
   ChevronDown,
   Eye,
@@ -19,9 +18,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCanvasStore, type CanvasElement } from "@/store/canvas";
-import { useDesignSystemStore } from "@/store/design-system";
-
-type Tab = "layers" | "components";
 
 const ELEMENT_ICONS: Record<CanvasElement["type"], React.ReactNode> = {
   rectangle: <Square size={11} />,
@@ -168,80 +164,14 @@ function LayersTab() {
   );
 }
 
-function ComponentsTab() {
-  const { components } = useDesignSystemStore();
-
-  const builtIn = [
-    { name: "Button", category: "UI", preview: "▸ Button" },
-    { name: "Input", category: "UI", preview: "[ Input ]" },
-    { name: "Card", category: "Layout", preview: "┌─ Card ─┐" },
-    { name: "Badge", category: "UI", preview: "• Badge" },
-    { name: "Avatar", category: "UI", preview: "○ Avatar" },
-    { name: "Toggle", category: "UI", preview: "● Toggle" },
-    { name: "Nav Bar", category: "Navigation", preview: "≡ Nav Bar" },
-    { name: "Tab Bar", category: "Navigation", preview: "⊟ Tabs" },
-  ];
-
-  const categories = Array.from(new Set(builtIn.map((c) => c.category)));
-
-  return (
-    <div className="flex-1 overflow-y-auto">
-      {categories.map((cat) => (
-        <div key={cat}>
-          <p className="section-title">{cat}</p>
-          <div className="grid grid-cols-2 gap-1 px-2 pb-2">
-            {builtIn
-              .filter((c) => c.category === cat)
-              .map((c) => (
-                <div
-                  key={c.name}
-                  className="flex flex-col items-center gap-1.5 p-2 rounded border border-surface-border bg-surface-subtle hover:border-accent/40 hover:bg-accent/5 cursor-grab transition-colors"
-                  title={`Add ${c.name}`}
-                >
-                  <span className="text-2xs font-mono text-text-tertiary">{c.preview}</span>
-                  <span className="text-xs text-text-secondary">{c.name}</span>
-                </div>
-              ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function LeftPanel() {
-  const [activeTab, setActiveTab] = useState<Tab>("layers");
-
   return (
     <aside className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
-      {/* Tabs */}
-      <div className="flex border-b border-surface-border">
-        {(["layers", "components"] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              "flex-1 py-2 text-xs font-medium capitalize transition-colors",
-              activeTab === tab
-                ? "text-text-primary border-b border-accent"
-                : "text-text-tertiary hover:text-text-secondary"
-            )}
-          >
-            {tab === "layers" ? (
-              <span className="flex items-center justify-center gap-1">
-                <Layers size={11} /> Layers
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-1">
-                <Component size={11} /> Assets
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="flex items-center gap-1.5 px-3 h-10 border-b border-surface-border flex-shrink-0">
+        <Layers size={12} className="text-text-tertiary" />
+        <span className="text-xs font-medium text-text-secondary">Layers</span>
       </div>
-
-      {/* Content */}
-      {activeTab === "layers" ? <LayersTab /> : <ComponentsTab />}
+      <LayersTab />
     </aside>
   );
 }

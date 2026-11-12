@@ -1,19 +1,21 @@
 "use client";
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import Toolbar from "./toolbar/Toolbar";
 import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
-import AIPanel from "./panels/AIPanel";
 import DesignCanvas from "./canvas/DesignCanvas";
+import AppNav, { type NavItem } from "./AppNav";
+import ActivityPanel from "./ActivityPanel";
+import VerticalToolbar from "./toolbar/VerticalToolbar";
 import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useFilesStore } from "@/store/files";
-import { useAIStore } from "@/store/ai";
 
 export default function Editor({ fileId }: { fileId?: string }) {
+  const [activeNav, setActiveNav] = useState<NavItem | null>(null);
+
   const { undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool } =
     useCanvasStore();
-  const { setOpen: setAIOpen, isOpen: aiOpen } = useAIStore();
 
   // Spacebar temporary-pan state (not React state — avoids re-renders)
   const spaceDown = useRef(false);
@@ -96,10 +98,10 @@ export default function Editor({ fileId }: { fileId?: string }) {
         setActiveTool("hand");
       } else if (ctrl && e.key === "k") {
         e.preventDefault();
-        setAIOpen(!aiOpen);
+        setActiveNav((prev) => prev === "chat" ? null : "chat");
       }
     },
-    [undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool, setAIOpen, aiOpen]
+    [undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool, setActiveNav]
   );
 
   const handleKeyUp = useCallback(
@@ -175,20 +177,28 @@ export default function Editor({ fileId }: { fileId?: string }) {
 
       {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel */}
+        {/* Far-left nav icon rail */}
+        <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
+
+        {/* Activity panel (components / tokens / chat) */}
+        {activeNav && (
+          <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} />
+        )}
+
+        {/* Layers panel */}
         <LeftPanel />
+
+        {/* Vertical draw tools */}
+        <VerticalToolbar />
 
         {/* Canvas */}
         <main className="flex-1 relative overflow-hidden">
           <DesignCanvas />
         </main>
 
-        {/* Right panel */}
+        {/* Right properties panel */}
         <RightPanel />
       </div>
-
-      {/* AI Panel */}
-      <AIPanel />
     </div>
   );
 }
