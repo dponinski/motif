@@ -6,6 +6,11 @@ export const readerSource = (reader: RepoReader, ref: string): RepoSource => ({
   readText: (path) => reader.readText(path, ref),
 });
 
+export const memoryReader = (files: Record<string, string>): RepoReader => ({
+  listTree: async () => ({ paths: Object.keys(files), truncated: false }),
+  readText: async (path) => files[path] ?? null,
+});
+
 export const memorySource = (files: Record<string, string>): RepoSource => ({
   listFiles: async () => ({ paths: Object.keys(files), truncated: false }),
   readText: async (path) => files[path] ?? null,

@@ -6,7 +6,7 @@ import { finalizeTokens, newAccumulator, scanCss, scanTailwindConfig, scanTokenJ
 import type { RepoAnalysis, RepoSource, StylingSystem } from "./types";
 
 export type { RepoAnalysis, RepoComponent, RepoSource, RepoToken } from "./types";
-export { memorySource, readerSource } from "./source";
+export { memoryReader, memorySource, readerSource } from "./source";
 
 const MAX_PACKAGES = 25;
 const MAX_CSS_FILES = 60;

@@ -33,6 +33,8 @@ export interface FileModel {
   cssModuleImports: Set<string>;
   styled: Map<string, StyledComponent>;
   stylingUsage: Set<StylingSystem>;
+  // Every module this file imports or re-exports from, in order, including side-effect imports.
+  sources: string[];
 }
 
 const CSS_MODULE = /\.module\.(css|scss|sass|less)$/;
@@ -108,7 +110,10 @@ export function buildModel(path: string, code: string, program: AnyNode[]): File
     path, code,
     imports: new Map(), consts: new Map(), declarators: new Map(), functions: new Map(), types: new Map(),
     cvas: new Map(), lookups: new Map(), exports: new Map(), reexports: [],
-    cssModuleImports: new Set(), styled: new Map(), stylingUsage: new Set(),
+    cssModuleImports: new Set(), styled: new Map(), stylingUsage: new Set(), sources: [],
+  };
+  const addSource = (source: string | null) => {
+    if (source && !m.sources.includes(source)) m.sources.push(source);
   };
   const styledLocals = new Set<string>();
 
@@ -150,6 +155,7 @@ export function buildModel(path: string, code: string, program: AnyNode[]): File
   for (const stmt of program) {
     if (stmt.type === "ImportDeclaration") {
       const source = nameOf(stmt.source) ?? "";
+      addSource(source);
       for (const spec of stmt.specifiers as AnyNode[]) {
         const local = nameOf(spec.local);
         if (!local) continue;
@@ -163,6 +169,7 @@ export function buildModel(path: string, code: string, program: AnyNode[]): File
       if (stmt.declaration) {
         for (const name of declare(stmt.declaration as AnyNode)) m.exports.set(name, name);
       } else if (stmt.source) {
+        addSource(nameOf(stmt.source));
         const names = (stmt.specifiers as AnyNode[])
           .filter((s) => s.type === "ExportSpecifier")
           .map((s) => ({ imported: nameOf(s.local) ?? "", exported: nameOf(s.exported) ?? "" }))
@@ -177,6 +184,7 @@ export function buildModel(path: string, code: string, program: AnyNode[]): File
         }
       }
     } else if (stmt.type === "ExportAllDeclaration") {
+      addSource(nameOf(stmt.source));
       if (!stmt.exported) m.reexports.push({ source: nameOf(stmt.source) ?? "", names: "*" });
     } else if (stmt.type === "ExportDefaultDeclaration") {
       const decl = stmt.declaration as AnyNode;

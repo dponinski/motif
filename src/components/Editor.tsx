@@ -10,6 +10,8 @@ import VerticalToolbar from "./toolbar/VerticalToolbar";
 import TokensView from "./views/TokensView";
 import DocsView from "./views/DocsView";
 import RepoView from "./views/RepoView";
+import ComponentStage from "./stage/ComponentStage";
+import { useLibraryStore } from "@/store/library";
 import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useDocsStore } from "@/store/docs";
 import { useFilesStore } from "@/store/files";
@@ -19,9 +21,10 @@ export default function Editor({ fileId }: { fileId?: string }) {
   const [activeNav, setActiveNav] = useState<NavItem | null>("components");
   // Canvas shortcuts must not fire while a full-screen view covers the canvas.
   const canvasHidden = useRef(false);
+  const stageActive = useLibraryStore((s) => s.activeId !== null && s.components.some((c) => c.id === s.activeId));
   useEffect(() => {
-    canvasHidden.current = activeNav === "tokens" || activeNav === "docs" || activeNav === "repo";
-  }, [activeNav]);
+    canvasHidden.current = activeNav === "tokens" || activeNav === "docs" || activeNav === "repo" || stageActive;
+  }, [activeNav, stageActive]);
 
   const { undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool } =
     useCanvasStore();
@@ -208,12 +211,12 @@ export default function Editor({ fileId }: { fileId?: string }) {
           {/* Components + layers panel (shown when components nav is active) */}
           {activeNav === "components" && <LeftPanel />}
 
-          {/* Vertical draw tools */}
-          <VerticalToolbar />
+          {/* Vertical draw tools (they draw on the canvas, which a repository component replaces) */}
+          {!stageActive && <VerticalToolbar />}
 
-          {/* Canvas */}
+          {/* Canvas, or the stage when a repository component is open */}
           <main className="flex-1 relative overflow-hidden">
-            <DesignCanvas />
+            {stageActive ? <ComponentStage /> : <DesignCanvas />}
           </main>
 
           {/* Right properties panel */}
