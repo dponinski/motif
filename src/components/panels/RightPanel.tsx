@@ -5,7 +5,7 @@ import { SlidersHorizontal, X, Minus, Plus, Code2, Trash2, ChevronDown } from "l
 import { cn } from "@/lib/utils";
 import { useCanvasStore, type VariantProp } from "@/store/canvas";
 import { componentInterface, componentJsx } from "@/lib/component-code";
-import { useLibraryStore } from "@/store/library";
+import { activeComponent, useLibraryStore } from "@/store/library";
 import RepoComponentPanel from "./RepoComponentPanel";
 import { formatZoom } from "@/lib/utils";
 import {
@@ -480,7 +480,7 @@ function ZoomControls() {
 }
 
 export default function RightPanel() {
-  const active = useLibraryStore((s) => s.components.find((c) => c.id === s.activeId));
+  const active = useLibraryStore(activeComponent);
   if (active) {
     return (
       <aside className="w-[260px] flex-shrink-0 flex flex-col border-l border-surface-border bg-surface-raised overflow-hidden">

@@ -9,6 +9,7 @@ import { useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import ElementInspector from "./ElementInspector";
+import PropsEditor from "./PropsEditor";
 
 const SUPPORT_STYLE: Record<Support, string> = {
   editable: "bg-emerald-500/15 text-emerald-500",
@@ -86,6 +87,7 @@ export default function RepoComponentPanel({ component }: { component: LibraryCo
   return (
     <div className="flex-1 select-text overflow-y-auto">
       {editing && source && connection && <ElementInspector component={component} source={source} connection={connection} />}
+      {editing && source && connection && <PropsEditor component={component} source={source} connection={connection} />}
       <div className="border-b border-surface-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className="flex-1 truncate text-sm font-medium text-text-primary">{component.name}</span>
