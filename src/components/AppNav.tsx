@@ -1,10 +1,10 @@
 "use client";
 
-import { Palette, Sparkles } from "lucide-react";
+import { LayoutTemplate, Palette, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type NavItem = "tokens" | "chat";
+export type NavItem = "components" | "tokens" | "chat";
 
 export default function AppNav({
   activeNav,
@@ -14,6 +14,7 @@ export default function AppNav({
   setActiveNav: (item: NavItem | null) => void;
 }) {
   const items: { id: NavItem; icon: React.ReactNode; label: string }[] = [
+    { id: "components", icon: <LayoutTemplate size={16} />, label: "Components" },
     { id: "tokens", icon: <Palette size={16} />, label: "Tokens" },
     { id: "chat", icon: <Sparkles size={16} />, label: "Chat" },
   ];
