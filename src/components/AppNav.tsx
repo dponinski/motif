@@ -4,7 +4,7 @@ import { BookOpen, GitBranch, LayoutTemplate, Palette, Sparkles } from "lucide-r
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type NavItem = "components" | "tokens" | "docs" | "chat" | "git";
+export type NavItem = "components" | "tokens" | "docs" | "chat" | "git" | "repo";
 
 export default function AppNav({
   activeNav,
@@ -42,7 +42,7 @@ export default function AppNav({
           title={item.label}
           className={cn(
             "w-10 h-10 flex items-center justify-center transition-colors",
-            activeNav === item.id
+            (activeNav === "repo" ? "git" : activeNav) === item.id
               ? "bg-accent/15 text-accent"
               : "text-text-tertiary hover:text-text-primary hover:bg-surface-subtle"
           )}

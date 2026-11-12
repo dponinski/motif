@@ -8,10 +8,12 @@ export default function ActivityPanel({
   activeNav,
   fileId,
   onClose,
+  onOpenReport,
 }: {
   activeNav: "chat" | "git";
   fileId?: string;
   onClose: () => void;
+  onOpenReport: () => void;
 }) {
   return (
     <div className="w-[300px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
@@ -26,7 +28,7 @@ export default function ActivityPanel({
         </button>
       </div>
       <div className="flex-1 overflow-hidden flex flex-col">
-        {activeNav === "chat" ? <ChatView /> : fileId && <GitView fileId={fileId} />}
+        {activeNav === "chat" ? <ChatView /> : fileId && <GitView fileId={fileId} onOpenReport={onOpenReport} />}
       </div>
     </div>
   );
