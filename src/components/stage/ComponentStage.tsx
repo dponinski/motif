@@ -7,6 +7,7 @@ import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
 import { parseMotifKey } from "@/lib/edit/instrument";
 import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
 import { tokenOverrides } from "@/lib/preview/overrides";
+import { rescanComponent } from "@/lib/preview/rescan";
 import { readMotifTokens } from "@/lib/token-sync/doc";
 import { initialProps, variantCombinations } from "@/lib/preview/props";
 import { isFromPreview, type RenderItem, type ToPreview } from "@/lib/preview/protocol";
@@ -15,7 +16,7 @@ import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useDesignSystemStore } from "@/store/design-system";
 import { changedFiles, useEditStore } from "@/store/edit";
-import { useLibraryStore, type LibrarySource } from "@/store/library";
+import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import EditPrDialog from "./EditPrDialog";
@@ -198,6 +199,26 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const changed = useEditStore((s) => changedFiles(s).length);
   const [prOpen, setPrOpen] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // The props and variants shown for a component follow the edits made to its file.
+  useEffect(() => {
+    let stale = false;
+    (async () => {
+      const edits = useEditStore.getState();
+      const texts = edits.history[edits.index].texts;
+      const library = useLibraryStore.getState();
+      const original = library.components.find((c) => c.id === component.id);
+      if (!original) return;
+      if (!(component.file in texts)) { library.setLive(component.id, null); return; }
+      try {
+        const paths = await loadTree(source, host);
+        const next = await rescanComponent({ reader, ref: source.branch, paths, overlay: texts, component: original });
+        if (!stale && next) library.setLive(component.id, next);
+      } catch { /* an edit that doesn't read yet leaves what was shown */ }
+    })();
+    return () => { stale = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revision, component.id, component.file]);
   const post = (message: ToPreview) => iframeRef.current?.contentWindow?.postMessage(message, "*");
 
   // Which element is selected, and whether clicking picks one.
@@ -372,7 +393,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 }
 
 export default function ComponentStage() {
-  const component = useLibraryStore((s) => s.components.find((c) => c.id === s.activeId));
+  const component = useLibraryStore(activeComponent);
   const source = useLibraryStore((s) => s.source);
   const connection = useGitStore((s) => s.connection);
 

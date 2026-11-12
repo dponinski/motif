@@ -18,6 +18,10 @@ interface LibraryStore {
   components: LibraryComponent[];
   // The repository component shown in the editor in place of the canvas.
   activeId: string | null;
+  // Components as they are with the changes made in the editor, read again from the edited text. Not saved:
+  // it goes away with the changes.
+  live: Record<string, LibraryComponent>;
+  setLive: (id: string, component: LibraryComponent | null) => void;
   importComponents: (analysis: RepoAnalysis) => number;
   updateComponents: (analysis: RepoAnalysis) => UpdateSummary;
   setActive: (id: string | null) => void;
@@ -39,10 +43,20 @@ export const useLibraryStore = create<LibraryStore>()(
       source: null,
       components: [],
       activeId: null,
+      live: {},
+      setLive: (id, component) =>
+        set((s) => {
+          if (component === null) {
+            if (!(id in s.live)) return s;
+            const { [id]: _, ...rest } = s.live;
+            return { live: rest };
+          }
+          return { live: { ...s.live, [id]: component } };
+        }),
 
       importComponents: (analysis) => {
         const components = toLibrary(analysis.components);
-        set({ source: sourceOf(analysis), components, activeId: null });
+        set({ source: sourceOf(analysis), components, activeId: null, live: {} });
         return components.length;
       },
 
@@ -50,13 +64,17 @@ export const useLibraryStore = create<LibraryStore>()(
         const components = toLibrary(analysis.components);
         const summary = diffLibrary(get().components, components);
         const { activeId } = get();
-        set({ source: sourceOf(analysis), components, activeId: components.some((c) => c.id === activeId) ? activeId : null });
+        set({ source: sourceOf(analysis), components, live: {}, activeId: components.some((c) => c.id === activeId) ? activeId : null });
         return summary;
       },
 
       setActive: (activeId) => set({ activeId }),
-      clear: () => set({ source: null, components: [], activeId: null }),
+      clear: () => set({ source: null, components: [], activeId: null, live: {} }),
     }),
     { name: "motif-library", partialize: (s) => ({ source: s.source, components: s.components }) }
   )
 );
+
+// The component being shown, with the changes made to it in the editor.
+export const activeComponent = (s: Pick<LibraryStore, "components" | "activeId" | "live">): LibraryComponent | undefined =>
+  s.activeId === null ? undefined : s.live[s.activeId] ?? s.components.find((c) => c.id === s.activeId);
