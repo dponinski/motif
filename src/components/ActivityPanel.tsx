@@ -6,12 +6,10 @@ import GitView from "./views/GitView";
 
 export default function ActivityPanel({
   activeNav,
-  fileId,
   onClose,
   onOpenReport,
 }: {
   activeNav: "chat" | "git";
-  fileId?: string;
   onClose: () => void;
   onOpenReport: () => void;
 }) {
@@ -28,7 +26,7 @@ export default function ActivityPanel({
         </button>
       </div>
       <div className="flex-1 overflow-hidden flex flex-col">
-        {activeNav === "chat" ? <ChatView /> : fileId && <GitView fileId={fileId} onOpenReport={onOpenReport} />}
+        {activeNav === "chat" ? <ChatView /> : <GitView onOpenReport={onOpenReport} />}
       </div>
     </div>
   );

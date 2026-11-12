@@ -3,25 +3,21 @@
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Editor from "./Editor";
-import { useFilesStore } from "@/store/files";
+import { useProjectSession } from "@/store/project-session";
 
 export default function EditorRoot() {
   const params = useParams();
   const router = useRouter();
-  const fileId = params?.id as string;
-  const files = useFilesStore((s) => s.files);
+  const projectId = (params?.id as string | undefined) ?? "";
+  const session = useProjectSession(projectId);
 
-  // Redirect to dashboard if the file no longer exists (after files load from localStorage)
+  // There is nothing to edit without a project.
   useEffect(() => {
-    if (!fileId) {
-      router.replace("/");
-      return;
-    }
-    // Only redirect once the store has hydrated (files array may be empty initially)
-    if (files.length > 0 && !files.find((f) => f.id === fileId)) {
-      router.replace("/");
-    }
-  }, [fileId, files, router]);
+    if (session === "missing") router.replace("/");
+  }, [session, router]);
 
-  return <Editor fileId={fileId} />;
+  if (session !== "ready") {
+    return <div className="w-screen h-screen bg-surface-base" />;
+  }
+  return <Editor projectId={projectId} />;
 }

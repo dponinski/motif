@@ -1,13 +1,6 @@
-import { DOCUMENT_EXTENSION } from "./motif-document";
-
 export interface RemoteFile {
   text: string;
   sha: string;
-}
-
-export interface RemoteEntry {
-  path: string;
-  name: string;
 }
 
 export interface PutFileArgs {
@@ -24,7 +17,6 @@ export interface GitHost {
   getRepo(): Promise<{ defaultBranch: string; canPush: boolean }>;
   listBranches(): Promise<string[]>;
   createBranch(name: string, from: string): Promise<void>;
-  listDocuments(dir: string, branch: string): Promise<RemoteEntry[]>;
   getFile(path: string, branch: string): Promise<RemoteFile | null>;
   getBlob(sha: string): Promise<string | null>;
   putFile(args: PutFileArgs): Promise<{ sha: string; commitUrl: string }>;
@@ -136,17 +128,6 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     async createBranch(name, from) {
       const ref = await request<{ object: { sha: string } }>(`/git/ref/heads/${encodePath(from)}`);
       await request("/git/refs", { method: "POST", body: { ref: `refs/heads/${name}`, sha: ref!.object.sha } });
-    },
-
-    async listDocuments(dir, branch) {
-      const entries = await request<{ type: string; name: string; path: string }[]>(
-        `/contents/${encodePath(dir)}?ref=${encodeURIComponent(branch)}`,
-        { allow404: true }
-      );
-      if (!Array.isArray(entries)) return [];
-      return entries
-        .filter((e) => e.type === "file" && e.name.endsWith(DOCUMENT_EXTENSION))
-        .map((e) => ({ path: e.path, name: e.name }));
     },
 
     async getFile(path, branch) {

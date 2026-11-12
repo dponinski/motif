@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { diffLibrary, toLibrary, type LibraryComponent, type UpdateSummary } from "@/lib/preview/library";
 import type { RepoAnalysis } from "@/lib/repo-scan/types";
 
@@ -26,6 +25,13 @@ interface LibraryStore {
   updateComponents: (analysis: RepoAnalysis) => UpdateSummary;
   setActive: (id: string | null) => void;
   clear: () => void;
+  load: (library: LibraryData) => void;
+}
+
+// What a project keeps of the library.
+export interface LibraryData {
+  source: LibrarySource | null;
+  components: LibraryComponent[];
 }
 
 const sourceOf = (a: RepoAnalysis): LibrarySource => ({
@@ -37,8 +43,8 @@ const sourceOf = (a: RepoAnalysis): LibrarySource => ({
   styleFiles: a.styleFiles,
 });
 
+// Held in memory for the project that is open; the project keeps `source` and `components`.
 export const useLibraryStore = create<LibraryStore>()(
-  persist(
     (set, get) => ({
       source: null,
       components: [],
@@ -70,9 +76,8 @@ export const useLibraryStore = create<LibraryStore>()(
 
       setActive: (activeId) => set({ activeId }),
       clear: () => set({ source: null, components: [], activeId: null, live: {} }),
-    }),
-    { name: "motif-library", partialize: (s) => ({ source: s.source, components: s.components }) }
-  )
+      load: ({ source, components }) => set({ source, components, activeId: null, live: {} }),
+    })
 );
 
 // The component being shown, with the changes made to it in the editor.

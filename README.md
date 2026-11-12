@@ -1,16 +1,20 @@
 A new design tool built for design systems first
 
-## Git sync
+## What Motif is
 
-Design files can be stored on a branch of a GitHub repository. Connect a repository from the dashboard or the Git panel in the editor (a fine-grained personal access token with Contents read/write on that repository is enough; it stays in the browser's local storage), then track a file and push it.
+A design system builder. It works on the React components and design tokens of a GitHub repository: it reads them, shows them running, lets a designer change them visually and assign tokens to them, documents them, and sends every change back as a pull request. The code in the repository is the source of truth; Motif keeps nothing that the repository doesn't have except documentation and unsent edits. It is not a prototyping tool.
 
-Each file is written as `<design folder>/<name>.motif.json`: components with their variant props, elements keyed by id, and layer order. Keys are sorted and every value sits on its own line, so diffs stay small and `git pull` gives engineers a stable input for codegen.
+## Projects
 
-Pushing or pulling when the branch has moved runs a three-way merge against the last synced version. Changes to different elements or different properties merge automatically; when both sides changed the same property, or one side deleted what the other edited, the Git panel asks which to keep.
+Each design system is a **project**: one GitHub repository, with its tokens, documentation, imported components and unsent edits. The dashboard lists them. **New project** (or **Connect a repository** on an empty dashboard) takes `owner/name` or a GitHub URL and an access token. Public repositories can be read without one; private ones, and opening pull requests, need a fine-grained token limited to the repository with Contents and Pull requests read and write. The repository is checked before the project is made, so a typo or a missing token shows in the dialog. A token already entered for another project can be reused.
+
+Projects are kept in this browser (local storage), token included, and are saved a moment after every change. Renaming or deleting a project only affects this browser: the repository is not touched, and edits waiting to be sent as a pull request are kept. A new project starts with no tokens and no components: scan the repository (see below) and sync its tokens.
+
+Versions of Motif that were built around design files (`.motif.json` files saved to a branch, with their own sync) are gone, and so are the files, connections and token sets they left in the browser: they are cleared the first time the dashboard opens. Documentation now lives in the project in this browser, not in the repository.
 
 ## Documentation
 
-The Docs view in the editor builds design system documentation from the file itself. Every component and token category has a page from the start (preview, props table, usage code, token specimens); add your own pages and blocks for principles, guidelines and do / don't examples. Preview shows the finished site and Export HTML downloads it as a single file. Docs are stored in the design file, so they sync and merge through Git with everything else.
+The Docs view in the editor builds design system documentation from the project. Every component and token category has a page from the start (preview, props table, usage code, token specimens); add your own pages and blocks for principles, guidelines and do / don't examples. Preview shows the finished site and Export HTML downloads it as a single file. Docs are saved with the project.
 
 
 **Repository components in the documentation.** Once a repository's components are imported, the documentation has a **Repository components** section with a page for each one: its name, a live preview of every variant (or just the one, for a component without variants), a props table (types, defaults, the options of each variant and the descriptions from the code) and usage code with the import and the variants it can take. The preview is the real component running as it does in the repository, in a sandboxed frame; it is a block like any other, so the designer can add one to any page (**Add block**, then *Repository component preview*, *props* or *usage*), pick which component it shows, and switch it between one and all variants. The page for a component is named after where it is declared, so everyone who edits it edits the same page.
@@ -19,7 +23,7 @@ The Docs view in the editor builds design system documentation from the file its
 - Parts of a compound component (such as `TabsTrigger`) can't be shown without their parent, so their default page's preview shows the component's own error; change or remove that block, or document the parent.
 ## Reading a repository
 
-Connect a GitHub repository from the Git panel and press Scan to see how it is built. No token is needed for public repositories; private ones need a token with Contents read access. Motif parses the code without running it and reports:
+Open the Git panel in a project and press Scan to see how its repository is built. No token is needed for public repositories; private ones need a token with Contents read access. Motif parses the code without running it and reports:
 
 - the stack: framework, language, build tool, styling system (Tailwind v3/v4, CSS modules, styled-components, Emotion, plain CSS), variants helper, entry files
 - design tokens from CSS custom properties (with `.dark`, `[data-theme]` and `prefers-color-scheme` themes), Tailwind v4 `@theme` blocks, a Tailwind v3 config, and token JSON files
@@ -28,7 +32,7 @@ Connect a GitHub repository from the Git panel and press Scan to see how it is b
 
 Nothing is written to the repository by a scan. Only React repositories are read so far.
 
-**Where to start.** With no repository components imported, the Components panel has a **Repository components** section: **Connect a repository** takes you to the Git panel, and once one is connected **Scan and import components** scans its default branch and brings the components in, in one step. They then appear in the same panel under **Repository**. A repository with no React components says so, and a private one needs an access token. The Git panel has the same scan with its report, a choice of branch, and a separate Import button.
+**Where to start.** With no repository components imported, the Components panel has a **Repository components** section: **Scan and import components** scans the project's repository (its default branch) and brings the components in, in one step. They then appear in the same panel under **Repository**. A repository with no React components says so, and a private one needs an access token. The Git panel has the same scan with its report, a choice of branch, and a separate Import button.
 
 ## Previewing repository components
 

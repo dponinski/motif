@@ -13,12 +13,9 @@ import RepoView from "./views/RepoView";
 import ComponentStage from "./stage/ComponentStage";
 import { useLibraryStore } from "@/store/library";
 import { useCanvasStore, type Tool } from "@/store/canvas";
-import { useDocsStore } from "@/store/docs";
-import { useFilesStore } from "@/store/files";
-import { loadOpenDocument, snapshotOpenDocument } from "@/store/open-document";
 import { useNavRequest } from "@/store/nav";
 
-export default function Editor({ fileId }: { fileId?: string }) {
+export default function Editor({ projectId }: { projectId: string }) {
   const [activeNav, setActiveNav] = useState<NavItem | null>("components");
   // A panel can ask for another one to be shown.
   const navRequest = useNavRequest((s) => s.request);
@@ -153,50 +150,6 @@ export default function Editor({ fileId }: { fileId?: string }) {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Load file elements on mount; fall back to canvas store defaults if no fileId
-  useEffect(() => {
-    if (!fileId) {
-      useCanvasStore.getState().pushHistory();
-      return;
-    }
-    const file = useFilesStore.getState().files.find((f) => f.id === fileId);
-    if (file) {
-      loadOpenDocument(file);
-    } else {
-      useCanvasStore.getState().pushHistory();
-    }
-  }, [fileId]);
-
-  // Auto-save to files store when the document changes (debounced 1.5s)
-  useEffect(() => {
-    if (!fileId) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const save = () => useFilesStore.getState().saveFile(fileId, snapshotOpenDocument());
-    const schedule = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(save, 1500);
-    };
-
-    const unsubCanvas = useCanvasStore.subscribe((state, prev) => {
-      if (
-        state.elements === prev.elements &&
-        state.order === prev.order &&
-        state.componentDefs === prev.componentDefs &&
-        state.componentGroups === prev.componentGroups
-      ) return;
-      schedule();
-    });
-    const unsubDocs = useDocsStore.subscribe(schedule);
-
-    return () => {
-      if (timer) clearTimeout(timer);
-      unsubCanvas();
-      unsubDocs();
-      // Final sync on unmount
-      save();
-    };
-  }, [fileId]);
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface-base select-none">
       {/* Far-left nav icon rail */}
@@ -206,14 +159,14 @@ export default function Editor({ fileId }: { fileId?: string }) {
         /* Full-screen token editor */
         <TokensView onClose={() => setActiveNav(null)} />
       ) : activeNav === "docs" ? (
-        <DocsView fileId={fileId} onClose={() => setActiveNav(null)} />
+        <DocsView projectId={projectId} onClose={() => setActiveNav(null)} />
       ) : activeNav === "repo" ? (
         <RepoView onClose={() => setActiveNav("git")} />
       ) : (
         <>
           {/* Chat / Git activity panel */}
           {(activeNav === "chat" || activeNav === "git") && (
-            <ActivityPanel activeNav={activeNav} fileId={fileId} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
+            <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
           )}
 
           {/* Components + layers panel (shown when components nav is active) */}

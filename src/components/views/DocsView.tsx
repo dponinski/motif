@@ -19,7 +19,7 @@ import RepoDocPreview from "./RepoDocPreview";
 import { useCanvasStore } from "@/store/canvas";
 import { useDesignSystemStore } from "@/store/design-system";
 import { useDocsStore } from "@/store/docs";
-import { useFilesStore } from "@/store/files";
+import { useProjectsStore } from "@/store/projects";
 
 // The connected repository's components, for pages that document them. Empty until some are imported.
 function useRepoComponents() {
@@ -296,8 +296,8 @@ function Sidebar({
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
-export default function DocsView({ fileId, onClose }: { fileId?: string; onClose: () => void }) {
-  const fileName = useFilesStore((s) => s.files.find((f) => f.id === fileId)?.name) ?? "Design system";
+export default function DocsView({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const fileName = useProjectsStore((s) => s.projects.find((p) => p.id === projectId)?.name) ?? "Design system";
   const pages = useDocsStore((s) => s.pages);
   const ctx = useDocsContext();
   const repo = useRepoComponents();

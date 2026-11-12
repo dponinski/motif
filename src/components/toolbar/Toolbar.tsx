@@ -29,7 +29,7 @@ export default function Toolbar() {
       <Link
         href="/"
         className="flex items-center gap-2 mr-3 opacity-90 hover:opacity-100 transition-opacity"
-        title="Back to files"
+        title="Back to projects"
       >
         <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
           <span className="text-white text-xs font-bold leading-none">M</span>

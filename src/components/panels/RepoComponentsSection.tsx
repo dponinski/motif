@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, GitBranch, LayoutTemplate, Loader2, RefreshCw } from "lucide-react";
+import { Boxes, LayoutTemplate, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeUpdate } from "@/lib/preview/library";
 import { readerSource } from "@/lib/repo-scan/source";
@@ -42,26 +42,17 @@ function UpdateButton({ connection, onResult }: { connection: GitConnection; onR
   );
 }
 
-// Where a repository's components are first brought in: connect, then scan and import in one step, from the
+// Where a project's repository components are first brought in: scan and import in one step, from the
 // Components panel where they will appear. (The Git panel has the same, with the scan report and the branch.)
 function ImportPrompt() {
   const connection = useGitStore((s) => s.connection);
   const analysis = useGitStore((s) => s.analysis);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
-  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", dir: "", defaultBranch: "" });
+  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", defaultBranch: "" });
 
-  if (!connection) {
-    return (
-      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border px-3 py-3">
-        <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary"><Boxes size={12} className="text-text-tertiary" /> Repository components</p>
-        <p className="text-2xs leading-relaxed text-text-tertiary">Bring in the React components from a GitHub repository, to preview, document, edit and place them in designs.</p>
-        <button onClick={() => useNavRequest.getState().ask("git")} className="flex h-7 items-center justify-center gap-1.5 rounded-md border border-surface-border text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary" aria-label="Connect a repository">
-          <GitBranch size={12} /> Connect a repository
-        </button>
-      </div>
-    );
-  }
+  // A project always has its repository; this is only here for the moment before it is loaded.
+  if (!connection) return null;
 
   const slug = repoSlug(connection);
   const run = async () => {
