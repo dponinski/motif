@@ -7,6 +7,7 @@ import DesignCanvas from "./canvas/DesignCanvas";
 import AppNav, { type NavItem } from "./AppNav";
 import ActivityPanel from "./ActivityPanel";
 import VerticalToolbar from "./toolbar/VerticalToolbar";
+import TokensView from "./views/TokensView";
 import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useFilesStore } from "@/store/files";
 
@@ -171,27 +172,34 @@ export default function Editor({ fileId }: { fileId?: string }) {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface-base select-none">
-        {/* Far-left nav icon rail */}
-        <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
+      {/* Far-left nav icon rail */}
+      <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
 
-        {/* Activity panel (components / tokens / chat) */}
-        {activeNav && (
-          <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} />
-        )}
+      {activeNav === "tokens" ? (
+        /* Full-screen token editor */
+        <TokensView onClose={() => setActiveNav(null)} />
+      ) : (
+        <>
+          {/* Chat activity panel */}
+          {activeNav === "chat" && (
+            <ActivityPanel activeNav="chat" onClose={() => setActiveNav(null)} />
+          )}
 
-        {/* Layers panel */}
-        <LeftPanel />
+          {/* Layers + components panel */}
+          <LeftPanel />
 
-        {/* Vertical draw tools */}
-        <VerticalToolbar />
+          {/* Vertical draw tools */}
+          <VerticalToolbar />
 
-        {/* Canvas */}
-        <main className="flex-1 relative overflow-hidden">
-          <DesignCanvas />
-        </main>
+          {/* Canvas */}
+          <main className="flex-1 relative overflow-hidden">
+            <DesignCanvas />
+          </main>
 
-        {/* Right properties panel */}
-        <RightPanel />
+          {/* Right properties panel */}
+          <RightPanel />
+        </>
+      )}
     </div>
   );
 }
