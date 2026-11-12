@@ -78,6 +78,16 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
   return { ...motif, shown: motifTokens ? motif.css : "" };
 }
 
+// The graph of one component, kept for as long as the import is current and shared by everything that shows it.
+export function cachedGraph(source: LibrarySource, host: Host, reader: Parameters<typeof buildGraph>[0]["reader"], file: string): Promise<ModuleGraph> {
+  const key = `${versionOf(source)}:${file}`;
+  if (!graphs.has(key)) {
+    const make = componentGraph(host, reader, source, file);
+    graphs.set(key, loadTree(source, host).then(make));
+  }
+  return graphs.get(key)!.catch((err) => { graphs.delete(key); throw err; });
+}
+
 // The graph of one component, built for pages that only show it (not edit it).
 export function componentGraph(host: Host, reader: Parameters<typeof buildGraph>[0]["reader"], source: LibrarySource, file: string) {
   const graphInput = { repo: source.repo, ref: source.branch, tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles };

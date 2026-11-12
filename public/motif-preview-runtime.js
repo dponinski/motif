@@ -127,16 +127,18 @@
       }
 
       var currentId = 0;
+      var measure = function () {
+        // A component that fits its content is measured by the box around it, not by the page.
+        var fit = lastRender && lastRender.layout === 'bare' && lastRender.fit && rootElement.firstElementChild;
+        var rect = (fit || rootElement).getBoundingClientRect();
+        post({ type: 'rendered', id: currentId, height: Math.ceil(rect.height), width: Math.ceil(rect.width) });
+        draw();
+      };
       var reportHeight = function () {
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            // A component that fits its content is measured by the box around it, not by the page.
-            var fit = lastRender && lastRender.layout === 'bare' && lastRender.fit && rootElement.firstElementChild;
-            var rect = (fit || rootElement).getBoundingClientRect();
-            post({ type: 'rendered', id: currentId, height: Math.ceil(rect.height), width: Math.ceil(rect.width) });
-            draw();
-          });
-        });
+        requestAnimationFrame(function () { requestAnimationFrame(measure); });
+        // A page that is scrolled out of view doesn't get animation frames, but its size should still be known.
+        setTimeout(measure, 150);
+        setTimeout(measure, 800);
       };
       var sizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reportHeight) : null;
       if (sizeObserver) sizeObserver.observe(rootElement);
@@ -199,9 +201,7 @@
         });
       }
 
-      window.addEventListener('message', function (event) {
-        if (event.source !== window.parent) return;
-        var message = event.data;
+      function handle(message) {
         if (!message) return;
         if (message.type === 'render') {
           currentId = message.id;
@@ -235,9 +235,16 @@
           if (!editOn) hovered = null;
           draw();
         }
+      }
+
+      window.addEventListener('message', function (event) {
+        if (event.source !== window.parent) return;
+        handle(event.data);
       });
 
       post({ type: 'ready' });
+      // A page that is shown without a parent to ask it (an exported docs site) is told what to show in its data.
+      if (data.initial) handle(data.initial);
     }).catch(fail);
   }
 
