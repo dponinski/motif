@@ -30,6 +30,12 @@ export interface GitHost {
   putFile(args: PutFileArgs): Promise<{ sha: string; commitUrl: string }>;
 }
 
+// What reading a repository's code needs; kept apart from GitHost so sync can be tested without it.
+export interface RepoReader {
+  listTree(ref: string): Promise<{ paths: string[]; truncated: boolean }>;
+  readText(path: string, ref: string): Promise<string | null>;
+}
+
 export class GitHostError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -63,8 +69,10 @@ function fromBase64(encoded: string): string {
 
 const encodePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 
-export function createGitHubClient(conn: { owner: string; repo: string; token: string }): GitHost {
+// Public repositories can be read without a token; an empty token means that.
+export function createGitHubClient(conn: { owner: string; repo: string; token: string }): GitHost & RepoReader {
   const root = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}`;
+  const authed = conn.token.length > 0;
 
   async function request<T>(path: string, init: { method?: string; body?: unknown; allow404?: boolean } = {}): Promise<T | null> {
     const res = await fetch(root + path, {
@@ -72,7 +80,7 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
       // GitHub marks GETs cacheable for 60s; a stale sha would defeat conflict detection.
       cache: "no-store",
       headers: {
-        Authorization: `Bearer ${conn.token}`,
+        ...(authed ? { Authorization: `Bearer ${conn.token}` } : {}),
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -82,9 +90,11 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     if (res.status === 404 && init.allow404) return null;
     if (!res.ok) {
       const detail = await res.json().then((j) => j?.message as string | undefined, () => undefined);
+      const limited = res.status === 429 || (res.status === 403 && (res.headers.get("x-ratelimit-remaining") === "0" || /rate limit/i.test(detail ?? "")));
       const message =
         res.status === 401 ? "GitHub rejected the token" :
-        res.status === 404 ? "Repository not found, or the token cannot access it" :
+        limited ? (authed ? "GitHub's rate limit was reached. Try again in a few minutes." : "GitHub's rate limit for requests without a token was reached. Add an access token to continue.") :
+        res.status === 404 ? (authed ? "Repository not found, or the token cannot access it" : "Repository not found. If it is private, connect with an access token.") :
         detail ?? `GitHub request failed (${res.status})`;
       throw new GitHostError(message, res.status);
     }
@@ -139,6 +149,24 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     },
 
     getBlob,
+
+    async listTree(ref) {
+      // The tree endpoint wants a sha; branch names with slashes only resolve through the ref.
+      const sha = /^[0-9a-f]{40}$/i.test(ref)
+        ? ref
+        : (await request<{ object: { sha: string } }>(`/git/ref/heads/${encodePath(ref)}`))!.object.sha;
+      const tree = await request<{ tree: { path: string; type: string }[]; truncated: boolean }>(`/git/trees/${sha}?recursive=1`);
+      return { paths: tree!.tree.filter((e) => e.type === "blob").map((e) => e.path), truncated: tree!.truncated };
+    },
+
+    async readText(path, ref) {
+      if (authed) return (await this.getFile(path, ref))?.text ?? null;
+      const url = `https://raw.githubusercontent.com/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/${ref.split("/").map(encodeURIComponent).join("/")}/${encodePath(path)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new GitHostError(`GitHub request failed (${res.status})`, res.status);
+      return res.text();
+    },
 
     async putFile({ path, branch, text, message, sha }) {
       const res = await request<{ content: { sha: string }; commit: { html_url: string } }>(

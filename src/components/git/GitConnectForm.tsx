@@ -23,7 +23,6 @@ export default function GitConnectForm() {
     e.preventDefault();
     const parsed = parseRepo(repoInput);
     if (!parsed) return setError("Enter the repository as owner/name");
-    if (!token.trim()) return setError("Enter an access token");
     setBusy(true);
     setError(null);
     try {
@@ -40,17 +39,17 @@ export default function GitConnectForm() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       <p className="text-xs text-text-secondary leading-relaxed">
-        Connect a GitHub repository to store design files as JSON on a branch.
+        Connect a GitHub repository to read its components and tokens, and to save design files to a branch.
       </p>
       <label className="flex flex-col gap-1">
         <span className="text-2xs text-text-tertiary">Repository</span>
         <input className="input-sm" placeholder="owner/name" value={repoInput} onChange={(e) => setRepoInput(e.target.value)} autoComplete="off" />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-2xs text-text-tertiary">Access token</span>
+        <span className="text-2xs text-text-tertiary">Access token (optional)</span>
         <input className="input-sm font-mono" type="password" placeholder="github_pat_…" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
         <span className="text-2xs text-text-tertiary leading-relaxed">
-          Use a fine-grained token limited to this repository with Contents read and write. It is stored in this browser only.
+          Public repositories can be read without one. Private repositories, and saving design files, need a fine-grained token limited to this repository with Contents read and write. It is stored in this browser only.
         </span>
       </label>
       <label className="flex flex-col gap-1">

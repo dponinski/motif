@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createGitHubClient, type GitHost } from "@/lib/github";
+import { createGitHubClient, type GitHost, type RepoReader } from "@/lib/github";
 import type { GitConnection } from "@/store/git";
 
-export function useGitHost(connection: GitConnection): GitHost {
+export function useGitHost(connection: GitConnection): GitHost & RepoReader {
   const { owner, repo, token } = connection;
   return useMemo(() => createGitHubClient({ owner, repo, token }), [owner, repo, token]);
 }

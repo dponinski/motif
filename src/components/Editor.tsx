@@ -9,6 +9,7 @@ import ActivityPanel from "./ActivityPanel";
 import VerticalToolbar from "./toolbar/VerticalToolbar";
 import TokensView from "./views/TokensView";
 import DocsView from "./views/DocsView";
+import RepoView from "./views/RepoView";
 import { useCanvasStore, type Tool } from "@/store/canvas";
 import { useDocsStore } from "@/store/docs";
 import { useFilesStore } from "@/store/files";
@@ -19,7 +20,7 @@ export default function Editor({ fileId }: { fileId?: string }) {
   // Canvas shortcuts must not fire while a full-screen view covers the canvas.
   const canvasHidden = useRef(false);
   useEffect(() => {
-    canvasHidden.current = activeNav === "tokens" || activeNav === "docs";
+    canvasHidden.current = activeNav === "tokens" || activeNav === "docs" || activeNav === "repo";
   }, [activeNav]);
 
   const { undo, redo, deleteSelected, duplicateSelected, copySelected, pasteClipboard, setActiveTool } =
@@ -195,11 +196,13 @@ export default function Editor({ fileId }: { fileId?: string }) {
         <TokensView onClose={() => setActiveNav(null)} />
       ) : activeNav === "docs" ? (
         <DocsView fileId={fileId} onClose={() => setActiveNav(null)} />
+      ) : activeNav === "repo" ? (
+        <RepoView onClose={() => setActiveNav("git")} />
       ) : (
         <>
           {/* Chat / Git activity panel */}
           {(activeNav === "chat" || activeNav === "git") && (
-            <ActivityPanel activeNav={activeNav} fileId={fileId} onClose={() => setActiveNav(null)} />
+            <ActivityPanel activeNav={activeNav} fileId={fileId} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
           )}
 
           {/* Components + layers panel (shown when components nav is active) */}
