@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
+import type { DocumentContent } from "@/lib/motif-document";
 
 export interface ComponentGroup {
   id: string;
@@ -116,7 +117,8 @@ interface CanvasStore {
   undo: () => void;
   redo: () => void;
   clearCanvas: () => void;
-  loadElements: (elements: CanvasElement[]) => void;
+  loadDocument: (content: DocumentContent, activeComponentId?: string) => void;
+  getDocumentContent: () => DocumentContent;
 
   // Component management
   setActiveComponent: (id: string) => void;
@@ -630,14 +632,34 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     get().pushHistory();
   },
 
-  loadElements: (elList) => {
-    const elements: Record<string, CanvasElement> = {};
-    const order: string[] = [];
-    for (const el of elList) {
-      elements[el.id] = el;
-      if (!el.parentId) order.push(el.id);
-    }
-    set({ elements, order, selectedIds: [] });
+  loadDocument: (content, activeComponentId) => {
+    const components = content.components.length
+      ? content.components
+      : [{ id: MAIN_COMPONENT_ID, name: "Main", groupId: null, variantProps: [], elements: {}, order: [] }];
+    const active = components.find((c) => c.id === activeComponentId) ?? components[0];
+    set({
+      componentGroups: content.componentGroups,
+      componentDefs: components.map(({ id, name, groupId, variantProps }) => ({ id, name, groupId, variantProps })),
+      componentScenes: Object.fromEntries(components.map((c) => [c.id, { elements: c.elements, order: c.order }])),
+      activeComponentId: active.id,
+      elements: active.elements,
+      order: active.order,
+      selectedIds: [],
+      history: [],
+      historyIndex: -1,
+    });
     get().pushHistory();
+  },
+
+  getDocumentContent: () => {
+    const { componentGroups, componentDefs, componentScenes, activeComponentId, elements, order } = get();
+    return {
+      componentGroups,
+      components: componentDefs.map((def) => ({
+        ...def,
+        // The active scene lives in elements/order; its componentScenes entry is stale until the next switch.
+        ...(def.id === activeComponentId ? { elements, order } : componentScenes[def.id] ?? { elements: {}, order: [] }),
+      })),
+    };
   },
 }));

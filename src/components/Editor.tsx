@@ -138,35 +138,35 @@ export default function Editor({ fileId }: { fileId?: string }) {
     }
     const file = useFilesStore.getState().files.find((f) => f.id === fileId);
     if (file) {
-      useCanvasStore.getState().loadElements(Object.values(file.elements));
+      useCanvasStore.getState().loadDocument(file);
     } else {
       useCanvasStore.getState().pushHistory();
     }
   }, [fileId]);
 
-  // Auto-save to files store when elements/order change (debounced 1.5s)
+  // Auto-save to files store when the document changes (debounced 1.5s)
   useEffect(() => {
     if (!fileId) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let lastElements = useCanvasStore.getState().elements;
-    let lastOrder = useCanvasStore.getState().order;
+    const save = () =>
+      useFilesStore.getState().saveFile(fileId, useCanvasStore.getState().getDocumentContent());
 
-    const unsub = useCanvasStore.subscribe((state) => {
-      if (state.elements === lastElements && state.order === lastOrder) return;
+    const unsub = useCanvasStore.subscribe((state, prev) => {
+      if (
+        state.elements === prev.elements &&
+        state.order === prev.order &&
+        state.componentDefs === prev.componentDefs &&
+        state.componentGroups === prev.componentGroups
+      ) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        lastElements = state.elements;
-        lastOrder = state.order;
-        useFilesStore.getState().saveFile(fileId, state.elements, state.order);
-      }, 1500);
+      timer = setTimeout(save, 1500);
     });
 
     return () => {
       if (timer) clearTimeout(timer);
       unsub();
       // Final sync on unmount
-      const { elements, order } = useCanvasStore.getState();
-      useFilesStore.getState().saveFile(fileId, elements, order);
+      save();
     };
   }, [fileId]);
 
@@ -180,9 +180,9 @@ export default function Editor({ fileId }: { fileId?: string }) {
         <TokensView onClose={() => setActiveNav(null)} />
       ) : (
         <>
-          {/* Chat activity panel */}
-          {activeNav === "chat" && (
-            <ActivityPanel activeNav="chat" onClose={() => setActiveNav(null)} />
+          {/* Chat / Git activity panel */}
+          {(activeNav === "chat" || activeNav === "git") && (
+            <ActivityPanel activeNav={activeNav} fileId={fileId} onClose={() => setActiveNav(null)} />
           )}
 
           {/* Components + layers panel (shown when components nav is active) */}

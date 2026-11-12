@@ -2,18 +2,21 @@
 
 import { X } from "lucide-react";
 import ChatView from "./views/ChatView";
+import GitView from "./views/GitView";
 
 export default function ActivityPanel({
   activeNav,
+  fileId,
   onClose,
 }: {
-  activeNav: "chat";
+  activeNav: "chat" | "git";
+  fileId?: string;
   onClose: () => void;
 }) {
   return (
     <div className="w-[300px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
       <div className="flex items-center gap-2 px-3 h-10 border-b border-surface-border flex-shrink-0">
-        <span className="text-sm font-medium text-text-primary flex-1">AI Chat</span>
+        <span className="text-sm font-medium text-text-primary flex-1">{activeNav === "chat" ? "AI Chat" : "Git"}</span>
         <button
           onClick={onClose}
           title="Close panel"
@@ -23,7 +26,7 @@ export default function ActivityPanel({
         </button>
       </div>
       <div className="flex-1 overflow-hidden flex flex-col">
-        <ChatView />
+        {activeNav === "chat" ? <ChatView /> : fileId && <GitView fileId={fileId} />}
       </div>
     </div>
   );
