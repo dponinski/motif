@@ -1,5 +1,5 @@
 import { nameOf, parseModule, unwrap, walk, type AnyNode } from "../repo-scan/ast";
-import { groupById, hasGroup, readGroup, writeGroup, type ClassGroup } from "./classes";
+import { NO_NAMES, groupById, hasGroup, readGroup, writeGroup, type ClassGroup, type TokenNames } from "./classes";
 import { applyEdits, type Edit } from "./patch";
 
 // What can be changed about one element of a component's source, and the changes themselves. Everything is
@@ -228,12 +228,12 @@ export async function analyze(path: string, code: string, start: number, values:
 const done = (code: string, edits: Edit[], selection: number, summary: string): EditResult => ({ ...applyEdits(code, edits, selection), summary });
 
 // The edits that give a slot new text. A string made of several parts keeps its shape.
-function slotEdits(slot: ClassSlot, group: ClassGroup, value: string | null, modifier: string): Edit[] {
-  const matching = slot.parts.findIndex((p) => hasGroup(p.text, group, modifier));
+function slotEdits(slot: ClassSlot, group: ClassGroup, value: string | null, modifier: string, names: TokenNames): Edit[] {
+  const matching = slot.parts.findIndex((p) => hasGroup(p.text, group, modifier, names));
   const edits: Edit[] = [];
   const target = matching === -1 ? slot.parts.length - 1 : matching;
   slot.parts.forEach((part, i) => {
-    const next = i === target ? writeGroup(part.text, group, value, modifier) : hasGroup(part.text, group, modifier) ? writeGroup(part.text, group, null, modifier) : part.text;
+    const next = i === target ? writeGroup(part.text, group, value, modifier, names) : hasGroup(part.text, group, modifier, names) ? writeGroup(part.text, group, null, modifier, names) : part.text;
     if (next !== part.text) edits.push({ start: part.start, end: part.end, text: next });
   });
   return edits;
@@ -241,27 +241,28 @@ function slotEdits(slot: ClassSlot, group: ClassGroup, value: string | null, mod
 
 // Sets one group (gap, background, ...) on an element, in the class string where that group already is, or
 // in the element's own classes when it isn't set yet. A null value removes it. With a modifier ("hover:", "md:")
-// it is that state's class that is read and written, and the plain class is left alone.
-export async function setGroup(path: string, code: string, start: number, groupId: string, value: string | null, values: Record<string, string> = {}, modifier = ""): Promise<EditResult | null> {
+// it is that state's class that is read and written, and the plain class is left alone. `names` are the
+// repository's token names, which decide what `text-display` or `shadow-card` is.
+export async function setGroup(path: string, code: string, start: number, groupId: string, value: string | null, values: Record<string, string> = {}, modifier = "", names: TokenNames = NO_NAMES): Promise<EditResult | null> {
   const info = await analyze(path, code, start, values);
   if (!info) return null;
   if (info.className === "dynamic") throw new Error(info.dynamicReason ?? "These classes can't be edited");
   const group = groupById(groupId);
-  const before = readGroup(info.classes, group, modifier);
+  const before = readGroup(info.classes, group, modifier, names);
   const state = modifier ? `${modifier.replace(/:$/, "").replace(/:/g, " ")} ` : "";
   const summary = `${info.tag}: ${state}${group.label.toLowerCase()} ${before ?? "none"} → ${value ?? "none"}`;
   if (before === value) return { code, selection: start, summary };
 
   const active = info.slots.filter((s) => s.active);
-  const holder = [...active].reverse().find((s) => hasGroup(slotText(s), group, modifier));
-  if (holder) return done(code, slotEdits(holder, group, value, modifier), start, summary);
+  const holder = [...active].reverse().find((s) => hasGroup(slotText(s), group, modifier, names));
+  if (holder) return done(code, slotEdits(holder, group, value, modifier, names), start, summary);
   if (value === null) return { code, selection: start, summary };
 
   // A state goes next to the plain class it is a state of (dark:bg-x beside bg-x), so a variant's own colors
   // stay in the variant; otherwise it goes in the element's own classes, or the cva base.
-  const neighbour = modifier ? [...active].reverse().find((s) => hasGroup(slotText(s), group, "")) : undefined;
+  const neighbour = modifier ? [...active].reverse().find((s) => hasGroup(slotText(s), group, "", names)) : undefined;
   const adopter = neighbour ?? [...active].reverse().find((s) => s.kind === "literal" || s.kind === "cn") ?? active.find((s) => s.kind === "cva-base");
-  if (adopter) return done(code, slotEdits(adopter, group, value, modifier), start, summary);
+  if (adopter) return done(code, slotEdits(adopter, group, value, modifier, names), start, summary);
 
   // No className yet.
   const ctx = await context(path, code);

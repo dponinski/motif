@@ -9,15 +9,14 @@ import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlo
 import { HOST_TAGS, changeTag, insertElement, unwrapElement, wrapElement, type InsertPosition } from "@/lib/edit/insert";
 import { SNIPPETS, WRAPPERS, componentSnippet } from "@/lib/edit/snippets";
 import type { LibraryComponent } from "@/lib/preview/library";
-import { cssName } from "@/lib/token-sync/doc";
+import { useTokenIndex } from "@/components/stage/preview-core";
 import { readerFor } from "@/components/stage/reader";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
-import { useDesignSystemStore } from "@/store/design-system";
 import { useEditStore, currentText } from "@/store/edit";
 import type { GitConnection } from "@/store/git";
-import { useGitStore } from "@/store/git";
 import { useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
+import { ChoiceField, ColorField, RawHint, fieldStatus } from "./TokenField";
 
 // Shown for every element; anything else that is set on the element appears as well, and the rest is under "Add".
 const SHOWN: Record<string, string[]> = {
@@ -28,8 +27,6 @@ const SHOWN: Record<string, string[]> = {
   fill: ["bg", "border-width", "border-color", "radius", "shadow"],
 };
 
-const PALETTE = ["white", "black", "transparent", "current"];
-
 const starting = (g: ClassGroup): string => {
   if (g.control === "color") return "transparent";
   if (/^(p|m)[xytrbl]?$|^gap/.test(g.id)) return g.id.startsWith("m") ? "0" : "4";
@@ -37,10 +34,14 @@ const starting = (g: ClassGroup): string => {
   return g.options?.find((o) => o !== "none") ?? g.options?.[0] ?? "";
 };
 
-function Field({ label, children, onRemove }: { label: string; children: React.ReactNode; onRemove?: () => void }) {
+// `status` marks a value that is one of the repository's tokens, or one that is written out where a token could be.
+function Field({ label, children, onRemove, status }: { label: string; children: React.ReactNode; onRemove?: () => void; status?: "token" | "flag" | null }) {
   return (
     <div className="grid grid-cols-[84px_1fr_16px] items-center gap-1.5">
-      <span className="truncate text-xs text-text-secondary" title={label}>{label}</span>
+      <span className="flex min-w-0 items-center gap-1" title={status === "token" ? `${label}: a token of the repository` : status === "flag" ? `${label}: not a token` : label}>
+        <span className="truncate text-xs text-text-secondary">{label}</span>
+        {status && <span data-token-status={status} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", status === "token" ? "bg-accent" : "bg-amber-500")} />}
+      </span>
       {children}
       {onRemove ? (
         <button onClick={onRemove} className="rounded text-text-tertiary hover:text-text-primary" aria-label={`Remove ${label}`} title="Remove">
@@ -93,8 +94,11 @@ export default function ElementInspector({ component, source, connection }: { co
   const selection = useEditStore((s) => s.selection);
   const revision = useEditStore((s) => s.revision);
   const overrides = usePreviewStore((s) => s.values[component.id]);
-  const link = useGitStore((s) => s.tokenLink);
-  const colors = useDesignSystemStore((s) => s.colors);
+  // The repository's tokens: what the controls offer, and what decides whether `text-display` is a size or a color.
+  const index = useTokenIndex(source.repo);
+  const names = index.names;
+  const dark = usePreviewStore((s) => s.dark);
+  const theme = dark && index.themes.includes("dark") ? "dark" : index.themes[0] ?? "default";
 
   const [info, setInfo] = useState<ElementInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,11 +121,6 @@ export default function ElementInspector({ component, source, connection }: { co
     () => Object.fromEntries(Object.entries(overrides ?? {}).filter(([, v]) => ["string", "boolean", "number"].includes(typeof v)).map(([k, v]) => [k, String(v)])),
     [overrides]
   );
-
-  const tokenNames = useMemo(() => {
-    const names = link ? colors.filter((c) => c.setId === link.setId).map((c) => c.repoName ?? cssName(c.name)) : [];
-    return [...new Set([...names, ...PALETTE])];
-  }, [link, colors]);
 
   const read = async (path: string): Promise<string | null> => currentText(useEditStore.getState(), path) ?? (await reader.readText(path, source.branch));
 
@@ -173,12 +172,14 @@ export default function ElementInspector({ component, source, connection }: { co
   const editable = info.className !== "dynamic";
   const classes = info.classes;
   const groupsFor = (section: string) => {
-    const set = GROUPS.filter((g) => g.section === section && readGroup(classes, g, modifier) !== null).map((g) => g.id);
+    const set = GROUPS.filter((g) => g.section === section && readGroup(classes, g, modifier, names) !== null).map((g) => g.id);
     const shown = [...new Set([...SHOWN[section], ...set])];
     const ordered = GROUPS.filter((g) => g.section === section && shown.includes(g.id));
     return { ordered, rest: GROUPS.filter((g) => g.section === section && !shown.includes(g.id)) };
   };
-  const change = (g: ClassGroup, value: string | null) => run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier));
+  const change = (g: ClassGroup, value: string | null) => run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier, names));
+  // Values of the state being edited that are written out where the repository has a token, or the scale a step.
+  const flagged = GROUPS.filter((g) => fieldStatus(g, readGroup(classes, g, modifier, names), index) === "flag").length;
   const state = MODIFIERS.find((m) => m.id === modifier);
   const line = source ? `${selection.path}` : "";
 
@@ -293,6 +294,11 @@ export default function ElementInspector({ component, source, connection }: { co
             </select>
           </Field>
           {state?.hint && <p className="mt-1.5 text-2xs leading-relaxed text-text-tertiary">{state.hint}</p>}
+          {flagged > 0 && (
+            <p className="mt-1.5 text-2xs leading-relaxed text-amber-500" role="status" data-flagged={flagged}>
+              {flagged === 1 ? "1 value here is not a token." : `${flagged} values here are not tokens.`} They are marked below.
+            </p>
+          )}
         </div>
       )}
 
@@ -313,24 +319,17 @@ export default function ElementInspector({ component, source, connection }: { co
                 <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">{section.label}</p>
                 <div className="flex flex-col gap-1.5">
                   {ordered.map((g) => {
-                    const value = readGroup(classes, g, modifier);
+                    const value = readGroup(classes, g, modifier, names);
                     // Under a state, what the plain class gives is what applies until the state sets its own.
-                    const inherited = modifier ? readGroup(classes, g, "") : null;
+                    const inherited = modifier ? readGroup(classes, g, "", names) : null;
+                    const Control = g.control === "color" ? ColorField : ChoiceField;
                     return (
-                      <Field key={g.id} label={g.label} onRemove={value !== null ? () => change(g, null) : undefined}>
-                        {g.control === "color" ? (
-                          <>
-                            <Commit label={g.label} list={`motif-colors-${g.id}`} placeholder={inherited ? `inherits ${inherited}` : undefined} value={value ?? ""} onCommit={(v) => change(g, v.trim() || null)} />
-                            <datalist id={`motif-colors-${g.id}`}>{tokenNames.map((n) => <option key={n} value={n} />)}</datalist>
-                          </>
-                        ) : (
-                          <select className="input-sm w-full" aria-label={g.label} value={value ?? ""} onChange={(e) => change(g, e.target.value || null)}>
-                            <option value="">{inherited ? `inherits ${inherited === "DEFAULT" ? "default" : inherited}` : "—"}</option>
-                            {value !== null && !g.options!.includes(value) && <option value={value}>{value}</option>}
-                            {g.options!.map((o) => <option key={o} value={o}>{o === "DEFAULT" ? "default" : o}</option>)}
-                          </select>
-                        )}
-                      </Field>
+                      <div key={g.id} className="flex flex-col gap-1">
+                        <Field label={g.label} status={fieldStatus(g, value, index)} onRemove={value !== null ? () => change(g, null) : undefined}>
+                          <Control group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} onChange={(v) => change(g, v)} />
+                        </Field>
+                        <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} />
+                      </div>
                     );
                   })}
                   {rest.length > 0 && (

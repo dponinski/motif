@@ -17,6 +17,18 @@ const selectorFor = (theme: string, baseTheme: string, themes: string[]) =>
 const text = (kind: SyncKind, value: string) =>
   kind === "color" ? value : kind === "shadow" ? writeShadow(value) : formatLength(parseFloat(value));
 
+// The same changes as values, by token name and theme, for showing what a token is worth outside a preview.
+export function changedValues(current: SyncDoc, base: SyncDoc): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const [name, token] of Object.entries(current)) {
+    for (const [theme, value] of Object.entries(token.values)) {
+      if (base[name]?.values[theme] === value) continue;
+      (out[name] ??= {})[theme] = text(token.kind, value);
+    }
+  }
+  return out;
+}
+
 export interface TokenOverrides {
   css: string;
   // Names of the tokens that differ.

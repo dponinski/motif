@@ -4,6 +4,21 @@
 
 export type Section = "layout" | "spacing" | "size" | "type" | "fill";
 
+// What kind of design token a group's value can be: `bg-primary` is a color token, `rounded-card` a radius token.
+export type TokenRole = "color" | "spacing" | "radius" | "shadow" | "text" | "font";
+
+// The repository's own token names, by what they are. Some utilities share a prefix (`text-lg` is a size and
+// `text-primary` a color, `shadow-card` a shadow and `shadow-primary` the color of one), and only the names
+// tell them apart. Without any, the names Tailwind ships with are all that is known.
+export interface TokenNames {
+  color: ReadonlySet<string>;
+  text: ReadonlySet<string>;
+  shadow: ReadonlySet<string>;
+  font: ReadonlySet<string>;
+}
+
+export const NO_NAMES: TokenNames = { color: new Set(), text: new Set(), shadow: new Set(), font: new Set() };
+
 export interface ClassGroup {
   id: string;
   label: string;
@@ -11,8 +26,10 @@ export interface ClassGroup {
   // What the control offers; null for a free value such as a color.
   options: string[] | null;
   control: "select" | "color";
+  // The kind of token its values can be, for the groups that take tokens.
+  role?: TokenRole;
   // The value a class carries in this group, or null when it is not one.
-  read(utility: string): string | null;
+  read(utility: string, names: TokenNames): string | null;
   write(value: string): string;
 }
 
@@ -22,6 +39,11 @@ const SIZES = ["auto", "full", "screen", "fit", "min", "max", ...FRACTIONS];
 const TEXT_SIZES = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "8xl", "9xl"];
 const TEXT_ALIGN = ["left", "center", "right", "justify", "start", "end"];
 const TEXT_OTHER = ["wrap", "nowrap", "balance", "pretty", "ellipsis", "clip", "inherit", "current", "transparent"];
+
+const FAMILIES = ["sans", "serif", "mono"];
+const ROUNDED_SIDE = /^(?:[trblse]|tl|tr|bl|br|ss|se|es|ee)(?:-|$)/;
+// The colors Tailwind ships with, and the words that are colors everywhere: `red-500`, `white`, `current`.
+export const PALETTE_COLOR = /^(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white|transparent|inherit|current)(-|\/|$)/;
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
@@ -35,9 +57,9 @@ function fixed(id: string, label: string, section: Section, prefix: string, valu
 }
 
 // A value out of a scale, or anything else after the prefix (`p-[18px]`).
-function scaled(id: string, label: string, section: Section, prefix: string, options: string[], exclude: RegExp | null = null): ClassGroup {
+function scaled(id: string, label: string, section: Section, prefix: string, options: string[], exclude: RegExp | null = null, role: TokenRole | undefined = "spacing"): ClassGroup {
   return {
-    id, label, section, options, control: "select",
+    id, label, section, options, control: "select", role,
     read: (u) => {
       if (!u.startsWith(`${prefix}-`)) return null;
       const value = u.slice(prefix.length + 1);
@@ -58,7 +80,7 @@ const NOT_COLOR_BORDER = /^(?:0|2|4|8|[xytrblse]|solid|dashed|dotted|double|none
 
 function colored(id: string, label: string, prefix: string, notColor: RegExp): ClassGroup {
   return {
-    id, label, section: "fill", options: null, control: "color",
+    id, label, section: "fill", options: null, control: "color", role: "color",
     read: (u) => {
       if (!u.startsWith(`${prefix}-`)) return null;
       const value = u.slice(prefix.length + 1);
@@ -96,17 +118,25 @@ export const GROUPS: ClassGroup[] = [
   // Size
   scaled("w", "Width", "size", "w", [...SPACE, ...SIZES]),
   scaled("h", "Height", "size", "h", [...SPACE, ...SIZES]),
-  scaled("max-w", "Max width", "size", "max-w", ["none", "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "full", "prose", "screen-sm", "screen-md", "screen-lg"]),
+  scaled("max-w", "Max width", "size", "max-w", ["none", "xs", "sm", "md", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "full", "prose", "screen-sm", "screen-md", "screen-lg"], null, undefined),
   // Type
   {
-    id: "text-size", label: "Text size", section: "type", options: TEXT_SIZES, control: "select",
-    read: (u) => {
+    id: "text-size", label: "Text size", section: "type", options: TEXT_SIZES, control: "select", role: "text",
+    read: (u, names) => {
       const m = u.match(/^text-(.+)$/)?.[1];
-      return m && (TEXT_SIZES.includes(m) || /^\[\d/.test(m)) ? m : null;
+      return m && (TEXT_SIZES.includes(m) || /^\[\d/.test(m) || names.text.has(m)) ? m : null;
     },
     write: (v) => `text-${v}`,
   },
   fixed("font-weight", "Weight", "type", "font", ["thin", "extralight", "light", "normal", "medium", "semibold", "bold", "extrabold", "black"]),
+  {
+    id: "font-family", label: "Font", section: "type", options: FAMILIES, control: "select", role: "font",
+    read: (u, names) => {
+      const m = u.match(/^font-(.+)$/)?.[1];
+      return m && (FAMILIES.includes(m) || names.font.has(m)) ? m : null;
+    },
+    write: (v) => `font-${v}`,
+  },
   {
     id: "text-align", label: "Text align", section: "type", options: TEXT_ALIGN, control: "select",
     read: (u) => {
@@ -116,10 +146,10 @@ export const GROUPS: ClassGroup[] = [
     write: (v) => `text-${v}`,
   },
   {
-    id: "text-color", label: "Text color", section: "type", options: null, control: "color",
-    read: (u) => {
+    id: "text-color", label: "Text color", section: "type", options: null, control: "color", role: "color",
+    read: (u, names) => {
       const m = u.match(/^text-(.+)$/)?.[1];
-      return m && !TEXT_SIZES.includes(m) && !TEXT_ALIGN.includes(m) && !/^\[\d/.test(m) && !["wrap", "nowrap", "balance", "pretty", "ellipsis", "clip"].includes(m) ? m : null;
+      return m && !TEXT_SIZES.includes(m) && !TEXT_ALIGN.includes(m) && !/^\[\d/.test(m) && !names.text.has(m) && !["wrap", "nowrap", "balance", "pretty", "ellipsis", "clip"].includes(m) ? m : null;
     },
     write: (v) => `text-${v}`,
   },
@@ -132,17 +162,25 @@ export const GROUPS: ClassGroup[] = [
   },
   colored("border-color", "Border color", "border", NOT_COLOR_BORDER),
   {
-    id: "radius", label: "Radius", section: "fill", options: ["none", "xs", "sm", "DEFAULT", "md", "lg", "xl", "2xl", "3xl", "full"], control: "select",
-    read: (u) => (u === "rounded" ? "DEFAULT" : u.match(/^rounded-(none|xs|sm|md|lg|xl|2xl|3xl|full)$/)?.[1] ?? null),
+    id: "radius", label: "Radius", section: "fill", options: ["none", "xs", "sm", "DEFAULT", "md", "lg", "xl", "2xl", "3xl", "full"], control: "select", role: "radius",
+    read: (u) => {
+      if (u === "rounded") return "DEFAULT";
+      const m = u.match(/^rounded-(.+)$/)?.[1];
+      // `rounded-t-lg` and the like round some corners only, which is not this group. Anything else is a
+      // radius: one of Tailwind's, one of the repository's own (`rounded-card`), or a value (`rounded-[10px]`).
+      return m && !ROUNDED_SIDE.test(m) ? m : null;
+    },
     write: (v) => (v === "DEFAULT" ? "rounded" : `rounded-${v}`),
   },
   {
-    id: "shadow", label: "Shadow", section: "fill", options: ["none", "2xs", "xs", "sm", "DEFAULT", "md", "lg", "xl", "2xl"], control: "select",
-    read: (u) => {
+    id: "shadow", label: "Shadow", section: "fill", options: ["none", "2xs", "xs", "sm", "DEFAULT", "md", "lg", "xl", "2xl"], control: "select", role: "shadow",
+    read: (u, names) => {
       if (u === "shadow") return "DEFAULT";
       const m = u.match(/^shadow-(.+)$/)?.[1];
-      // `shadow-red-500` is a color, which belongs to no group here.
-      return m && !/^(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|black|white|transparent|inherit|current)(-|$)/.test(m) ? m : null;
+      if (!m) return null;
+      if (names.shadow.has(m)) return m;
+      // `shadow-red-500` and `shadow-primary/40` color a shadow, which belongs to no group here.
+      return PALETTE_COLOR.test(m) || names.color.has(m.split("/")[0]) ? null : m;
     },
     write: (v) => (v === "DEFAULT" ? "shadow" : `shadow-${v}`),
   },
@@ -214,25 +252,25 @@ export const MODIFIERS: { id: string; label: string; hint: string | null }[] = [
 // The preview width that shows a breakpoint, in px.
 export const BREAKPOINT_WIDTH: Record<string, number> = { "sm:": 640, "md:": 768, "lg:": 1024, "xl:": 1280 };
 
-const inGroup = (t: ClassToken, group: ClassGroup, modifier: string) => t.modifier === modifier && t.utility !== null && group.read(t.utility) !== null;
+const inGroup = (t: ClassToken, group: ClassGroup, modifier: string, names: TokenNames) => t.modifier === modifier && t.utility !== null && group.read(t.utility, names) !== null;
 
 // The value a group has under a modifier ("" for the plain class), or null when it isn't set there.
-export function readGroup(text: string, group: ClassGroup, modifier = ""): string | null {
+export function readGroup(text: string, group: ClassGroup, modifier = "", names: TokenNames = NO_NAMES): string | null {
   let found: string | null = null;
   for (const t of tokenize(text)) {
-    if (!inGroup(t, group, modifier)) continue;
-    found = group.read(t.utility!);
+    if (!inGroup(t, group, modifier, names)) continue;
+    found = group.read(t.utility!, names);
   }
   return found;
 }
 
-export const hasGroup = (text: string, group: ClassGroup, modifier = "") => tokenize(text).some((t) => inGroup(t, group, modifier));
+export const hasGroup = (text: string, group: ClassGroup, modifier = "", names: TokenNames = NO_NAMES) => tokenize(text).some((t) => inGroup(t, group, modifier, names));
 
 // Sets a group in a class string, keeping every other class and the spacing between them. The new class takes
 // the place of the first one it replaces; with none to replace it goes at the end. A null value removes the group.
 // Under a modifier only classes with exactly that modifier count, so `hover:bg-x` and `bg-x` are separate.
-export function writeGroup(text: string, group: ClassGroup, value: string | null, modifier = ""): string {
-  const matches = tokenize(text).filter((t) => inGroup(t, group, modifier));
+export function writeGroup(text: string, group: ClassGroup, value: string | null, modifier = "", names: TokenNames = NO_NAMES): string {
+  const matches = tokenize(text).filter((t) => inGroup(t, group, modifier, names));
   const next = value === null ? null : `${modifier}${group.write(value)}`;
 
   if (matches.length === 0) {
