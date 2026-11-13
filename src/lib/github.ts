@@ -5,7 +5,8 @@ export interface RemoteFile {
 
 export interface PutFileArgs {
   path: string;
-  branch: string;
+  // Omit to write to the default branch, which is also how the first commit of an empty repository is made.
+  branch?: string;
   text: string;
   message: string;
   // Blob sha being replaced; omit when creating the file.
@@ -15,6 +16,8 @@ export interface PutFileArgs {
 // The surface sync needs from a git host. GitHub is the only implementation today.
 export interface GitHost {
   getRepo(): Promise<{ defaultBranch: string; canPush: boolean }>;
+  // A repository with no commits yet has no branch to build on: nothing can be branched from or read until it has one.
+  isEmpty(): Promise<boolean>;
   listBranches(): Promise<string[]>;
   createBranch(name: string, from: string): Promise<void>;
   getFile(path: string, branch: string): Promise<RemoteFile | null>;
@@ -137,6 +140,11 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
       return { defaultBranch: repo!.default_branch, canPush: repo!.permissions?.push ?? false };
     },
 
+    async isEmpty() {
+      const branches = await request<{ name: string }[]>("/branches?per_page=1");
+      return branches!.length === 0;
+    },
+
     async listBranches() {
       const names: string[] = [];
       for (let page = 1; ; page++) {
@@ -165,12 +173,32 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     getBlob,
 
     async listTree(ref) {
+      const none = { paths: [] as string[], truncated: false };
+      // GitHub says "Git Repository is empty" (409) for anything that reads a repository with no commits.
+      const empty = (err: unknown) => err instanceof GitHostError && err.status === 409 && /empty/i.test(err.message);
       // The tree endpoint wants a sha; branch names with slashes only resolve through the ref.
-      const sha = /^[0-9a-f]{40}$/i.test(ref)
-        ? ref
-        : (await request<{ object: { sha: string } }>(`/git/ref/heads/${encodePath(ref)}`))!.object.sha;
-      const tree = await request<{ tree: { path: string; type: string }[]; truncated: boolean }>(`/git/trees/${sha}?recursive=1`);
-      return { paths: tree!.tree.filter((e) => e.type === "blob").map((e) => e.path), truncated: tree!.truncated };
+      let sha = ref;
+      if (!/^[0-9a-f]{40}$/i.test(ref)) {
+        let found: { object: { sha: string } } | null;
+        try {
+          found = await request<{ object: { sha: string } }>(`/git/ref/heads/${encodePath(ref)}`, { allow404: true });
+        } catch (err) {
+          if (empty(err)) return none;
+          throw err;
+        }
+        if (!found) {
+          if (await this.isEmpty()) return none;
+          throw new GitHostError(`The branch ${ref} was not found`, 404);
+        }
+        sha = found.object.sha;
+      }
+      try {
+        const tree = await request<{ tree: { path: string; type: string }[]; truncated: boolean }>(`/git/trees/${sha}?recursive=1`);
+        return { paths: tree!.tree.filter((e) => e.type === "blob").map((e) => e.path), truncated: tree!.truncated };
+      } catch (err) {
+        if (empty(err)) return none;
+        throw err;
+      }
     },
 
     async readText(path, ref) {
@@ -202,7 +230,7 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     async putFile({ path, branch, text, message, sha }) {
       const res = await request<{ content: { sha: string }; commit: { html_url: string } }>(
         `/contents/${encodePath(path)}`,
-        { method: "PUT", body: { message, branch, content: toBase64(text), sha } }
+        { method: "PUT", body: { message, ...(branch ? { branch } : {}), content: toBase64(text), sha } }
       );
       return { sha: res!.content.sha, commitUrl: res!.commit.html_url };
     },

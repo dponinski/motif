@@ -10,6 +10,7 @@ import DocsView from "./views/DocsView";
 import RepoView from "./views/RepoView";
 import ComponentStage from "./stage/ComponentStage";
 import ProjectOverview from "./stage/ProjectOverview";
+import { useAutoRead } from "./stage/useReadRepository";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
 
@@ -22,6 +23,8 @@ export default function Editor({ projectId }: { projectId: string }) {
     setActiveNav(navRequest);
     useNavRequest.getState().clear();
   }, [navRequest]);
+  // A project that hasn't been read yet reads its repository now.
+  useAutoRead();
   const stageActive = useLibraryStore((s) => s.activeId !== null && s.components.some((c) => c.id === s.activeId));
 
   // Ctrl/Cmd+K opens or closes the chat.
