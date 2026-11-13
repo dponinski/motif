@@ -6,6 +6,7 @@ import { GitBranch, Monitor, Moon, MoreHorizontal, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { clearLegacyStorage, useProjectsStore, type Project } from "@/store/projects";
+import { AccountMenu, AccountNotices, useAccountInit } from "@/components/git/AccountControls";
 import NewProjectDialog from "./NewProjectDialog";
 
 function formatDate(ts: number): string {
@@ -123,6 +124,7 @@ export default function Dashboard() {
 
   // Design files, repository connections and token sets kept in this browser by earlier versions are not carried over.
   useEffect(() => clearLegacyStorage(), []);
+  useAccountInit();
 
   const themeOptions: { mode: ThemeMode; icon: React.ReactNode; label: string }[] = [
     { mode: "light", icon: <Sun size={12} />, label: "Light" },
@@ -133,6 +135,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-surface-base text-text-primary select-none">
+      <AccountNotices />
       <header className="flex items-center justify-between h-12 px-6 border-b border-surface-border-subtle">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center flex-shrink-0">
@@ -156,6 +159,7 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          <AccountMenu />
           {projects.length > 0 && <NewProjectDialog />}
         </div>
       </header>

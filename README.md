@@ -12,6 +12,36 @@ Projects are kept in this browser (local storage), token included, and are saved
 
 Versions of Motif that were built around design files (`.motif.json` files saved to a branch, with their own sync) are gone, and so are the files, connections and token sets they left in the browser: they are cleared the first time the dashboard opens. Documentation now lives in the project in this browser, not in the repository.
 
+## Signing in with GitHub
+
+Instead of creating and pasting an access token for every repository, a person can **sign in with GitHub**. It uses a **GitHub App** that you create once for your Motif deployment; the app is then installed on the accounts and repositories that should be usable, and each person signs in to approve it.
+
+- **What it gives**: **New project** lists the repositories the app is installed on, to pick from (no `owner/name` to type, nothing to paste), and a project made that way stores no token at all. Scanning, reading a private repository and opening pull requests use the signed-in person's access through the app, and the pull request is opened as them. The app can only reach a repository where it is installed and the person has access. A token typed in for a project is still used for that project, and a public repository can still be added by name with no sign-in. Nothing changes where the server isn't set up for it: the button doesn't appear.
+- **Where the tokens are**: the browser is sent to GitHub to approve, GitHub sends it back with a code, and the server exchanges the code for tokens (the exchange needs the app's client secret, which never reaches the browser). The tokens are kept in a cookie the page's scripts can't read (`httpOnly`, `SameSite=Lax`, only sent to `/api/github`, `Secure` on https). The page asks the server for the access token (it lasts 8 hours) and keeps it in memory only; nothing is saved in local storage. The refresh token never leaves the cookie, and renewing needs the client secret too, so it is of no use on its own.
+- **Renewing**: a token about to stop working is renewed by the server before it is handed out. If GitHub still refuses a token (revoked, or ended early), the page asks for a new one and repeats the request once, and requests refused together share one renewal. GitHub gives each refresh token one use, so the server also lets two requests that carry the same one (two tabs) share the result for a minute instead of racing. When the refresh token is refused or has run out (after about six months) the person is told the sign-in has ended and signs in again. If GitHub can't be reached the sign-in is kept.
+- **Signing out** clears the cookie and revokes the access token at GitHub.
+- **A cancelled or refused sign-in** comes back to the page it started from with a message. A sign-in that wasn't started in this browser (the state doesn't match) is not finished. The page to come back to can only be a path on this site.
+
+**Setting it up**
+
+1. Create the app: GitHub, *Settings*, *Developer settings*, *GitHub Apps*, *New GitHub App* (for an organization, under the organization's settings instead). Give it a name and a homepage URL.
+2. **Callback URL**: `https://your-domain/api/github/callback`. It must match exactly where the site is served. An app can have several callback URLs (add `http://localhost:3000/api/github/callback` to try it locally, and each deployment you want to sign in from; a preview deployment on another address can't sign in unless its callback is listed).
+3. **Expire user authorization tokens**: leave it on (the default). **Request user authorization (OAuth) during installation** can stay off. **Webhook**: untick *Active*; Motif doesn't use one.
+4. **Permissions**, under *Repository permissions*: **Contents: Read and write**, **Pull requests: Read and write**. *Metadata: Read-only* is added for you. Nothing else is needed.
+5. **Where can this app be installed**: *Only on this account* for your own repositories, *Any account* for others'.
+6. Create the app, then **generate a client secret** and note the **Client ID** and the app's **URL name** (the last part of `github.com/apps/<name>`).
+7. **Install the app**: *Install App* in the app's settings, on the account or organization that owns the design system repositories, for all or selected repositories.
+8. Set these on the server (Hostinger: the Node.js app's environment variables) and redeploy:
+
+| Variable | What |
+| --- | --- |
+| `GITHUB_APP_CLIENT_ID` | the app's Client ID |
+| `GITHUB_APP_CLIENT_SECRET` | the client secret, kept on the server only |
+| `GITHUB_APP_SLUG` | the app's URL name, for the link to install it on more repositories |
+| `APP_URL` | where the site is served, `https://your-domain`, when it sits behind a proxy that doesn't pass its address on (it has to match the callback URL) |
+
+The server keeps what it needs to share a renewal in memory, so it expects to run as one process. A static export (the desktop build) has no server, so there is no sign-in there and access tokens are used.
+
 ## Documentation
 
 The Docs view in the editor builds design system documentation from the project. Every token category has a page from the start (swatches, type, spacing, radius and shadow specimens), and so does every imported repository component (see below); add your own pages and blocks for principles, guidelines and do / don't examples. Preview shows the finished site and Export HTML downloads it as a single file. Docs are saved with the project.

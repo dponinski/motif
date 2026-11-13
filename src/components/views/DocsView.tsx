@@ -13,7 +13,7 @@ import { DOCS_CSS, blockHtml, renderDocsSite, type DocsContext } from "@/lib/doc
 import type { DocBlock, DocPage, RepoRef, TokenKind } from "@/lib/motif-document";
 import { repoSlug, useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
-import { createGitHubClient } from "@/lib/github";
+import { clientFor } from "@/components/git/hooks";
 import { buildPreviews } from "@/components/stage/docs-previews";
 import RepoDocPreview from "./RepoDocPreview";
 import { useDesignSystemStore } from "@/store/design-system";
@@ -296,7 +296,7 @@ export default function DocsView({ projectId, onClose }: { projectId: string; on
   const source = useLibraryStore((s) => s.source);
   const connection = useGitStore((s) => s.connection);
   const host = useMemo(
-    () => (connection ? createGitHubClient({ owner: connection.owner, repo: connection.repo, token: connection.token }) : null),
+    () => (connection ? clientFor(connection) : null),
     [connection]
   );
   const connected = !!connection && !!source && repoSlug(connection) === source.repo;

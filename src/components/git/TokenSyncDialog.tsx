@@ -12,7 +12,7 @@ import { applyEdits, filesNeeded } from "@/lib/token-sync/write";
 import { useDesignSystemStore } from "@/store/design-system";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { applySyncPlan, importRepoTokens, tokenSlices } from "@/store/token-sync";
-import { errorMessage, useBranches, useGitHost } from "./hooks";
+import { errorMessage, useBranches, useCanSend, useGitHost } from "./hooks";
 
 const btnPrimary = "h-7 px-3 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const btnSecondary = "h-7 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
@@ -152,6 +152,7 @@ function ImportSection({ state, repo, branch, onDone }: { state: RepoState; repo
 // ── Not linked yet: the repository has no tokens ──────────────────────────────
 
 function ExportSection({ state, connection, host, branch, onDone }: { state: RepoState; connection: GitConnection; host: Host; branch: string; onDone: (n: Notice) => void }) {
+  const canSend = useCanSend(connection);
   const sets = useDesignSystemStore((s) => s.sets);
   const colors = useDesignSystemStore((s) => s.colors);
   const radii = useDesignSystemStore((s) => s.radii);
@@ -204,9 +205,9 @@ function ExportSection({ state, connection, host, branch, onDone }: { state: Rep
           </select>
         </label>
       )}
-      {!connection.token && <p className="text-xs text-amber-500">Opening a pull request needs an access token with Contents and Pull requests read and write. Add one in the Git panel.</p>}
+      {!canSend && <p className="text-xs text-amber-500">Opening a pull request needs you to sign in with GitHub, or an access token with Contents and Pull requests read and write. Either is in the Git panel.</p>}
       {error && <p className="text-xs text-red-400">{error}</p>}
-      <button className={btnPrimary} onClick={create} disabled={busy || !connection.token || !setId}>
+      <button className={btnPrimary} onClick={create} disabled={busy || !canSend || !setId}>
         {busy && <Loader2 size={12} className="animate-spin" />}
         Create pull request
       </button>
@@ -219,6 +220,7 @@ function ExportSection({ state, connection, host, branch, onDone }: { state: Rep
 function SyncSection({ link, state, connection, host, onRefresh, notify }: {
   link: TokenLink; state: RepoState; connection: GitConnection; host: Host; onRefresh: () => void; notify: (n: Notice) => void;
 }) {
+  const canSend = useCanSend(connection);
   const setLink = useGitStore((s) => s.setTokenLink);
   const colors = useDesignSystemStore((s) => s.colors);
   const spacing = useDesignSystemStore((s) => s.spacing);
@@ -289,7 +291,7 @@ function SyncSection({ link, state, connection, host, onRefresh, notify }: {
     }
   };
 
-  const prBlocked = !connection.token ? "Opening a pull request needs an access token. Add one in the Git panel."
+  const prBlocked = !canSend ? "Opening a pull request needs you to sign in with GitHub, or an access token. Either is in the Git panel."
     : needsApply ? "Apply the changes above first."
     : link.pending ? `Pull request #${link.pending.number} is still open. Merge or close it first.`
     : null;
