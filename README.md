@@ -60,6 +60,16 @@ Without a database, Motif has no accounts: it is a single-user tool, as before, 
 
 How it is kept safe: a session is a random value in an `HttpOnly` cookie of which only a hash is stored; it lasts 30 days from the last visit; sign-in and the assistant refuse requests that don't come from the app itself; links, sign-in attempts and chat messages are rate limited per address and per place; Google and Apple sign-ins use a state, a nonce and (Google) PKCE and check the ID token against the provider's keys; errors are never put in the page beyond a short reason.
 
+### Projects saved to your account
+
+Signed in, a person's projects are saved to their account and kept the same on every device they use. The browser still works on its own copy, so Motif works offline and edits are never held up by the network; changes are sent a moment after they are made, and other devices are checked every 45 seconds and whenever the window is focused.
+
+- **What is saved**: the project's name, its repository (owner, name, default branch), its tokens, the link to the repository's tokens, and its documentation. **Not** saved: access tokens (they stay in the browser they were typed into, and anything that looks like one is refused by the server), the repository scan and the component library (read again from the repository), and unsent edits to components. On another device a project has no token of its own: sign in with GitHub, or type one.
+- **First sign-in**: the projects already in the browser are saved to the account, and the account's projects are brought in. Up to 100 projects per account.
+- **Two devices**: each project is compared in five parts (name, repository, token link, tokens, documentation) against what both sides had when they last agreed. A part changed on only one side is taken from that side, so docs edited on one device and tokens on another are combined. Only the *same* part changed differently on both asks a person, once, which version to keep. Nothing is sent for that project until they answer. A project deleted on one device is deleted on the others (unless it was changed here, which asks), and the server keeps a note of the deletion for 90 days.
+- **Signing out** takes the account's projects off that browser (after sending anything not yet sent), so the next person to use it doesn't see them; a project that couldn't be sent stays for its owner. A different person signing in on the same browser never receives another account's projects.
+- Projects are stored as JSON in the `projects` table, one row per project with a version number that rises with each change; a device that was behind is refused instead of overwriting.
+
 Preview deployments get their own address, so Google, Apple and GitHub sign-in work there only if that address's callback URLs are registered with the provider. Email links work anywhere.
 
 Tests that use a database run when `TEST_DATABASE_URL` points at an empty one (`TEST_DATABASE_URL=mysql://user:pw@127.0.0.1:3306/motif_test npm test`) and are skipped without it.

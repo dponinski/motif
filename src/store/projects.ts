@@ -29,6 +29,8 @@ interface ProjectsStore {
   projects: Project[];
   create: (connection: GitConnection, name?: string) => Project;
   save: (id: string, data: ProjectData) => void;
+  // Adds a project, or replaces the one with its id, as it is (used when projects arrive from the account).
+  put: (project: Project) => void;
   rename: (id: string, name: string) => void;
   remove: (id: string) => void;
 }
@@ -56,6 +58,9 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       save: (id, data) =>
         set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, ...data, updatedAt: Date.now() } : p)) })),
+
+      put: (project) =>
+        set((s) => ({ projects: s.projects.some((p) => p.id === project.id) ? s.projects.map((p) => (p.id === project.id ? project : p)) : [...s.projects, project] })),
 
       rename: (id, name) =>
         set((s) => ({ projects: s.projects.map((p) => (p.id === id ? { ...p, name, updatedAt: Date.now() } : p)) })),

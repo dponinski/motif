@@ -3,6 +3,8 @@ import { allowedEmail, isAllowed, normalizeEmail } from "./allowlist";
 import { parseAllowed, providersOf, readAuthConfig } from "./config";
 import { MIGRATIONS, closeAll, createPool, migrate, wrap, type Db } from "./db";
 import { completeSignIn } from "./signin";
+import { getProject, listProjects, removeProject, saveProject } from "./projects";
+import type { ProjectPayload } from "../sync/payload";
 import {
   LOGIN_LINK_MINUTES, SESSION_DAYS, consumeLoginToken, createLoginToken, createSession, createUser, deleteSession, deleteUserSessions, findIdentity,
   findUserByEmail, getSession, getUser, hashToken, hit, identitiesOf, linkIdentity, newToken, pruneExpired,
@@ -87,14 +89,14 @@ describe.skipIf(!URL)("accounts in a database", () => {
 
   beforeAll(async () => {
     pool = createPool(URL!);
-    for (const t of ["sessions", "identities", "login_tokens", "rate_buckets", "users", "schema_migrations"]) await pool.query(`DROP TABLE IF EXISTS ${t}`);
+    for (const t of ["projects", "sessions", "identities", "login_tokens", "rate_buckets", "users", "schema_migrations"]) await pool.query(`DROP TABLE IF EXISTS ${t}`);
     await migrate(pool);
     db = wrap(pool);
   });
   afterAll(async () => { await pool.end(); await closeAll(); });
   beforeEach(async () => {
     await pool.query("SET FOREIGN_KEY_CHECKS = 0");
-    for (const t of ["sessions", "identities", "login_tokens", "rate_buckets", "users"]) await pool.query(`TRUNCATE TABLE ${t}`);
+    for (const t of ["projects", "sessions", "identities", "login_tokens", "rate_buckets", "users"]) await pool.query(`TRUNCATE TABLE ${t}`);
     await pool.query("SET FOREIGN_KEY_CHECKS = 1");
   });
 
@@ -337,6 +339,121 @@ describe.skipIf(!URL)("accounts in a database", () => {
       expect(await db.query("SELECT 1 FROM users")).toHaveLength(1);
       expect(results.map((r) => r.status)).toEqual(["fulfilled", "fulfilled", "fulfilled", "fulfilled", "fulfilled"]);
       expect(await db.query("SELECT 1 FROM identities")).toHaveLength(1);
+    });
+  });
+  describe("projects", () => {
+    const payload = (over: Partial<ProjectPayload> = {}): ProjectPayload => ({ name: "Acme", connection: { owner: "acme", repo: "ds", defaultBranch: "main" }, tokenLink: null, tokens: { colors: [] }, docs: [], ...over });
+    let ada: string, grace: string;
+    beforeEach(async () => {
+      ada = (await createUser(db, { email: "ada@example.com" })).id;
+      grace = (await createUser(db, { email: "grace@example.com" })).id;
+    });
+
+    it("keeps a new project at version 1 and returns exactly what was saved", async () => {
+      expect(await saveProject(db, ada, "p1", 0, payload(), 1000)).toEqual({ ok: true, version: 1, updatedAt: 1000 });
+      const got = await getProject(db, ada, "p1");
+      expect(got).toMatchObject({ id: "p1", name: "Acme", version: 1, deleted: false, updatedAt: 1000, data: payload() });
+      expect(await listProjects(db, ada)).toEqual([{ id: "p1", version: 1, updatedAt: 1000, deleted: false }]);
+    });
+
+    it("keeps unicode and large content intact", async () => {
+      const big = payload({ name: "Design 🎨 系統", docs: [{ text: "日本語 ".repeat(50_000) }] });
+      expect((await saveProject(db, ada, "p1", 0, big)).ok).toBe(true);
+      expect((await getProject(db, ada, "p1"))!.data).toEqual(big);
+    });
+
+    it("raises the version with each change, from a device that had the latest", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      expect(await saveProject(db, ada, "p1", 1, payload({ name: "Two" }), 2000)).toEqual({ ok: true, version: 2, updatedAt: 2000 });
+      expect((await getProject(db, ada, "p1"))!.name).toBe("Two");
+    });
+
+    it("refuses a change from a device that is behind, and says what the server has", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      await saveProject(db, ada, "p1", 1, payload({ name: "Two" }));
+      const r = await saveProject(db, ada, "p1", 1, payload({ name: "Stale" }));
+      expect(r).toMatchObject({ ok: false, reason: "conflict", current: { version: 2, name: "Two", deleted: false } });
+      expect((await getProject(db, ada, "p1"))!.name).toBe("Two");
+    });
+
+    it("refuses a new project whose id is taken, and a version for a project it doesn't have", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      expect(await saveProject(db, ada, "p1", 0, payload({ name: "Again" }))).toMatchObject({ ok: false, reason: "conflict", current: { version: 1 } });
+      expect(await saveProject(db, ada, "nope", 3, payload())).toMatchObject({ ok: false, reason: "conflict", current: { deleted: true } });
+    });
+
+    it("keeps people's projects apart", async () => {
+      await saveProject(db, ada, "p1", 0, payload({ name: "Ada's" }));
+      expect(await getProject(db, grace, "p1")).toBeNull();
+      expect(await listProjects(db, grace)).toEqual([]);
+      expect((await saveProject(db, grace, "p1", 0, payload({ name: "Grace's" }))).ok).toBe(true);
+      expect((await getProject(db, ada, "p1"))!.name).toBe("Ada's");
+      expect(await removeProject(db, grace, "p1", 1)).toEqual({ ok: true });
+      expect((await getProject(db, ada, "p1"))!.deleted).toBe(false);
+    });
+
+    it("lets only one of several devices creating the same project win", async () => {
+      const results = await Promise.all(Array.from({ length: 6 }, (_, i) => saveProject(db, ada, "race", 0, payload({ name: `D${i}` }))));
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect(results.filter((r) => !r.ok && r.reason === "conflict")).toHaveLength(5);
+      expect(await db.query("SELECT 1 FROM projects WHERE id = 'race'")).toHaveLength(1);
+    });
+
+    it("lets only one of several devices changing the same version win", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      const results = await Promise.all(Array.from({ length: 6 }, (_, i) => saveProject(db, ada, "p1", 1, payload({ name: `D${i}` }))));
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect((await getProject(db, ada, "p1"))!.version).toBe(2);
+    });
+
+    it("deletes a project but keeps a note of it, without the content", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      expect(await removeProject(db, ada, "p1", 1, 5000)).toEqual({ ok: true });
+      expect(await getProject(db, ada, "p1")).toMatchObject({ deleted: true, version: 2, data: null, name: "" });
+      expect(await db.query<{ data: string }>("SELECT data FROM projects WHERE id = 'p1'")).toEqual([{ data: "" }]);
+      expect(await listProjects(db, ada)).toEqual([{ id: "p1", version: 2, updatedAt: 5000, deleted: true }]);
+      // Deleting it again, or one that isn't there, is fine.
+      expect(await removeProject(db, ada, "p1", 1)).toEqual({ ok: true });
+      expect(await removeProject(db, ada, "never", 4)).toEqual({ ok: true });
+    });
+
+    it("won't delete a project that was changed since the device saw it", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      await saveProject(db, ada, "p1", 1, payload({ name: "Two" }));
+      expect(await removeProject(db, ada, "p1", 1)).toMatchObject({ ok: false, reason: "conflict", current: { version: 2, name: "Two" } });
+      expect((await getProject(db, ada, "p1"))!.deleted).toBe(false);
+    });
+
+    it("refuses changes to a deleted project from a device that hasn't seen it deleted, and revives it for one that has", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      await removeProject(db, ada, "p1", 1);
+      expect(await saveProject(db, ada, "p1", 1, payload({ name: "Late" }))).toMatchObject({ ok: false, reason: "conflict", current: { deleted: true, version: 2 } });
+      expect(await saveProject(db, ada, "p1", 2, payload({ name: "Back" }), 9000)).toEqual({ ok: true, version: 3, updatedAt: 9000 });
+      expect(await getProject(db, ada, "p1")).toMatchObject({ deleted: false, name: "Back", version: 3, data: payload({ name: "Back" }) });
+    });
+
+    it("forgets old deletions", async () => {
+      await saveProject(db, ada, "old", 0, payload(), 1000);
+      await removeProject(db, ada, "old", 1, 1000);
+      await saveProject(db, ada, "p2", 0, payload(), 1000);
+      await removeProject(db, ada, "p2", 1, 1000 + 91 * 86_400_000);
+      expect((await listProjects(db, ada)).map((p) => p.id)).toEqual(["p2"]);
+    });
+
+    it("stops at 100 projects, counting only those not deleted", async () => {
+      await db.exec("INSERT INTO projects (user_id, id, name, data, version, created_at, updated_at) SELECT ?, CONCAT('b', seq), 'x', '{}', 1, 1, 1 FROM (" +
+        Array.from({ length: 100 }, (_, i) => `SELECT ${i} AS seq`).join(" UNION ALL ") + ") t", [ada]);
+      expect(await saveProject(db, ada, "extra", 0, payload())).toEqual({ ok: false, reason: "limit" });
+      await removeProject(db, ada, "b1", 1);
+      expect((await saveProject(db, ada, "extra", 0, payload())).ok).toBe(true);
+      // Grace has her own allowance
+      expect((await saveProject(db, grace, "extra", 0, payload())).ok).toBe(true);
+    });
+
+    it("goes when the person does", async () => {
+      await saveProject(db, ada, "p1", 0, payload());
+      await db.exec("DELETE FROM users WHERE id = ?", [ada]);
+      expect(await db.query("SELECT 1 FROM projects")).toHaveLength(0);
     });
   });
 });

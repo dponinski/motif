@@ -5,6 +5,7 @@ import { ExternalLink, Github, LogOut } from "lucide-react";
 import { AccountMenu } from "@/components/git/AccountControls";
 import { useAccount } from "@/store/account";
 import { useAuth } from "@/store/auth";
+import { useSync } from "@/store/sync";
 
 const item = "flex cursor-pointer items-center gap-2 px-3 py-1.5 outline-none hover:bg-surface-subtle hover:text-text-primary data-[highlighted]:bg-surface-subtle";
 
@@ -13,6 +14,7 @@ const item = "flex cursor-pointer items-center gap-2 px-3 py-1.5 outline-none ho
 export default function UserMenu() {
   const { status, user, signOut, openDialog } = useAuth();
   const github = useAccount();
+  const sync = useSync();
   if (status === "unknown") return null;
   if (status === "unavailable") return <AccountMenu />;
 
@@ -37,6 +39,13 @@ export default function UserMenu() {
           <div className="border-b border-surface-border px-3 py-2">
             {user.name && <p className="truncate text-text-primary">{user.name}</p>}
             <p className="truncate text-text-tertiary" data-account-email>{user.email}</p>
+          </div>
+          <div className="border-b border-surface-border px-3 py-1.5 text-2xs text-text-tertiary" data-sync-status={sync.status}>
+            {sync.status === "syncing" ? "Saving your projects…"
+              : sync.status === "offline" ? "Offline: your projects are saved here and will be sent when you're back online"
+              : sync.status === "error" ? "Some projects couldn't be saved to your account"
+              : sync.status === "idle" ? "Your projects are saved to your account"
+              : "Projects aren't being saved to your account"}
           </div>
           {github.status === "signed-in" ? (
             <div className="flex items-center gap-2 px-3 py-1.5 text-text-tertiary" data-github-connected><Github size={12} /> GitHub: {github.login ?? "connected"}</div>

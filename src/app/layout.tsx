@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
+import SyncManager from "@/components/sync/SyncManager";
 
 export const metadata: Metadata = {
   title: "Motif — Design System Builder",
@@ -25,6 +26,7 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>
+        <SyncManager />
       </body>
     </html>
   );
