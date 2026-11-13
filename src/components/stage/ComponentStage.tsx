@@ -231,8 +231,9 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, revision, main.graph]);
 
+  // Ctrl/Cmd+Z steps back through the changes made here, in Edit mode or not: the assistant can make some too.
   useEffect(() => {
-    if (!editing) return;
+    if (!editing && !canUndo && !canRedo) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) return;
@@ -243,7 +244,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing]);
+  }, [editing, canUndo, canRedo]);
 
   const githubUrl = `https://github.com/${source.repo}/blob/${source.branch}/${component.file}#L${component.line}`;
 

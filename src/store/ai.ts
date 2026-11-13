@@ -1,15 +1,18 @@
 import { create } from "zustand";
+import type { ComponentBasis } from "../lib/ai/context";
 
 export interface AIMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: number;
-  structured?: {
-    action: "generate" | "tokens";
-    elements?: unknown[];
-    tokens?: unknown;
-  };
+  // The JSON block of a reply, as it came: nothing in it is trusted until it has been read (lib/ai).
+  structured?: { action?: string; [key: string]: unknown };
+  // The component the reply is about, as it was when it was asked, so a suggestion of changes is only made to
+  // the same elements.
+  basis?: ComponentBasis | null;
+  // What came of applying the suggestion, once it has been.
+  outcome?: string;
 }
 
 interface AIStore {
@@ -23,21 +26,25 @@ interface AIStore {
   addMessage: (msg: Omit<AIMessage, "id" | "timestamp">) => void;
   setLoading: (loading: boolean) => void;
   clearMessages: () => void;
+  setOutcome: (id: string, outcome: string) => void;
   sendMessage: (
     content: string,
-    designContext?: unknown
+    context?: unknown,
+    basis?: ComponentBasis | null
   ) => Promise<AIMessage | null>;
 }
 
 let msgCounter = 0;
+
+const WELCOME =
+  "Hi! I'm Motif AI. I can review the component you have open, suggest changes to it made of your repository's own tokens, and suggest new tokens. You choose what to apply, and everything still goes out as a pull request. Try asking me to:\n\n- **Make the heading larger and the text muted**\n- **Replace the raw values with tokens**\n- **Is this component accessible?**\n- **Suggest a success color scale**";
 
 export const useAIStore = create<AIStore>((set, get) => ({
   messages: [
     {
       id: "welcome",
       role: "assistant",
-      content:
-        "Hi! I'm Motif AI. I can help you generate UI layouts, suggest design tokens, or critique your designs. Try asking me to:\n\n- **Generate a card component**\n- **Create a navigation bar**\n- **Suggest a color system for a fintech app**\n- **Review this layout for accessibility**",
+      content: WELCOME,
       timestamp: Date.now(),
     },
   ],
@@ -57,20 +64,21 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
   setLoading: (loading) => set({ isLoading: loading }),
 
+  setOutcome: (id, outcome) => set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, outcome } : m)) })),
+
   clearMessages: () =>
     set({
       messages: [
         {
           id: "welcome",
           role: "assistant",
-          content:
-            "Hi! I'm Motif AI. How can I help with your design?",
+          content: WELCOME,
           timestamp: Date.now(),
         },
       ],
     }),
 
-  sendMessage: async (content, designContext) => {
+  sendMessage: async (content, context, basis = null) => {
     const { messages } = get();
 
     get().addMessage({ role: "user", content });
@@ -87,7 +95,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, designContext }),
+        body: JSON.stringify({ messages: apiMessages, context }),
       });
 
       const data = await res.json();
@@ -106,6 +114,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
         role: "assistant",
         content: data.text,
         structured: data.structured,
+        basis,
       };
       get().addMessage(assistantMsg);
       set({ isLoading: false });

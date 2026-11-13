@@ -1,15 +1,16 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { Sparkles, Send, Loader2, Wand2, RefreshCw } from "lucide-react";
+import { Sparkles, Send, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAIStore, type AIMessage } from "@/store/ai";
-import { useLibraryStore, activeComponent } from "@/store/library";
-import { useDesignSystemStore } from "@/store/design-system";
+import { componentContext, projectContext } from "@/lib/ai/context";
+import { useChatSource } from "./chat-source";
+import { EditProposal, TokenProposal } from "./ProposalCards";
 
 const QUICK_PROMPTS = [
   "Suggest a color scale for a fintech brand",
-  "Suggest a spacing and type scale",
+  "Replace the raw values in this component with tokens",
   "What would you improve in this component?",
   "Is this component accessible?",
 ];
@@ -17,15 +18,8 @@ const QUICK_PROMPTS = [
 function MessageBubble({ message }: { message: AIMessage }) {
   const isUser = message.role === "user";
   const { structured } = message;
-  const { loadTokens } = useDesignSystemStore();
-
-  const handleApply = () => {
-    if (!structured) return;
-
-    if (structured.action === "tokens" && structured.tokens) {
-      loadTokens(structured.tokens as Parameters<typeof loadTokens>[0]);
-    }
-  };
+  // The JSON of a suggestion is shown as the card under the reply, not as text.
+  const text = structured ? message.content.replace(/```json[\s\S]*?```/g, "").trim() : message.content;
 
   return (
     <div className={cn("flex gap-2 py-2", isUser ? "flex-row-reverse" : "flex-row")}>
@@ -46,7 +40,7 @@ function MessageBubble({ message }: { message: AIMessage }) {
           )}
         >
           <div className="prose-ai">
-            {message.content.split("\n").map((line, i) => {
+            {text.split("\n").map((line, i) => {
               if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold">{line.slice(2, -2)}</p>;
               if (line.startsWith("- ")) return <p key={i} className="pl-3 text-text-secondary">• {line.slice(2)}</p>;
               if (line.startsWith("#")) return <p key={i} className="font-semibold text-text-primary">{line.replace(/^#+\s/, "")}</p>;
@@ -55,15 +49,8 @@ function MessageBubble({ message }: { message: AIMessage }) {
           </div>
         </div>
 
-        {structured && (
-          <button
-            onClick={handleApply}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 rounded-md transition-colors"
-          >
-            <Wand2 size={11} />
-            {structured.action === "tokens" ? "Apply Tokens" : "Apply"}
-          </button>
-        )}
+        {structured?.action === "edit" && <EditProposal message={message} />}
+        {structured?.action === "tokens" && <TokenProposal message={message} />}
       </div>
     </div>
   );
@@ -71,7 +58,7 @@ function MessageBubble({ message }: { message: AIMessage }) {
 
 export default function ChatView() {
   const { messages, isLoading, inputValue, setInputValue, sendMessage, clearMessages } = useAIStore();
-  const component = useLibraryStore(activeComponent);
+  const src = useChatSource();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -83,12 +70,15 @@ export default function ChatView() {
     const content = inputValue.trim();
     if (!content || isLoading) return;
 
-    // What is open, so a question about "this component" has something to be about.
-    const context = component
-      ? { component: { name: component.name, file: component.file, props: component.props.map((p) => p.name), variants: component.variants.map((v) => ({ name: v.name, options: v.options })) } }
-      : {};
-
-    await sendMessage(content, context);
+    // What is open, so a question about "this component" has something to be about, and what it can be made of.
+    let sent = projectContext(src.index, src.theme);
+    if (src.component && src.source) {
+      const code = await src.readCode(src.component.file);
+      if (code !== null) {
+        try { sent = await componentContext({ component: src.component, scope: src.scope, code, index: src.index, theme: src.theme, values: src.values }); } catch { /* the file doesn't read: only the tokens are told */ }
+      }
+    }
+    await sendMessage(content, sent.context, sent.basis);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -113,7 +103,7 @@ export default function ChatView() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-32 gap-2">
             <Sparkles size={20} className="text-accent/40" />
-            <span className="text-xs text-text-tertiary text-center">Ask me to suggest tokens<br />or review a component</span>
+            <span className="text-xs text-text-tertiary text-center">Ask me to review the open component,<br />change it with your tokens, or suggest tokens</span>
           </div>
         )}
         {messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)}

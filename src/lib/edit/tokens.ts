@@ -108,6 +108,9 @@ export function buildTokenIndex(
 
 // ── Values ────────────────────────────────────────────────────────────────────
 
+// The theme the controls and the assistant read token values in: dark when the stage shows it and the repository has one.
+export const activeTheme = (index: TokenIndex, dark: boolean): string => (dark && index.themes.includes("dark") ? "dark" : index.themes[0] ?? "default");
+
 const valueIn = (choice: TokenChoice, theme: string) => choice.values[theme] ?? Object.values(choice.values)[0] ?? "";
 
 // px for a length, including the simple sums design systems write: `calc(0.625rem - 4px)`, `calc(infinity * 1px)`.
