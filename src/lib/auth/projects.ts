@@ -6,11 +6,12 @@ import { MAX_PROJECTS, type ProjectPayload } from "../sync/payload";
 // doesn't read the tokens or the documentation, and a change is taken only from a device that had the latest version.
 
 const TOMBSTONE_DAYS = 90;
-// Devices saving the same project at the same moment can make the database give up on one of the transactions
-// (a deadlock); trying that one again finds what the other did.
+// Devices saving the same project at the same moment can make the database give up on one of the transactions;
+// trying that one again finds what the other did.
 const retryable = (err: unknown) => {
-  const e = err as { errno?: number; code?: string } | null;
-  return e?.errno === 1213 || e?.errno === 1205 || e?.code === "ER_LOCK_DEADLOCK" || e?.code === "ER_LOCK_WAIT_TIMEOUT";
+  const code = (err as { code?: string } | null)?.code;
+  // A deadlock, or a transaction that couldn't be serialised.
+  return code === "40P01" || code === "40001";
 };
 async function withRetry<T>(work: () => Promise<T>, tries = 4): Promise<T> {
   for (let i = 1; ; i++) {

@@ -2,7 +2,7 @@
 // offered that isn't set up; a server without a database has no accounts and works as it did before.
 
 export interface AuthConfig {
-  // mysql://user:password@host:3306/database
+  // postgresql://user:password@host:5432/database (Supabase: Connect, Session pooler)
   databaseUrl: string;
   // Where this site is served, for the addresses the providers send people back to.
   appUrl: string | null;
