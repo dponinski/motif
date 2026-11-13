@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Editor from "./Editor";
 import { AccountNotices, useAccountInit } from "@/components/git/AccountControls";
+import AuthDialog from "@/components/auth/AuthDialog";
 import { useProjectSession } from "@/store/project-session";
 
 export default function EditorRoot() {
@@ -24,6 +25,7 @@ export default function EditorRoot() {
   return (
     <>
       <AccountNotices />
+      <AuthDialog />
       <Editor projectId={projectId} />
     </>
   );

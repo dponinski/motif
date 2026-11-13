@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { TokenSource } from "../lib/github";
 import { getViewer } from "../lib/github-app";
+import { AUTH_NOTICES } from "./auth-notices";
 
 // Who is signed in with the GitHub App, in this browser. Nothing here is kept: the sign-in itself is a cookie the
 // page can't read, and the access token it gives is asked for from the server and held in memory only.
@@ -26,7 +27,8 @@ interface Account {
   notice: string | null;
   // Asks the server who is signed in, and for a token that works; a token GitHub has refused is renewed.
   load: (renew?: boolean) => Promise<void>;
-  signIn: (returnTo?: string) => void;
+  // `purpose` "login" signs in to Motif with GitHub as well as connecting its repositories.
+  signIn: (returnTo?: string, purpose?: "connect" | "login") => void;
   signOut: () => Promise<void>;
   setNotice: (notice: string | null) => void;
 }
@@ -91,9 +93,9 @@ export const useAccount = create<Account>()((set, get) => {
       await run;
     },
 
-    signIn: (returnTo) => {
+    signIn: (returnTo, purpose = "connect") => {
       const to = returnTo ?? `${window.location.pathname}${window.location.search}`;
-      window.location.assign(`/api/github/login?returnTo=${encodeURIComponent(to)}`);
+      window.location.assign(`/api/github/login?returnTo=${encodeURIComponent(to)}${purpose === "login" ? "&purpose=login" : ""}`);
     },
 
     signOut: async () => {
@@ -125,9 +127,11 @@ export const appTokenSource: TokenSource = {
 export function takeSignInError() {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
-  const reason = url.searchParams.get("github_error");
-  if (!reason) return;
+  const github = url.searchParams.get("github_error");
+  const account = url.searchParams.get("auth_error");
+  if (!github && !account) return;
   url.searchParams.delete("github_error");
+  url.searchParams.delete("auth_error");
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  useAccount.getState().setNotice(NOTICES[reason] ?? NOTICES.failed);
+  useAccount.getState().setNotice(account ? AUTH_NOTICES[account] ?? AUTH_NOTICES.failed : NOTICES[github!] ?? NOTICES.failed);
 }

@@ -88,13 +88,16 @@ export function sanitizeReturnTo(value: string | null | undefined): string {
   return value.length > 300 ? "/" : value;
 }
 
-export const encodeState = (state: string, returnTo: string) => b64(JSON.stringify({ s: state, to: returnTo }));
+// What a sign-in is for: only to use the person's repositories ("connect"), or also to sign them in to Motif ("login").
+export type Purpose = "connect" | "login";
 
-export function decodeState(text: string | undefined | null): { state: string; returnTo: string } | null {
+export const encodeState = (state: string, returnTo: string, purpose: Purpose = "connect") => b64(JSON.stringify({ s: state, to: returnTo, ...(purpose === "login" ? { for: "login" } : {}) }));
+
+export function decodeState(text: string | undefined | null): { state: string; returnTo: string; purpose: Purpose } | null {
   if (!text) return null;
   try {
-    const raw = JSON.parse(unb64(text)) as { s?: unknown; to?: unknown };
-    return typeof raw.s === "string" && raw.s ? { state: raw.s, returnTo: sanitizeReturnTo(typeof raw.to === "string" ? raw.to : "/") } : null;
+    const raw = JSON.parse(unb64(text)) as { s?: unknown; to?: unknown; for?: unknown };
+    return typeof raw.s === "string" && raw.s ? { state: raw.s, returnTo: sanitizeReturnTo(typeof raw.to === "string" ? raw.to : "/"), purpose: raw.for === "login" ? "login" : "connect" } : null;
   } catch {
     return null;
   }

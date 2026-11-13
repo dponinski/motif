@@ -8,6 +8,7 @@ const config: OAuthConfig = { clientId: "Iv1.abc", clientSecret: "shh", slug: "m
 const NOW = 1_800_000_000_000;
 const session = (extra: Partial<Session> = {}): Session => ({ access: "ghu_a", accessExpires: NOW + 8 * 3600_000, refresh: "ghr_a", refreshExpires: NOW + 180 * 86400_000, ...extra });
 
+const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString("base64url");
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 afterEach(() => forgetRefreshes());
@@ -76,8 +77,11 @@ describe("where to go back to", () => {
   });
 
   it("is kept with the state, and read back the same", () => {
-    expect(decodeState(encodeState("abc", "/editor/x"))).toEqual({ state: "abc", returnTo: "/editor/x" });
-    expect(decodeState(encodeState("abc", "https://evil.test"))).toEqual({ state: "abc", returnTo: "/" });
+    expect(decodeState(encodeState("abc", "/editor/x"))).toEqual({ state: "abc", returnTo: "/editor/x", purpose: "connect" });
+    expect(decodeState(encodeState("abc", "https://evil.test"))).toEqual({ state: "abc", returnTo: "/", purpose: "connect" });
+    // A sign-in that is also to sign in to Motif says so, and only that exact word does.
+    expect(decodeState(encodeState("abc", "/", "login"))).toEqual({ state: "abc", returnTo: "/", purpose: "login" });
+    expect(decodeState(b64({ s: "abc", to: "/", for: "admin" }))).toEqual({ state: "abc", returnTo: "/", purpose: "connect" });
     expect(decodeState(undefined)).toBeNull();
     expect(decodeState("garbage")).toBeNull();
     expect(decodeState(Buffer.from(JSON.stringify({ s: "" })).toString("base64url"))).toBeNull();

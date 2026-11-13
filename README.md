@@ -42,6 +42,28 @@ Instead of creating and pasting an access token for every repository, a person c
 
 The server keeps what it needs to share a renewal in memory, so it expects to run as one process. A static export (the desktop build) has no server, so there is no sign-in there and access tokens are used.
 
+## Accounts
+
+Without a database, Motif has no accounts: it is a single-user tool, as before, and everything is kept in the browser. With `DATABASE_URL` set, people can sign in to Motif itself (not just to GitHub for repositories) and the assistant is only for people who have. It needs a MySQL or MariaDB database (the tables are made on first use). Who may sign in is a list you control; there is no sign-up.
+
+| Variable | |
+| --- | --- |
+| `DATABASE_URL` | `mysql://user:password@host:3306/database`. Turns accounts on. |
+| `ALLOWED_EMAILS` | Who may sign in: addresses and `@domain` entries separated by commas or spaces (`ada@example.com, @acme.io`). **Empty means nobody**: the sign-in dialog says so. A person is matched on an address their provider has *verified*, so the same person signing in with email, Google, Apple and GitHub is one account. The list is checked again on every request, so removing someone ends their sessions. |
+| `APP_URL` | Where the site is served (`https://motif.example.com`). Needed behind a proxy and for the callback addresses below. |
+| `SMTP_URL`, `MAIL_FROM` | Turns on **email links**: `smtps://user:pass@smtp.example.com:465`. A link works once, for 15 minutes, opens a page that asks for a press (so mail scanners can't use it up), and is only sent to addresses on the list, with the same answer shown for any address. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Turns on **Google**. In the Google Cloud console create an OAuth client of type *Web application* with the redirect URI `APP_URL/api/auth/google/callback`. |
+| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Turns on **Apple** (needs a paid Apple Developer membership and an https site). Create a Services ID (that is the client id) with the return URL `APP_URL/api/auth/apple/callback`, and a *Sign in with Apple* key (the `.p8` file is the private key; write its line breaks as `\n` if it goes in one line). People who hide their email from the app can't be matched to the list; they are told to share it. |
+| GitHub | Uses the GitHub App of "Signing in with GitHub". Give the app the account permission **Email addresses: Read-only**; without it nobody can sign in that way, as there is no verified address to go by. |
+| `CHAT_PER_HOUR` | How many assistant messages one person may send an hour (default 60, `0` for no limit). |
+| `AI_PUBLIC` | Without a database the assistant is open in development and **closed in production** (it spends your Anthropic key); `AI_PUBLIC=true` opens it to anyone who reaches the site. |
+
+How it is kept safe: a session is a random value in an `HttpOnly` cookie of which only a hash is stored; it lasts 30 days from the last visit; sign-in and the assistant refuse requests that don't come from the app itself; links, sign-in attempts and chat messages are rate limited per address and per place; Google and Apple sign-ins use a state, a nonce and (Google) PKCE and check the ID token against the provider's keys; errors are never put in the page beyond a short reason.
+
+Preview deployments get their own address, so Google, Apple and GitHub sign-in work there only if that address's callback URLs are registered with the provider. Email links work anywhere.
+
+Tests that use a database run when `TEST_DATABASE_URL` points at an empty one (`TEST_DATABASE_URL=mysql://user:pw@127.0.0.1:3306/motif_test npm test`) and are skipped without it.
+
 ## Documentation
 
 The Docs view in the editor builds design system documentation from the project. Every token category has a page from the start (swatches, type, spacing, radius and shadow specimens), and so does every imported repository component (see below); add your own pages and blocks for principles, guidelines and do / don't examples. Preview shows the finished site and Export HTML downloads it as a single file. Docs are saved with the project.
@@ -98,7 +120,7 @@ Open a repository component and press **Edit** in the stage toolbar. Click any e
 
 ## The assistant
 
-**Chat** (the sparkle in the rail, or Ctrl/Cmd+K) is an assistant for the design system. It needs `ANTHROPIC_API_KEY` set on the server; without it the chat says so. Each question is sent with what the assistant needs to answer about this project, and nothing else: the open component (its props and variants, and its elements with their classes and text), and the repository's tokens with what each is worth in the theme that is showing. It does not receive the repository's source files, the access token or where the code is kept. Anything in that context comes from the repository and is marked to the model as data, not instructions.
+**Chat** (the sparkle in the rail, or Ctrl/Cmd+K) is an assistant for the design system. It needs `ANTHROPIC_API_KEY` set on the server; without it the chat says so. Where [accounts](#accounts) are set up, it is for people who are signed in, and limited per person. Each question is sent with what the assistant needs to answer about this project, and nothing else: the open component (its props and variants, and its elements with their classes and text), and the repository's tokens with what each is worth in the theme that is showing. It does not receive the repository's source files, the access token or where the code is kept. Anything in that context comes from the repository and is marked to the model as data, not instructions.
 
 It can answer in words (review a component for accessibility or consistency, naming, advice) and it can **suggest**, as a card under its reply that you choose to apply or dismiss:
 
