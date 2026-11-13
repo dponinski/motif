@@ -44,7 +44,7 @@ export async function findIdentity(db: Db, provider: string, subject: string): P
 }
 
 // Whether an error is the database saying a row with that key is already there.
-export const isDuplicate = (err: unknown) => (err as { code?: string; errno?: number } | null)?.code === "ER_DUP_ENTRY" || (err as { errno?: number } | null)?.errno === 1062;
+export const isDuplicate = (err: unknown) => (err as { code?: string } | null)?.code === "23505";
 
 export async function createUser(db: Db, input: { email: string; name?: string | null; avatar?: string | null }, now = Date.now()): Promise<User> {
   const id = nanoid(22);
@@ -64,7 +64,7 @@ export async function touchUser(db: Db, id: string, input: { name?: string | nul
 
 export async function linkIdentity(db: Db, userId: string, provider: string, subject: string, email: string | null, now = Date.now()) {
   // Linking twice is not an error: the same person signing in again.
-  await db.exec("INSERT IGNORE INTO identities (provider, subject, user_id, email, created_at) VALUES (?, ?, ?, ?, ?)", [provider, subject, userId, email, now]);
+  await db.exec("INSERT INTO identities (provider, subject, user_id, email, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (provider, subject) DO NOTHING", [provider, subject, userId, email, now]);
 }
 
 export async function identitiesOf(db: Db, userId: string): Promise<{ provider: string; subject: string; email: string | null }[]> {
@@ -141,7 +141,7 @@ export async function hit(db: Db, bucket: string, limit: number, windowMs: numbe
   return db.tx(async (tx) => {
     // An old bucket is started again; one in its window counts up.
     await tx.exec(
-      "INSERT INTO rate_buckets (bucket, hits, expires_at) VALUES (?, 1, ?) ON DUPLICATE KEY UPDATE hits = IF(expires_at <= ?, 1, hits + 1), expires_at = IF(expires_at <= ?, ?, expires_at)",
+      "INSERT INTO rate_buckets (bucket, hits, expires_at) VALUES (?, 1, ?) ON CONFLICT (bucket) DO UPDATE SET hits = CASE WHEN rate_buckets.expires_at <= ? THEN 1 ELSE rate_buckets.hits + 1 END, expires_at = CASE WHEN rate_buckets.expires_at <= ? THEN ? ELSE rate_buckets.expires_at END",
       [key, now + windowMs, now, now, now + windowMs]
     );
     const rows = await tx.query<{ hits: number; expires_at: number }>("SELECT hits, expires_at FROM rate_buckets WHERE bucket = ?", [key]);

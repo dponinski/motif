@@ -44,11 +44,12 @@ The server keeps what it needs to share a renewal in memory, so it expects to ru
 
 ## Accounts
 
-Without a database, Motif has no accounts: it is a single-user tool, as before, and everything is kept in the browser. With `DATABASE_URL` set, people can sign in to Motif itself (not just to GitHub for repositories) and the assistant is only for people who have. It needs a MySQL or MariaDB database (the tables are made on first use). Who may sign in is a list you control; there is no sign-up.
+Without a database, Motif has no accounts: it is a single-user tool, as before, and everything is kept in the browser. With `DATABASE_URL` set, people can sign in to Motif itself (not just to GitHub for repositories) and the assistant is only for people who have. It needs a PostgreSQL database (the tables are made on first use); Supabase is what it is set up for, see below. Who may sign in is a list you control; there is no sign-up.
 
 | Variable | |
 | --- | --- |
-| `DATABASE_URL` | `mysql://user:password@host:3306/database`. Turns accounts on. |
+| `DATABASE_URL` | `postgresql://user:password@host:5432/database`. Turns accounts on. With Supabase: **Connect → Session pooler** and your database password (see below). |
+| `DATABASE_CA` | Optional: the CA certificate (PEM; write its line breaks as `\n`) to check the database server against. Without it the connection is encrypted but the server isn't verified. |
 | `ALLOWED_EMAILS` | Who may sign in: addresses and `@domain` entries separated by commas or spaces (`ada@example.com, @acme.io`). **Empty means nobody**: the sign-in dialog says so. A person is matched on an address their provider has *verified*, so the same person signing in with email, Google, Apple and GitHub is one account. The list is checked again on every request, so removing someone ends their sessions. |
 | `APP_URL` | Where the site is served (`https://motif.example.com`). Needed behind a proxy and for the callback addresses below. |
 | `SMTP_URL`, `MAIL_FROM` | Turns on **email links**: `smtps://user:pass@smtp.example.com:465`. A link works once, for 15 minutes, opens a page that asks for a press (so mail scanners can't use it up), and is only sent to addresses on the list, with the same answer shown for any address. |
@@ -59,6 +60,14 @@ Without a database, Motif has no accounts: it is a single-user tool, as before, 
 | `AI_PUBLIC` | Without a database the assistant is open in development and **closed in production** (it spends your Anthropic key); `AI_PUBLIC=true` opens it to anyone who reaches the site. |
 
 How it is kept safe: a session is a random value in an `HttpOnly` cookie of which only a hash is stored; it lasts 30 days from the last visit; sign-in and the assistant refuse requests that don't come from the app itself; links, sign-in attempts and chat messages are rate limited per address and per place; Google and Apple sign-ins use a state, a nonce and (Google) PKCE and check the ID token against the provider's keys; errors are never put in the page beyond a short reason.
+
+### Using Supabase as the database
+
+Create the project, then in **Connect** copy the **Session pooler** connection string (`postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`) into `DATABASE_URL`. Use the pooler, not the "Direct connection": direct connections are IPv6-only unless you add Supabase's IPv4 add-on, and most hosts (Hostinger included) are IPv4. The transaction pooler (port 6543) works too.
+
+- **The tables are made by the app** the first time it connects (and kept up to date when a new version needs more), so there is nothing to run by hand. They live in the `public` schema with **row level security on and no policies, and no rights for the `anon` and `authenticated` roles**: Supabase's public API (the one the publishable key opens) can't read or write any of them. Only the server, through `DATABASE_URL`, can. Don't add policies or grants to them: the sessions, sign-in links and saved projects are in there.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are only for the Supabase client in `src/utils/supabase`, which nothing uses yet. The database for accounts and projects doesn't need them.
+- Keep the database password out of git: it goes in the host's environment variables (or `.env.local`), never in `NEXT_PUBLIC_` ones.
 
 ### Projects saved to your account
 
@@ -72,7 +81,7 @@ Signed in, a person's projects are saved to their account and kept the same on e
 
 Preview deployments get their own address, so Google, Apple and GitHub sign-in work there only if that address's callback URLs are registered with the provider. Email links work anywhere.
 
-Tests that use a database run when `TEST_DATABASE_URL` points at an empty one (`TEST_DATABASE_URL=mysql://user:pw@127.0.0.1:3306/motif_test npm test`) and are skipped without it.
+Tests that use a database run when `TEST_DATABASE_URL` points at an empty one (`TEST_DATABASE_URL=postgresql://user:pw@127.0.0.1:5432/motif_test npm test`) and are skipped without it.
 
 ## Documentation
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { allowedEmail, isAllowed, normalizeEmail } from "./allowlist";
 import { parseAllowed, providersOf, readAuthConfig } from "./config";
-import { MIGRATIONS, closeAll, createPool, migrate, wrap, type Db } from "./db";
+import { MIGRATIONS, closeAll, createPool, migrate, poolConfig, wrap, type Db } from "./db";
 import { completeSignIn } from "./signin";
 import { getProject, listProjects, removeProject, saveProject } from "./projects";
 import type { ProjectPayload } from "../sync/payload";
@@ -10,8 +10,8 @@ import {
   findUserByEmail, getSession, getUser, hashToken, hit, identitiesOf, linkIdentity, newToken, pruneExpired,
 } from "./store";
 
-// The tests that need a database run when TEST_DATABASE_URL points at an empty MySQL or MariaDB one, for example
-// mysql://user:password@127.0.0.1:3306/motif_test. Without it they are skipped.
+// The tests that need a database run when TEST_DATABASE_URL points at an empty PostgreSQL one, for example
+// postgresql://user:password@127.0.0.1:5432/motif_test. Without it they are skipped.
 const URL = process.env.TEST_DATABASE_URL;
 
 describe("who may sign in", () => {
@@ -60,7 +60,7 @@ describe("what the server is told", () => {
   });
 
   it("offers only the ways to sign in that it has everything for", () => {
-    const base = { DATABASE_URL: "mysql://u:p@h/d" };
+    const base = { DATABASE_URL: "postgresql://u:p@h/d" };
     const none = readAuthConfig(base)!;
     expect(none.allowed).toEqual([]);
     expect(providersOf(none, false)).toEqual({ github: false, google: false, apple: false, email: false });
@@ -71,7 +71,7 @@ describe("what the server is told", () => {
 
   it("reads Apple's key with its line breaks, the issuers, the site's address and the chat limit", () => {
     const c = readAuthConfig({
-      DATABASE_URL: "mysql://u:p@h/d", APP_URL: "https://motif.example/", APPLE_CLIENT_ID: "com.example.web", APPLE_TEAM_ID: "TEAM", APPLE_KEY_ID: "KEY", APPLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----",
+      DATABASE_URL: "postgresql://u:p@h/d", APP_URL: "https://motif.example/", APPLE_CLIENT_ID: "com.example.web", APPLE_TEAM_ID: "TEAM", APPLE_KEY_ID: "KEY", APPLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----",
       GOOGLE_CLIENT_ID: "g", GOOGLE_CLIENT_SECRET: "s", GOOGLE_ISSUER: "http://localhost:9/", CHAT_PER_HOUR: "5", ALLOWED_EMAILS: "ada@example.com",
     })!;
     expect(c.appUrl).toBe("https://motif.example");
@@ -79,7 +79,31 @@ describe("what the server is told", () => {
     expect(c.apple?.issuer).toBe("https://appleid.apple.com");
     expect(c.google?.issuer).toBe("http://localhost:9");
     expect(c.chatPerHour).toBe(5);
-    expect(readAuthConfig({ DATABASE_URL: "mysql://u:p@h/d", CHAT_PER_HOUR: "0" })!.chatPerHour).toBe(60);
+    expect(readAuthConfig({ DATABASE_URL: "postgresql://u:p@h/d", CHAT_PER_HOUR: "0" })!.chatPerHour).toBe(60);
+  });
+});
+
+describe("connecting to the database", () => {
+  it("reads a connection string into the pool's settings, with the user and password decoded", () => {
+    expect(poolConfig("postgresql://postgres.abcd:p%40ss%2Fword@aws-0-us-west-2.pooler.supabase.com:5432/postgres", {})).toMatchObject({
+      host: "aws-0-us-west-2.pooler.supabase.com", port: 5432, user: "postgres.abcd", password: "p@ss/word", database: "postgres",
+    });
+    expect(poolConfig("postgres://u:p@db.example.com/motif", {})).toMatchObject({ port: 5432, database: "motif" });
+  });
+
+  it("uses TLS for any machine but this one, and checks the server only when it has its certificate", () => {
+    expect(poolConfig("postgresql://u:p@db.example.com/d", {}).ssl).toEqual({ rejectUnauthorized: false });
+    expect(poolConfig("postgresql://u:p@db.example.com/d", { DATABASE_CA: "-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----" }).ssl).toEqual({ ca: "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----", rejectUnauthorized: true });
+    expect(poolConfig("postgresql://u:p@localhost/d", {}).ssl).toBe(false);
+    expect(poolConfig("postgresql://u:p@127.0.0.1/d", {}).ssl).toBe(false);
+    // `sslmode` in the string doesn't switch encryption off for a real host, unless it says disable on purpose.
+    expect(poolConfig("postgresql://u:p@db.example.com/d?sslmode=require", {}).ssl).toEqual({ rejectUnauthorized: false });
+    expect(poolConfig("postgresql://u:p@db.example.com/d?sslmode=disable", {}).ssl).toBe(false);
+  });
+
+  it("says what is wrong with a setting that isn't a PostgreSQL connection string", () => {
+    expect(() => poolConfig("mysql://u:p@h/d", {})).toThrow(/PostgreSQL connection string/);
+    expect(() => poolConfig("not a url", {})).toThrow(/isn't a connection string/);
   });
 });
 
@@ -89,18 +113,31 @@ describe.skipIf(!URL)("accounts in a database", () => {
 
   beforeAll(async () => {
     pool = createPool(URL!);
-    for (const t of ["projects", "sessions", "identities", "login_tokens", "rate_buckets", "users", "schema_migrations"]) await pool.query(`DROP TABLE IF EXISTS ${t}`);
+    for (const t of ["projects", "sessions", "identities", "login_tokens", "rate_buckets", "users", "schema_migrations"]) await pool.query(`DROP TABLE IF EXISTS ${t} CASCADE`);
     await migrate(pool);
     db = wrap(pool);
   });
   afterAll(async () => { await pool.end(); await closeAll(); });
   beforeEach(async () => {
-    await pool.query("SET FOREIGN_KEY_CHECKS = 0");
-    for (const t of ["projects", "sessions", "identities", "login_tokens", "rate_buckets", "users"]) await pool.query(`TRUNCATE TABLE ${t}`);
-    await pool.query("SET FOREIGN_KEY_CHECKS = 1");
+    await pool.query("TRUNCATE projects, sessions, identities, login_tokens, rate_buckets, users CASCADE");
   });
 
   describe("the schema", () => {
+    it("has row level security on for every table, so Supabase's public API can't read any of them", async () => {
+      const tables = await db.query<{ relname: string; relrowsecurity: boolean }>(
+        "SELECT c.relname, c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind = 'r' AND n.nspname = current_schema()");
+      expect(tables.map((t) => t.relname).sort()).toEqual(["identities", "login_tokens", "projects", "rate_buckets", "schema_migrations", "sessions", "users"]);
+      expect(tables.filter((t) => !t.relrowsecurity)).toEqual([]);
+      expect(await db.query("SELECT 1 FROM pg_policies WHERE schemaname = current_schema()")).toEqual([]);
+    });
+
+    it("is changed all or not at all: a step that fails leaves nothing of it behind", async () => {
+      const bad = [{ version: 200, sql: ["CREATE TABLE migration_half (id INT)", "SELECT nope FROM nowhere"] }];
+      await expect(migrate(pool, [...MIGRATIONS, ...bad])).rejects.toThrow();
+      expect(await db.query("SELECT 1 FROM pg_tables WHERE tablename = 'migration_half'")).toEqual([]);
+      expect(await db.query("SELECT 1 FROM schema_migrations WHERE version = 200")).toEqual([]);
+    });
+
     it("is made once and brought up to date without being made again", async () => {
       expect(await migrate(pool)).toEqual([]);
       const rows = await db.query<{ version: number }>("SELECT version FROM schema_migrations");
@@ -108,7 +145,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
     });
 
     it("applies a new step on top, and only that one", async () => {
-      const extra = [...MIGRATIONS, { version: 99, sql: ["CREATE TABLE IF NOT EXISTS migration_probe (id INT) ENGINE=InnoDB"] }];
+      const extra = [...MIGRATIONS, { version: 99, sql: ["CREATE TABLE IF NOT EXISTS migration_probe (id INT)"] }];
       expect(await migrate(pool, extra)).toEqual([99]);
       expect(await migrate(pool, extra)).toEqual([]);
       await pool.query("DROP TABLE migration_probe");
@@ -116,7 +153,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
     });
 
     it("lets servers that start together take turns", async () => {
-      const probe = [{ version: 100, sql: ["CREATE TABLE migration_race (id INT) ENGINE=InnoDB"] }];
+      const probe = [{ version: 100, sql: ["CREATE TABLE migration_race (id INT)"] }];
       const runs = await Promise.all([migrate(pool, [...MIGRATIONS, ...probe]), migrate(pool, [...MIGRATIONS, ...probe]), migrate(pool, [...MIGRATIONS, ...probe])]);
       expect(runs.flat()).toEqual([100]);
       await pool.query("DROP TABLE migration_race");
@@ -441,7 +478,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
     });
 
     it("stops at 100 projects, counting only those not deleted", async () => {
-      await db.exec("INSERT INTO projects (user_id, id, name, data, version, created_at, updated_at) SELECT ?, CONCAT('b', seq), 'x', '{}', 1, 1, 1 FROM (" +
+      await db.exec("INSERT INTO projects (user_id, id, name, data, version, created_at, updated_at) SELECT ?::text, 'b' || seq, 'x', '{}', 1, 1, 1 FROM (" +
         Array.from({ length: 100 }, (_, i) => `SELECT ${i} AS seq`).join(" UNION ALL ") + ") t", [ada]);
       expect(await saveProject(db, ada, "extra", 0, payload())).toEqual({ ok: false, reason: "limit" });
       await removeProject(db, ada, "b1", 1);
