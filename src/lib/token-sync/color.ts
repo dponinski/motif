@@ -62,7 +62,7 @@ function oklabToRgb(L: number, a: number, b: number): { r: number; g: number; b:
   return { r: clamp(linearToSrgb(lin.r), 0, 1) * 255, g: clamp(linearToSrgb(lin.g), 0, 1) * 255, b: clamp(linearToSrgb(lin.b), 0, 1) * 255 };
 }
 
-function rgbToOklab({ r, g, b }: Rgba): { L: number; a: number; b: number } {
+export function rgbToOklab({ r, g, b }: Rgba): { L: number; a: number; b: number } {
   const [lr, lg, lb] = [r, g, b].map((c) => srgbToLinear(c / 255));
   const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
   const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
-import { tokenOverrides } from "@/lib/preview/overrides";
+import { changedValues, tokenOverrides } from "@/lib/preview/overrides";
 import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import { readMotifTokens } from "@/lib/token-sync/doc";
+import { EMPTY_INDEX, buildTokenIndex, type TokenIndex } from "@/lib/edit/tokens";
 import { useDesignSystemStore } from "@/store/design-system";
 import { useGitStore } from "@/store/git";
 import type { LibrarySource } from "@/store/library";
@@ -92,4 +93,19 @@ export function cachedGraph(source: LibrarySource, host: Host, reader: Parameter
 export function componentGraph(host: Host, reader: Parameters<typeof buildGraph>[0]["reader"], source: LibrarySource, file: string) {
   const graphInput = { repo: source.repo, ref: source.branch, tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles };
   return (paths: string[]) => buildGraph({ reader, entry: file, paths, instrument: true, ...graphInput });
+}
+
+// The repository's tokens, for the controls that assign them: what a class can name, and what each is worth.
+// They come from the last scan. With Motif's own changes switched on in previews, a token shows the value the
+// preview shows, so a swatch and the component it is used in never disagree.
+export function useTokenIndex(repo: string | null): TokenIndex {
+  const analysis = useGitStore((s) => s.analysis);
+  const link = useGitStore((s) => s.tokenLink);
+  const motifTokens = usePreviewStore((s) => s.motifTokens);
+  const { colors, spacing, radii, shadows } = useDesignSystemStore();
+  return useMemo(() => {
+    if (!analysis || !repo || analysis.repo !== repo) return EMPTY_INDEX;
+    const overrides = motifTokens && link && link.repo === repo ? changedValues(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base) : {};
+    return buildTokenIndex(analysis.tokens, analysis.themes, analysis.stack.tailwindVersion, overrides);
+  }, [analysis, repo, link, motifTokens, colors, spacing, radii, shadows]);
 }
