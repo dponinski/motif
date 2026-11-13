@@ -9,6 +9,7 @@ import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlo
 import { HOST_TAGS, changeTag, insertElement, unwrapElement, wrapElement, type InsertPosition } from "@/lib/edit/insert";
 import { SNIPPETS, WRAPPERS, componentSnippet } from "@/lib/edit/snippets";
 import type { LibraryComponent } from "@/lib/preview/library";
+import { activeTheme } from "@/lib/edit/tokens";
 import { useTokenIndex } from "@/components/stage/preview-core";
 import { readerFor } from "@/components/stage/reader";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
@@ -98,7 +99,7 @@ export default function ElementInspector({ component, source, connection }: { co
   const index = useTokenIndex(source.repo);
   const names = index.names;
   const dark = usePreviewStore((s) => s.dark);
-  const theme = dark && index.themes.includes("dark") ? "dark" : index.themes[0] ?? "default";
+  const theme = activeTheme(index, dark);
 
   const [info, setInfo] = useState<ElementInfo | null>(null);
   const [error, setError] = useState<string | null>(null);

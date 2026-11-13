@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAIStore } from "./ai";
 import { useDesignSystemStore, snapshotTokens } from "./design-system";
 import { useDocsStore } from "./docs";
 import { useGitStore } from "./git";
@@ -9,6 +10,8 @@ import { useProjectsStore, type Project, type ProjectData } from "./projects";
 // and back, so the stores themselves hold nothing between projects (or between visits: the project keeps it).
 
 export function loadProject(project: Project) {
+  // What was said about another project components is not about this one.
+  useAIStore.getState().clearMessages();
   useGitStore.getState().load(project.repo);
   useLibraryStore.getState().load(project.library);
   useDesignSystemStore.setState(project.tokens);
