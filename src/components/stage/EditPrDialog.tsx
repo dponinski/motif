@@ -6,7 +6,7 @@ import { ExternalLink, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { diffLines } from "@/lib/edit/diff";
 import { openTokenPr } from "@/lib/token-sync/pr";
-import { errorMessage, useGitHost } from "@/components/git/hooks";
+import { errorMessage, useCanSend, useGitHost } from "@/components/git/hooks";
 import { changedFiles, editLog, useEditStore } from "@/store/edit";
 import type { GitConnection } from "@/store/git";
 import type { LibrarySource } from "@/store/library";
@@ -29,6 +29,7 @@ const branchName = (now = Date.now()) => `motif/edit-${now.toString(36)}`;
 
 function Body({ connection, source, subject, onClose }: { connection: GitConnection; source: LibrarySource; subject: string; onClose: () => void }) {
   const host = useGitHost(connection);
+  const canSend = useCanSend(connection);
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);
   const bases = useEditStore((s) => s.bases);
@@ -106,12 +107,12 @@ function Body({ connection, source, subject, onClose }: { connection: GitConnect
         ))}
       </div>
 
-      {!connection.token && <p className="text-xs text-amber-500">Opening a pull request needs an access token with Contents and Pull requests read and write. Add one in the Git panel.</p>}
+      {!canSend && <p className="text-xs text-amber-500">Opening a pull request needs you to sign in with GitHub, or an access token with Contents and Pull requests read and write. Either is in the Git panel.</p>}
       {error && <p className="break-words text-xs text-red-400">{error}</p>}
       <button
         className="flex h-7 items-center justify-center gap-1.5 self-start rounded-md bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
         onClick={create}
-        disabled={busy || !connection.token || files.length === 0 || !title.trim()}
+        disabled={busy || !canSend || files.length === 0 || !title.trim()}
       >
         {busy && <Loader2 size={12} className="animate-spin" />}
         Create pull request

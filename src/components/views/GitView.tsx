@@ -3,14 +3,15 @@
 import { useState } from "react";
 import { Boxes, Loader2, Palette, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createGitHubClient } from "@/lib/github";
+import { clientFor, errorMessage, useBranches, useCanSend, useGitHost } from "@/components/git/hooks";
+import { SignInButton } from "@/components/git/AccountControls";
+import { useAccount } from "@/store/account";
 import { readerSource } from "@/lib/repo-scan/source";
 import { stackLine, stylingLine, supportCounts } from "@/lib/repo-scan/summary";
 import { importable } from "@/lib/preview/library";
 import { useLibraryStore } from "@/store/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import TokenSyncDialog from "@/components/git/TokenSyncDialog";
-import { errorMessage, useBranches, useGitHost } from "@/components/git/hooks";
 
 const btnPrimary = "h-7 px-3 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const btnSecondary = "h-7 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
@@ -103,6 +104,7 @@ function ScanSection({ connection, host, initialBranch, onOpenReport }: {
 
 function AddToken({ connection }: { connection: GitConnection }) {
   const connect = useGitStore((s) => s.connect);
+  const status = useAccount((s) => s.status);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +116,7 @@ function AddToken({ connection }: { connection: GitConnection }) {
     setBusy(true);
     setError(null);
     try {
-      const { canPush } = await createGitHubClient({ owner: connection.owner, repo: connection.repo, token: value }).getRepo();
+      const { canPush } = await clientFor({ owner: connection.owner, repo: connection.repo, token: value }).getRepo();
       if (!canPush) throw new Error("This token can read the repository but not write to it. It needs Contents read and write.");
       connect({ ...connection, token: value });
     } catch (err) {
@@ -125,17 +127,21 @@ function AddToken({ connection }: { connection: GitConnection }) {
   };
 
   return (
-    <form onSubmit={save} className="flex flex-col gap-3">
-      <p className="text-xs text-text-secondary leading-relaxed">
-        Opening pull requests (for token changes and component edits) needs an access token with Contents and Pull requests read and write. It is stored in this browser only.
-      </p>
-      <input className="input-sm font-mono" type="password" placeholder="github_pat_…" aria-label="Access token" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      <button type="submit" className={btnPrimary} disabled={busy || !token.trim()}>
-        {busy && <Loader2 size={12} className="animate-spin" />}
-        Add token
-      </button>
-    </form>
+    <div className="flex flex-col gap-3">
+      <SignInButton className="self-start" />
+      {status === "signed-out" && <p className="text-2xs leading-relaxed text-text-tertiary">Signs you in through the Motif GitHub App: pull requests are opened as you, on the repositories the app is installed on. Nothing to create or paste.</p>}
+      <form onSubmit={save} className="flex flex-col gap-3">
+        <p className="text-xs text-text-secondary leading-relaxed">
+          {status === "signed-out" ? "Or use an access token. " : ""}Opening pull requests (for token changes and component edits) needs an access token with Contents and Pull requests read and write. It is stored in this browser only.
+        </p>
+        <input className="input-sm font-mono" type="password" placeholder="github_pat_…" aria-label="Access token" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        <button type="submit" className={btnPrimary} disabled={busy || !token.trim()}>
+          {busy && <Loader2 size={12} className="animate-spin" />}
+          Add token
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -143,6 +149,8 @@ function AddToken({ connection }: { connection: GitConnection }) {
 
 function Connected({ connection, onOpenReport }: { connection: GitConnection; onOpenReport: () => void }) {
   const host = useGitHost(connection);
+  const canSend = useCanSend(connection);
+  const { status, login } = useAccount();
 
   return (
     <div className="flex flex-col gap-4">
@@ -155,11 +163,14 @@ function Connected({ connection, onOpenReport }: { connection: GitConnection; on
         {repoSlug(connection)}
       </a>
       <ScanSection connection={connection} host={host} initialBranch={connection.defaultBranch} onOpenReport={onOpenReport} />
-      {!connection.token && (
+      {!canSend && (
         <>
           <div className="border-t border-surface-border" />
           <AddToken connection={connection} />
         </>
+      )}
+      {!connection.token && status === "signed-in" && (
+        <p className="text-2xs leading-relaxed text-text-tertiary" data-signed-in>Signed in with GitHub{login ? ` as ${login}` : ""}: pull requests are opened as you, through the Motif GitHub App.</p>
       )}
     </div>
   );

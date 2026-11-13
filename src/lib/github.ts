@@ -73,32 +73,53 @@ function fromBase64(encoded: string): string {
 
 const encodePath = (path: string) => path.split("/").map(encodeURIComponent).join("/");
 
-// Public repositories can be read without a token; an empty token means that.
-export function createGitHubClient(conn: { owner: string; repo: string; token: string }): GitHost & RepoReader & PrHost {
+// Where a token comes from when none was typed in: the account that is signed in with the GitHub App. It can be
+// asked for a token that works now. When GitHub has refused a token, asking again with that token says so, and the
+// answer is a new one (the same new one for everyone who was refused it at the same time).
+export interface TokenSource {
+  get(refused?: string): Promise<string | null>;
+}
+
+// Public repositories can be read without a token; an empty token (and no source) means that.
+export function createGitHubClient(conn: { owner: string; repo: string; token: string; source?: TokenSource }): GitHost & RepoReader & PrHost {
   const root = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}`;
-  const authed = conn.token.length > 0;
+  // A token that was typed in is used as it is; otherwise the signed-in account's, if there is one.
+  const viaApp = conn.token.length === 0 && !!conn.source;
+  const token = async (refused?: string): Promise<string> => (conn.token || (viaApp ? await conn.source!.get(refused) : null)) ?? "";
 
   async function request<T>(path: string, init: { method?: string; body?: unknown; allow404?: boolean } = {}): Promise<T | null> {
-    const res = await fetch(root + path, {
-      method: init.method ?? "GET",
-      // GitHub marks GETs cacheable for 60s; a stale sha would defeat conflict detection.
-      cache: "no-store",
-      headers: {
-        ...(authed ? { Authorization: `Bearer ${conn.token}` } : {}),
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-    });
+    let bearer = await token();
+    let res: Response;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(root + path, {
+        method: init.method ?? "GET",
+        // GitHub marks GETs cacheable for 60s; a stale sha would defeat conflict detection.
+        cache: "no-store",
+        headers: {
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...(init.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: init.body ? JSON.stringify(init.body) : undefined,
+      });
+      // A signed-in token GitHub no longer accepts (revoked, or expired sooner than it said) is renewed once and the
+      // request made again, so a request never fails for want of a refresh.
+      if (res.status === 401 && viaApp && attempt === 0) {
+        const fresh = await token(bearer);
+        if (fresh && fresh !== bearer) { bearer = fresh; continue; }
+      }
+      break;
+    }
+    const authed = bearer.length > 0;
     if (res.status === 404 && init.allow404) return null;
     if (!res.ok) {
       const detail = await res.json().then((j) => j?.message as string | undefined, () => undefined);
       const limited = res.status === 429 || (res.status === 403 && (res.headers.get("x-ratelimit-remaining") === "0" || /rate limit/i.test(detail ?? "")));
       const message =
-        res.status === 401 ? "GitHub rejected the token" :
-        limited ? (authed ? "GitHub's rate limit was reached. Try again in a few minutes." : "GitHub's rate limit for requests without a token was reached. Add an access token to continue.") :
-        res.status === 404 ? (authed ? "Repository not found, or the token cannot access it" : "Repository not found. If it is private, connect with an access token.") :
+        res.status === 401 ? (viaApp ? "Your GitHub sign-in has expired. Sign in again." : "GitHub rejected the token") :
+        limited ? (authed ? "GitHub's rate limit was reached. Try again in a few minutes." : "GitHub's rate limit for requests without a token was reached. Add an access token or sign in with GitHub to continue.") :
+        res.status === 404 ? (viaApp && authed ? "Repository not found, or the Motif GitHub App isn't installed on it" : authed ? "Repository not found, or the token cannot access it" : "Repository not found. If it is private, sign in with GitHub or connect with an access token.") :
         detail ?? `GitHub request failed (${res.status})`;
       throw new GitHostError(message, res.status);
     }
@@ -153,7 +174,7 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     },
 
     async readText(path, ref) {
-      if (authed) return (await this.getFile(path, ref))?.text ?? null;
+      if ((await token()).length > 0) return (await this.getFile(path, ref))?.text ?? null;
       const url = `https://raw.githubusercontent.com/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}/${ref.split("/").map(encodeURIComponent).join("/")}/${encodePath(path)}`;
       const res = await fetch(url, { cache: "no-store" });
       if (res.status === 404) return null;
@@ -167,7 +188,7 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
         return { number: pr!.number, url: pr!.html_url };
       } catch (err) {
         if (err instanceof GitHostError && (err.status === 403 || err.status === 404)) {
-          throw new GitHostError("The token can't open pull requests. It needs Pull requests: read and write.", err.status);
+          throw new GitHostError(viaApp ? "The Motif GitHub App can't open pull requests here. It needs Pull requests: read and write, and to be installed on this repository." : "The token can't open pull requests. It needs Pull requests: read and write.", err.status);
         }
         throw err;
       }
