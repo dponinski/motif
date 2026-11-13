@@ -83,6 +83,16 @@ Preview deployments get their own address, so Google, Apple and GitHub sign-in w
 
 Tests that use a database run when `TEST_DATABASE_URL` points at an empty one (`TEST_DATABASE_URL=postgresql://user:pw@127.0.0.1:5432/motif_test npm test`) and are skipped without it.
 
+## Starting from an empty repository
+
+A project doesn't need a repository that already has components or tokens. Connect any repository, empty or not, and Motif **reads it by itself** when the project is first opened (the scan, and the components found in it, which appear in the Components panel). A repository with no components lands on the **build screen**: where to start, with nothing created for you.
+
+- **No commits yet.** A brand-new repository with no commits has nothing to branch from, so no pull request can be opened against it. The build screen (and the token sync dialog) then offers **Create README.md on `main`**: one explicit step that makes the first commit straight to the default branch, a README and nothing else. It is the only change Motif ever makes directly to a branch; everything after goes through a branch and a pull request. It needs sign-in with GitHub, or an access token, that can write to the repository.
+- **Tokens, from scratch.** On the Tokens screen, add colors, spacing, radii and shadows as you would anywhere. **Repo sync** sends them to the repository as a pull request that adds a stylesheet of plain CSS variables (`src/styles/tokens.css`, `:root { --primary: #3366ff; }`, with a selector per extra theme). It needs no framework and nothing to import it from: use the file wherever your application loads its styles. The preview applies your tokens as you edit them.
+- **Add a framework.** **Add a framework** (Tokens screen, and the build screen) adds a framework to the repository like a dependency, by pull request. **Tailwind CSS v4** is the first: it adds `tailwindcss` to `package.json` (a new one if there is none; an existing one is edited by text, so nothing else in it changes), a stylesheet `src/styles/tailwind.css` with `@import "tailwindcss"` (and an import of the tokens file, when Motif made one), and rewrites Motif's own tokens file so Tailwind reads the tokens as theme values (`@theme`). It refuses when the repository already has Tailwind v3 or v4. After the pull request is merged, **Read the repository again** and Motif edits styles with Tailwind's classes. What it does not do: set up the bundler of your application. It says so in the pull request, which lists what is left to do.
+
+Not here yet: building new components in Motif (the next part), other frameworks, and a single long-lived working branch for all changes.
+
 ## Documentation
 
 The Docs view in the editor builds design system documentation from the project. Every token category has a page from the start (swatches, type, spacing, radius and shadow specimens), and so does every imported repository component (see below); add your own pages and blocks for principles, guidelines and do / don't examples. Preview shows the finished site and Export HTML downloads it as a single file. Docs are saved with the project.

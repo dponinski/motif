@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowRight, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isColorValue } from "@/lib/repo-scan/summary";
+import FirstCommit from "./FirstCommit";
 import { planExport, planSync, readRepoState, type RepoState, type SyncPlan, type TokenLink } from "@/lib/token-sync/flow";
 import { displayValue, type TokenChange, type TokenConflict } from "@/lib/token-sync/merge";
 import { openTokenPr, prBody } from "@/lib/token-sync/pr";
@@ -151,7 +152,7 @@ function ImportSection({ state, repo, branch, onDone }: { state: RepoState; repo
 
 // ── Not linked yet: the repository has no tokens ──────────────────────────────
 
-function ExportSection({ state, connection, host, branch, onDone }: { state: RepoState; connection: GitConnection; host: Host; branch: string; onDone: (n: Notice) => void }) {
+function ExportSection({ state, connection, host, branch, empty, onFirstCommit, onDone }: { state: RepoState; connection: GitConnection; host: Host; branch: string; empty: boolean; onFirstCommit: () => void; onDone: (n: Notice) => void }) {
   const canSend = useCanSend(connection);
   const sets = useDesignSystemStore((s) => s.sets);
   const colors = useDesignSystemStore((s) => s.colors);
@@ -205,9 +206,10 @@ function ExportSection({ state, connection, host, branch, onDone }: { state: Rep
           </select>
         </label>
       )}
+      {empty && <FirstCommit connection={connection} onDone={onFirstCommit} />}
       {!canSend && <p className="text-xs text-amber-500">Opening a pull request needs you to sign in with GitHub, or an access token with Contents and Pull requests read and write. Either is in the Git panel.</p>}
       {error && <p className="text-xs text-red-400">{error}</p>}
-      <button className={btnPrimary} onClick={create} disabled={busy || !canSend || !setId}>
+      <button className={btnPrimary} onClick={create} disabled={busy || !canSend || !setId || empty}>
         {busy && <Loader2 size={12} className="animate-spin" />}
         Create pull request
       </button>
@@ -362,12 +364,16 @@ function Body({ connection }: { connection: GitConnection }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [empty, setEmpty] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setState(await readRepoState(host, slug, branch));
+      const next = await readRepoState(host, slug, branch);
+      // With nothing in the repository, say whether that is because it has no commits at all.
+      setEmpty(Object.keys(next.snapshot.doc).length === 0 ? await host.isEmpty().catch(() => false) : false);
+      setState(next);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -403,7 +409,7 @@ function Body({ connection }: { connection: GitConnection }) {
           ? <SyncSection link={link} state={state} connection={connection} host={host} onRefresh={refresh} notify={setNotice} />
           : Object.keys(state.snapshot.doc).length > 0
             ? <ImportSection state={state} repo={slug} branch={branch} onDone={setNotice} />
-            : <ExportSection state={state} connection={connection} host={host} branch={branch} onDone={setNotice} />
+            : <ExportSection state={state} connection={connection} host={host} branch={branch} empty={empty} onFirstCommit={refresh} onDone={setNotice} />
       )}
     </div>
   );

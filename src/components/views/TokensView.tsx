@@ -3,9 +3,10 @@
 import { useState } from "react";
 import {
   Plus, Trash2, ChevronDown, ChevronRight, X, Pencil,
-  Download, Upload, Palette, Check, GitBranch,
+  Download, Upload, Palette, Check, GitBranch, Layers,
 } from "lucide-react";
 import TokenSyncDialog from "@/components/git/TokenSyncDialog";
+import FrameworkDialog from "@/components/git/FrameworkDialog";
 import { cn } from "@/lib/utils";
 import {
   useDesignSystemStore,
@@ -237,21 +238,25 @@ function ColorGroup({
 
   return (
     <div className="mb-1">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 px-4 py-1.5 w-full text-left hover:bg-surface-subtle transition-colors"
-      >
-        {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-        <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider flex-1 capitalize">{group}</span>
-        <span className="text-2xs text-text-tertiary mr-2">{tokens.length}</span>
+      {/* The toggle and the add button are side by side: a button can't hold another button. */}
+      <div className="flex items-center w-full hover:bg-surface-subtle transition-colors">
         <button
-          className="p-0.5 rounded hover:bg-surface-overlay text-text-tertiary hover:text-text-primary"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          className="flex flex-1 min-w-0 items-center gap-1.5 pl-4 pr-1 py-1.5 text-left"
+        >
+          {expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+          <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider flex-1 capitalize">{group}</span>
+          <span className="text-2xs text-text-tertiary mr-2">{tokens.length}</span>
+        </button>
+        <button
+          className="mr-4 p-0.5 rounded hover:bg-surface-overlay text-text-tertiary hover:text-text-primary"
           title="Add color to group"
-          onClick={(e) => { e.stopPropagation(); addColor({ name: `${group}-new`, value: "#6366f1", group, setId }); }}
+          onClick={() => addColor({ name: `${group}-new`, value: "#6366f1", group, setId })}
         >
           <Plus size={9} />
         </button>
-      </button>
+      </div>
 
       {expanded && (
         <div className="pb-1">
@@ -580,6 +585,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
   const [activeTab, setActiveTab] = useState<TokenTab>("colors");
   const [showImport, setShowImport] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [frameworkOpen, setFrameworkOpen] = useState(false);
 
   const activeSet = sets.find((s) => s.id === activeSetId) ?? sets[0];
 
@@ -594,6 +600,9 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
         <div className="flex items-center gap-1">
           <button onClick={() => setSyncOpen(true)} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors">
             <GitBranch size={11} /> Repo sync
+          </button>
+          <button onClick={() => setFrameworkOpen(true)} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors">
+            <Layers size={11} /> Add a framework
           </button>
           <button onClick={() => setShowImport(!showImport)} className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors">
             <Upload size={11} /> Import
@@ -684,6 +693,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
       </div>
 
       <TokenSyncDialog open={syncOpen} onOpenChange={setSyncOpen} />
+      <FrameworkDialog open={frameworkOpen} onOpenChange={setFrameworkOpen} />
     </div>
   );
 }

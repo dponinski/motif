@@ -238,6 +238,7 @@ describe("paths and imports", () => {
     expect(newTokensPath({ ...base, styleFiles: ["src/styles/tokens.css"] })).toBe("src/styles/motif-tokens.css");
     expect(newTokensPath({ ...base, tailwindEntry: "app/globals.css", styleFiles: ["app/globals.css"] })).toBe("app/tokens.css");
     expect(newTokensPath({ ...base, stack: { entryFiles: ["src/index.ts"] } as never })).toBe("src/styles/tokens.css");
-    expect(newTokensPath(base)).toBe("styles/tokens.css");
+    expect(newTokensPath(base)).toBe("src/styles/tokens.css");
+    expect(newTokensPath({ ...base, stack: { entryFiles: ["index.ts"] } as never })).toBe("styles/tokens.css");
   });
 });

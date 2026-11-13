@@ -74,7 +74,8 @@ export function addImport(css: string, importPath: string): string | null {
 export function newTokensPath(analysis: RepoAnalysis): string {
   const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
   const anchor = analysis.tailwindEntry ?? analysis.styleFiles[0];
-  const dir = anchor !== undefined ? dirOf(anchor) : analysis.stack.entryFiles[0]?.startsWith("src/") ? "src/styles" : "styles";
+  // With nothing to go by (a repository that is only starting), tokens go where components will: under src.
+  const dir = anchor !== undefined ? dirOf(anchor) : analysis.stack.entryFiles.length > 0 && !analysis.stack.entryFiles[0].startsWith("src/") ? "styles" : "src/styles";
   const name = analysis.styleFiles.includes(`${dir ? dir + "/" : ""}tokens.css`) ? "motif-tokens.css" : "tokens.css";
   return dir ? `${dir}/${name}` : name;
 }
