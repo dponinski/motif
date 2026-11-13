@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { useAccount } from "./account";
+import { useSync } from "./sync";
 export { AUTH_NOTICES } from "./auth-notices";
 
 // Who is signed in to Motif itself (as opposed to to GitHub, for repositories: store/account.ts). Nothing here is
@@ -60,6 +61,9 @@ export const useAuth = create<Auth>()((set) => ({
   },
 
   signOut: async () => {
+    // What is saved to the account goes off this browser (after anything not yet sent is sent), so it isn't there for
+    // the next person who uses it.
+    await useSync.getState().stop({ clear: true });
     try {
       await fetch("/api/auth/logout", { method: "POST", headers: HEADERS, credentials: "same-origin" });
     } catch { /* the page is signed out either way; the cookie goes with the next successful call */ }

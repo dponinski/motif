@@ -6,6 +6,7 @@ import { GitBranch, Monitor, Moon, MoreHorizontal, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { clearLegacyStorage, useProjectsStore, type Project } from "@/store/projects";
+import { useSync } from "@/store/sync";
 import { AccountNotices, useAccountInit } from "@/components/git/AccountControls";
 import AuthDialog from "@/components/auth/AuthDialog";
 import UserMenu from "@/components/auth/UserMenu";
@@ -40,6 +41,8 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
     return () => document.removeEventListener("mousedown", close);
   }, [menu]);
 
+  // Signed in, a project is saved to the account, and deleting it deletes it everywhere.
+  const saved = useSync((s) => s.userId !== null && s.status !== "off" && !!s.meta[project.id]);
   const connection = project.repo.connection;
   const t = project.tokens;
   const tokenCount = t.colors.length + t.typography.length + t.spacing.length + t.radii.length + t.shadows.length;
@@ -107,8 +110,8 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
 
       {confirming && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-surface-raised/95 p-4 text-center" onClick={(e) => e.stopPropagation()}>
-          <p className="text-[12px] text-text-primary">Delete this project from this browser?</p>
-          <p className="text-[11px] text-text-tertiary">The repository is not touched. Unsent edits to it are kept.</p>
+          <p className="text-[12px] text-text-primary">{saved ? "Delete this project from your account?" : "Delete this project from this browser?"}</p>
+          <p className="text-[11px] text-text-tertiary">{saved ? "It is removed from all your devices. The repository is not touched." : "The repository is not touched. Unsent edits to it are kept."}</p>
           <div className="flex gap-2">
             <button className="h-7 rounded-md border border-surface-border px-3 text-[12px] text-text-secondary hover:bg-surface-subtle" onClick={() => setConfirming(false)}>Cancel</button>
             <button className="h-7 rounded-md bg-red-500 px-3 text-[12px] font-medium text-white hover:bg-red-500/90" onClick={() => remove(project.id)}>Delete</button>

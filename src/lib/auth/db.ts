@@ -67,6 +67,27 @@ export const MIGRATIONS: { version: number; sql: string[] }[] = [
       ) ${ENGINE}`,
     ],
   },
+  {
+    version: 2,
+    sql: [
+      // A person's projects. What is kept is the JSON of what they made (see lib/sync/payload.ts); the version goes
+      // up with every change, so a device that was behind finds out instead of overwriting. A deleted project stays
+      // as a row without its content for a while, so devices that still have it find out it was deleted.
+      `CREATE TABLE projects (
+        user_id CHAR(22) NOT NULL,
+        id VARCHAR(32) NOT NULL,
+        name VARCHAR(200) NOT NULL,
+        data MEDIUMTEXT NOT NULL,
+        version INT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        deleted_at BIGINT NULL,
+        PRIMARY KEY (user_id, id),
+        KEY projects_deleted (deleted_at),
+        CONSTRAINT fk_projects_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      ) ${ENGINE}`,
+    ],
+  },
 ];
 
 type Runner = Pick<mysql.Pool, "query">;

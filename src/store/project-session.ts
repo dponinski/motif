@@ -5,6 +5,7 @@ import { useDocsStore } from "./docs";
 import { useGitStore } from "./git";
 import { useLibraryStore } from "./library";
 import { useProjectsStore, type Project, type ProjectData } from "./projects";
+import { useSync } from "./sync";
 
 // The editor works on one project at a time, in the same stores it always used. These move a project into them
 // and back, so the stores themselves hold nothing between projects (or between visits: the project keeps it).
@@ -62,6 +63,17 @@ export function useProjectSession(projectId: string): "loading" | "ready" | "mis
       timer = setTimeout(flush, SAVE_DELAY);
     };
 
+    // Lets the account sync put the editor's latest into the project before it compares, and put a change that came
+    // from another device into the editor.
+    useSync.getState().setOpen({
+      id: projectId,
+      flush,
+      reload: (updated) => {
+        if (timer) { clearTimeout(timer); timer = null; }
+        loadProject(updated);
+      },
+    });
+
     const unsubscribe = [
       useGitStore.subscribe(schedule),
       useDesignSystemStore.subscribe(schedule),
@@ -73,6 +85,7 @@ export function useProjectSession(projectId: string): "loading" | "ready" | "mis
     window.addEventListener("pagehide", flush);
 
     return () => {
+      useSync.getState().setOpen(null);
       window.removeEventListener("pagehide", flush);
       unsubscribe.forEach((off) => off());
       flush();
