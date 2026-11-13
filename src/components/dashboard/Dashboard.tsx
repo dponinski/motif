@@ -6,7 +6,9 @@ import { GitBranch, Monitor, Moon, MoreHorizontal, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { clearLegacyStorage, useProjectsStore, type Project } from "@/store/projects";
-import { AccountMenu, AccountNotices, useAccountInit } from "@/components/git/AccountControls";
+import { AccountNotices, useAccountInit } from "@/components/git/AccountControls";
+import AuthDialog from "@/components/auth/AuthDialog";
+import UserMenu from "@/components/auth/UserMenu";
 import NewProjectDialog from "./NewProjectDialog";
 
 function formatDate(ts: number): string {
@@ -136,6 +138,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-surface-base text-text-primary select-none">
       <AccountNotices />
+      <AuthDialog />
       <header className="flex items-center justify-between h-12 px-6 border-b border-surface-border-subtle">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center flex-shrink-0">
@@ -159,7 +162,7 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
-          <AccountMenu />
+          <UserMenu />
           {projects.length > 0 && <NewProjectDialog />}
         </div>
       </header>

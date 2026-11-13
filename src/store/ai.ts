@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ComponentBasis } from "../lib/ai/context";
+import { useAuth } from "./auth";
 
 export interface AIMessage {
   id: string;
@@ -94,11 +95,19 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
       const res = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-requested-with": "motif" },
         body: JSON.stringify({ messages: apiMessages, context }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ error: `The assistant didn't answer (${res.status}).` }));
+
+      // The sign-in ended, or never was: the server says so, and the person can sign in again from here.
+      if (res.status === 401 && data.signInRequired) {
+        get().addMessage({ role: "assistant", content: "⚠️ Sign in to use the assistant." });
+        set({ isLoading: false });
+        void useAuth.getState().load().then(() => useAuth.getState().openDialog());
+        return null;
+      }
 
       if (data.error) {
         const errMsg: Omit<AIMessage, "id" | "timestamp"> = {

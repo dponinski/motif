@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { OAuthError, decodeState, exchangeCode, readConfig } from "@/lib/github-oauth";
+import { signedIn } from "@/lib/auth/flows";
+import { githubLogin } from "@/lib/auth/github-login";
+import { authOf } from "@/lib/auth/http";
+import { OAuthError, decodeState, exchangeCode, readConfig, revokeToken } from "@/lib/github-oauth";
 import { STATE_COOKIE, clearCookie, isSecure, originOf, setSession } from "@/lib/github-oauth-http";
 
 // Where GitHub sends the browser back to. The code it brings is exchanged for tokens here; the browser is then sent
@@ -29,6 +32,26 @@ export async function GET(req: NextRequest) {
 
   try {
     const session = await exchangeCode(config, code, `${origin}/api/github/callback`);
+
+    // Signing in to Motif as well: GitHub says who this is, and the sign-in only goes through for someone who may.
+    if (started.purpose === "login") {
+      const auth = await authOf();
+      if (!auth) return back(started.returnTo, "failed");
+      const result = await githubLogin(auth.db, auth.config.allowed, config, session.access);
+      if (!result.ok) {
+        await revokeToken(config, session.access);
+        const reason = result.reason === "no-verified-email" ? "github-email" : result.reason;
+        const res = NextResponse.redirect(new URL(`${started.returnTo}${started.returnTo.includes("?") ? "&" : "?"}auth_error=${reason}`, origin));
+        clearCookie(res, STATE_COOKIE, secure);
+        res.headers.set("Cache-Control", "no-store");
+        return res;
+      }
+      return signedIn(req, auth, result.user.id, started.returnTo, 307, (res) => {
+        setSession(res, session, secure);
+        clearCookie(res, STATE_COOKIE, secure);
+      });
+    }
+
     const res = back(started.returnTo);
     setSession(res, session, secure);
     return res;

@@ -4,6 +4,7 @@ import { useRef, useEffect } from "react";
 import { Sparkles, Send, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAIStore, type AIMessage } from "@/store/ai";
+import { useAuth } from "@/store/auth";
 import { componentContext, projectContext } from "@/lib/ai/context";
 import { useChatSource } from "./chat-source";
 import { EditProposal, TokenProposal } from "./ProposalCards";
@@ -59,6 +60,9 @@ function MessageBubble({ message }: { message: AIMessage }) {
 export default function ChatView() {
   const { messages, isLoading, inputValue, setInputValue, sendMessage, clearMessages } = useAIStore();
   const src = useChatSource();
+  const auth = useAuth();
+  // Where accounts exist, the assistant is for people who are signed in.
+  const locked = auth.status === "ready" && !auth.user;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -69,6 +73,7 @@ export default function ChatView() {
   const handleSend = async () => {
     const content = inputValue.trim();
     if (!content || isLoading) return;
+    if (locked) { auth.openDialog(); return; }
 
     // What is open, so a question about "this component" has something to be about, and what it can be made of.
     let sent = projectContext(src.index, src.theme);
@@ -139,6 +144,13 @@ export default function ChatView() {
         </div>
       )}
 
+      {locked && (
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-surface-border bg-surface-subtle px-3 py-2 text-xs text-text-secondary" data-chat-locked>
+          <span className="flex-1">Sign in to use the assistant.</span>
+          <button onClick={auth.openDialog} className="rounded bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/90">Sign in</button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="px-3 py-2 border-t border-surface-border flex gap-2 items-end flex-shrink-0">
         <textarea
@@ -146,17 +158,18 @@ export default function ChatView() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask me anything…"
+          placeholder={locked ? "Sign in to ask…" : "Ask me anything…"}
+          disabled={locked}
           className="flex-1 bg-surface-subtle border border-surface-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary outline-none resize-none focus:border-accent/60 transition-colors leading-relaxed"
           rows={2}
           style={{ minHeight: 60, maxHeight: 120 }}
         />
         <button
           onClick={handleSend}
-          disabled={!inputValue.trim() || isLoading}
+          disabled={!inputValue.trim() || isLoading || locked}
           className={cn(
             "w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0",
-            inputValue.trim() && !isLoading
+            inputValue.trim() && !isLoading && !locked
               ? "bg-accent text-white hover:bg-accent/80"
               : "bg-surface-subtle text-text-tertiary cursor-not-allowed"
           )}
