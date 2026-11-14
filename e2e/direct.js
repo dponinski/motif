@@ -159,6 +159,12 @@ const check = (name, ok, detail = "") => {
   };
   const classesOf = async () => { await tab("Code").click(); const text = await aside.getByLabel(/^Classes: /).first().inputValue(); await tab("Design").click(); return text; };
   const undo = () => page.getByRole("button", { name: "Undo" }).click();
+  // What to print when a check fails, so a failure on another machine says where things stood.
+  const where = async () => JSON.stringify({
+    focus: await page.evaluate(() => document.activeElement && document.activeElement.tagName + ":" + (document.activeElement.getAttribute("aria-label") || document.activeElement.textContent || "").slice(0, 20)),
+    aside: (await aside.innerText().catch(() => "")).slice(0, 110).replace(/\n+/g, " | "),
+    root: await root.evaluate((el) => { const r = el.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height), el.className]; }).catch(() => null),
+  });
   // A click on the canvas takes the keyboard from whatever had it; a key is only pressed once it has (the panel can already be showing
   // the same element, so waiting for it to show says nothing about the click having been dealt with).
   const clickCanvas = async (locator, options) => {
@@ -214,13 +220,15 @@ const check = (name, ok, detail = "") => {
   await undo();
   const backToStart = await settle(async () => Math.abs((await px("div.rounded-lg", "width")) - before) <= 1);
   await reselect();
-  check("as one step", undoable && backToStart && !(await classesOf()).match(/\bw-/));
+  const classesNow = await classesOf();
+  check("as one step", undoable && backToStart && !classesNow.match(/\bw-/), JSON.stringify({ undoable, backToStart, classesNow, before, width: await px("div.rounded-lg", "width") }));
 
   // ── The keyboard ─────────────────────────────────────────────────────────
   await clickCanvas(root, { position: { x: 4, y: 4 } });
   await aside.getByText("<div>").waitFor();
   await page.keyboard.press("Enter");
-  check("Enter picks the first element inside", await aside.getByText("<h2>").waitFor({ timeout: 5000 }).then(() => true, () => false));
+  const entered = await aside.getByText("<h2>").waitFor({ timeout: 5000 }).then(() => true, () => false);
+  check("Enter picks the first element inside", entered, entered ? "" : await where());
   await page.keyboard.press("ArrowDown");
   check("the arrows go along its neighbours", await aside.getByText("<p>").waitFor({ timeout: 5000 }).then(() => true, () => false));
   await page.keyboard.press("ArrowUp");

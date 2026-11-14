@@ -76,7 +76,9 @@ function runSuite(name) {
   const report = (r) => {
     const summary = r.out.split("\n").filter((l) => /passed|checks passed/.test(l)).pop() ?? "";
     console.log(`${r.ok ? "ok  " : "FAIL"} ${r.name.padEnd(12)} ${String(r.seconds).padStart(4)}s  ${summary.trim()}`);
-    if (!r.ok) console.log(r.out.split("\n").filter((l) => /^FAIL|Error|TIMEOUT/.test(l)).slice(0, 12).map((l) => `       ${l.slice(0, 240)}`).join("\n") || r.out.slice(-1200));
+    if (!r.ok) console.log(r.out.split("\n").filter((l) => /^FAIL|Error|TIMEOUT/.test(l)).slice(0, 12).map((l) => `       ${l.slice(0, 600)}`).join("\n") || r.out.slice(-1200));
+    // On CI the whole output of a failing suite is in the log: what passed before it failed says where it went wrong.
+    if (!r.ok && process.env.CI) console.log(`::group::${r.name} output\n${r.out}\n::endgroup::`);
   };
 
   const shared = names.filter((n) => SHARED.includes(n));
