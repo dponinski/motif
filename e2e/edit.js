@@ -141,7 +141,7 @@ const check = (name, ok, detail = "") => {
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
-  const editButton = page.getByRole("button", { name: "Edit", exact: true });
+  const editButton = page.getByRole("button", { name: "Design", exact: true });
   const field = (label) => aside.getByLabel(label, { exact: true });
   const setColor = async (label, value) => { await field(label).click(); const box = page.getByLabel(`${label}: search tokens or type a value`); await box.fill(value); await box.press("Enter"); };
 
@@ -181,7 +181,7 @@ const check = (name, ok, detail = "") => {
   for (let i = 0; i < 40 && !(await css("#root button", "backgroundColor")).startsWith("oklch(0.56"); i++) await page.waitForTimeout(100);
   check("and redo returns it", (await css("#root button", "backgroundColor")).startsWith("oklch(0.56"));
 
-  await page.getByRole("button", { name: "Playground" }).click();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
   check("other modes show the edited component too", (await css("#root button", "gap")) === "16px" && (await css("#root button", "backgroundColor")).startsWith("oklch(0.56"));
 
   // ── Text and structure ────────────────────────────────────────────────────

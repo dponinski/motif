@@ -143,7 +143,7 @@ const check = (name, ok, detail = "") => {
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
-  const editButton = page.getByRole("button", { name: "Edit", exact: true });
+  const editButton = page.getByRole("button", { name: "Design", exact: true });
   const field = (label) => aside.getByLabel(label, { exact: true });
   const setColor = async (label, value) => { await field(label).click(); const box = page.getByLabel(`${label}: search tokens or type a value`); await box.fill(value); await box.press("Enter"); };
 
@@ -161,7 +161,7 @@ const check = (name, ok, detail = "") => {
   await aside.getByLabel("New variant option").fill("ghost");
   await aside.getByLabel("Add variant option").click();
   check("a new option appears in the list straight away", await settle(async () => (await group.getByLabel("Rename variant ghost").count()) === 1));
-  await page.getByRole("button", { name: "All variants" }).click();
+  await page.getByRole("button", { name: "Variants", exact: true }).click();
   check("and in All variants", await settle(async () => (await badgeCount()) === 7));
   await editButton.click();
   check("and in the props controls", (await aside.getByLabel("variant", { exact: true }).locator("option").allInnerTexts()).includes("ghost"));

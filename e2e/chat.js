@@ -146,7 +146,7 @@ const check = (name, ok, detail = "") => {
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
-  const editButton = page.getByRole("button", { name: "Edit", exact: true });
+  const editButton = page.getByRole("button", { name: "Design", exact: true });
   const field = (label) => aside.getByLabel(label, { exact: true });
   const setColor = async (label, value) => { await field(label).click(); const box = page.getByLabel(`${label}: search tokens or type a value`); await box.fill(value); await box.press("Enter"); };
 
@@ -213,7 +213,7 @@ const check = (name, ok, detail = "") => {
   await say("Make the heading a bit larger");
   await settle(async () => (await page.locator('[data-proposal="edit"]').count()) === 2);
   check("a new suggestion is shown", (await card("edit").locator("[data-change]").count()) === 1);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await stage.locator("#root small").click();
   await page.locator("aside").last().getByRole("button", { name: "Delete element" }).click();
   await settle(async () => (await stage.locator("#root small").count()) === 0);
@@ -227,8 +227,8 @@ const check = (name, ok, detail = "") => {
   check("asking again is about the component as it is now", asked[asked.length - 1].context.elements.map((e) => e.tag).join() === "div,h2,p");
   await card("edit").getByRole("button", { name: "Apply 1 change" }).click();
   check("and applies", await settle(async () => (await fontSize()) === "20px"));
-  await page.getByRole("button", { name: "Playground" }).click();
-  check("the stage is not in Edit mode", (await page.getByRole("button", { name: "Edit", exact: true }).getAttribute("aria-pressed")) === "false");
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  check("the stage is not in Design mode", (await page.getByRole("button", { name: "Design", exact: true }).getAttribute("aria-pressed")) === "false");
   await page.keyboard.press("Control+z");
   check("Ctrl+Z steps it back too, outside Edit mode as well", await settle(async () => (await fontSize()) === before.size));
   await page.keyboard.press("Control+Shift+z");

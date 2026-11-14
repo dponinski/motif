@@ -2,7 +2,7 @@
 
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, Palette, Pencil, Play, Redo2, Sun, Undo2 } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, MousePointer2, Palette, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildGraph } from "@/lib/preview/graph";
 import { parseMotifKey } from "@/lib/edit/instrument";
@@ -84,7 +84,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
   const { dark, width, mode: wanted, motifTokens, setDark, setWidth, setMode, setMotifTokens } = usePreviewStore(useShallow((s) => ({ dark: s.dark, width: s.width, mode: s.mode, motifTokens: s.motifTokens, setDark: s.setDark, setWidth: s.setWidth, setMode: s.setMode, setMotifTokens: s.setMotifTokens })));
-  const mode = wanted === "examples" && !examples.list.length ? "playground" : wanted;
+  const mode = wanted === "examples" && !examples.list.length ? "edit" : wanted;
   const exampleDoc = useSrcdoc(mode === "examples", `examples:${component.id}`, source, host, (paths) =>
     buildGraph({
       reader, entry: examples.list[0].path, extraEntries: examples.list.slice(1).map((e) => e.path),
@@ -260,13 +260,13 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         <div className="flex-1" />
 
         <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5">
-          {([["playground", "Playground", Play], ["variants", "All variants", Layers], ["examples", "Examples", BookOpen], ["edit", "Edit", Pencil]] as const).map(([id, label, Icon]) => (
+          {([["edit", "Design", MousePointer2], ["playground", "Preview", Play], ["variants", "Variants", Layers], ["examples", "Examples", BookOpen]] as const).map(([id, label, Icon]) => (
             <button
               key={id}
               onClick={() => setMode(id)}
               aria-pressed={mode === id}
               disabled={(id === "variants" && component.variants.length === 0) || (id === "examples" && examples.list.length === 0)}
-              title={id === "examples" ? (examples.loading ? "Looking for examples in the repository…" : examples.list.length ? "How the repository uses this component" : "No examples found in the repository's demo files") : undefined}
+              title={id === "edit" ? "Select and change elements" : id === "playground" ? "Use the component: clicks reach it" : id === "variants" ? "Every variant side by side" : examples.loading ? "Looking for examples in the repository…" : examples.list.length ? "How the repository uses this component" : "No examples found in the repository's demo files"}
               className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors disabled:opacity-40", mode === id ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}
             >
               <Icon size={11} /> {label}{id === "examples" && examples.list.length > 0 && <span className="text-text-tertiary"> {examples.list.length}</span>}

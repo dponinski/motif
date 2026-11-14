@@ -7,7 +7,6 @@ import { elementTree, pathTo, type TreeNode } from "@/lib/edit/tree";
 import { useEditStore } from "@/store/edit";
 import { NO_CONNECTION, useGitStore } from "@/store/git";
 import { activeComponent, useLibraryStore } from "@/store/library";
-import { usePreviewStore } from "@/store/preview";
 import { useGitHost } from "@/components/git/hooks";
 import { readerFor } from "@/components/stage/reader";
 
@@ -107,7 +106,6 @@ export default function LayersSection() {
   const toggle = (start: number) => setOpen((o) => { const next = new Set(o); if (!next.delete(start)) next.add(start); return next; });
   const pick = (node: TreeNode) => {
     if (!component) return;
-    usePreviewStore.getState().setMode("edit");
     useEditStore.getState().select({ path: component.file, start: node.start });
   };
 
