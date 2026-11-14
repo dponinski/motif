@@ -20,7 +20,7 @@ export function importRepoTokens(repo: string, branch: string, state: RepoState)
   const themes: Record<string, string> = { [keys[0]]: first };
   for (const key of keys.slice(1)) themes[key] = useDesignSystemStore.getState().addThemeToSet(setId, themeLabel(key));
 
-  const link: TokenLink = { repo, branch, setId, themes, baseTheme: state.snapshot.baseTheme, base: state.snapshot.doc, pending: null, syncedAt: Date.now() };
+  const link: TokenLink = { repo, branch, setId, themes, baseTheme: state.snapshot.baseTheme, base: state.snapshot.doc, staged: null, syncedAt: Date.now() };
   useDesignSystemStore.setState(applyDoc(tokenSlices(), link, state.snapshot.doc, first));
   useGitStore.getState().setTokenLink(link);
   return link;

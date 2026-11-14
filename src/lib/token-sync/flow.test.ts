@@ -35,7 +35,7 @@ const setColor = (s: TokenSlices, name: string, themeId: string, value: string):
 async function linked(): Promise<{ repo: ReturnType<typeof repoOf>; link: TokenLink; slices: TokenSlices; state: RepoState }> {
   const repo = repoOf(loadFixture("motif-test-system"));
   const state = await repo.read();
-  const link: TokenLink = { repo: "a/b", branch: "main", setId: "set-1", themes, baseTheme: "light", base: state.snapshot.doc, pending: null, syncedAt: 0 };
+  const link: TokenLink = { repo: "a/b", branch: "main", setId: "set-1", themes, baseTheme: "light", base: state.snapshot.doc, staged: null, syncedAt: 0 };
   return { repo, link, slices: applyDoc(empty, link, state.snapshot.doc, "t-light"), state };
 }
 
@@ -80,11 +80,12 @@ describe("pushing edits made in Motif", () => {
     expect(after.analysis.tokens.find((t) => t.name === "brand-blue")!.tailwind).toBe("color-brand-blue");
   });
 
-  it("keeps showing the changes as pending until the pull request is merged", async () => {
+  it("keeps showing the changes as not in the repository until the pull request is merged", async () => {
     const { link, slices: imported, state } = await linked();
     const slices = setColor(imported, "primary", "t-light", "#ff0000");
     expect(planSync(link, slices, state).toRepo).toHaveLength(1);
-    expect(planSync({ ...link, pending: { number: 3, url: "u", branch: "b" } }, slices, state).toRepo).toHaveLength(1);
+    // What is staged is only a hint for the status: the plan against the repository doesn't change.
+    expect(planSync({ ...link, staged: { doc: link.base, paths: ["a.css"] } }, slices, state).toRepo).toHaveLength(1);
   });
 });
 
@@ -191,7 +192,7 @@ describe("a repository with no tokens", () => {
     // After the pull request merges, the repository's tokens are exactly Motif's: nothing to sync.
     for (const [path, file] of Object.entries(plan.files)) repo.files[path] = file.text;
     const after = await repo.read();
-    const link: TokenLink = { ...plan.link, repo: "a/b", branch: "main", base: {}, pending: null, syncedAt: 0 };
+    const link: TokenLink = { ...plan.link, repo: "a/b", branch: "main", base: {}, staged: null, syncedAt: 0 };
     const next = planSync(link, slices, after);
     expect(next.merge.conflicts).toEqual([]);
     expect(next.toMotif).toEqual([]);

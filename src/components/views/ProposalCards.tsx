@@ -159,7 +159,7 @@ export function TokenProposal({ message }: { message: AIMessage }) {
     if (!preview) return;
     useDesignSystemStore.setState(preview.next);
     const skipped = preview.skipped.length ? ` ${preview.skipped.length} already existed and were left as they are.` : "";
-    setOutcome(message.id, preview.added > 0 ? `Added ${preview.added} token${preview.added === 1 ? "" : "s"} to ${set?.name ?? "the token set"}.${skipped} Send them to the repository with Sync tokens, as a pull request.` : `Nothing added.${skipped}`);
+    setOutcome(message.id, preview.added > 0 ? `Added ${preview.added} token${preview.added === 1 ? "" : "s"} to ${set?.name ?? "the token set"}.${skipped} They go to the repository, in your pull request, with your next Sync (once the token set is linked to it).` : `Nothing added.${skipped}`);
   };
 
   return (

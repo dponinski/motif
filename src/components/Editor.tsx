@@ -12,6 +12,7 @@ import ComponentStage from "./stage/ComponentStage";
 import ProjectOverview from "./stage/ProjectOverview";
 import { useAutoRead } from "./stage/useReadRepository";
 import { useWorkWatcher } from "./work/useWork";
+import { useStagedStack } from "./work/useStagedStack";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
 import { createdTexts, useEditStore } from "@/store/edit";
@@ -29,6 +30,8 @@ export default function Editor({ projectId }: { projectId: string }) {
   useAutoRead();
   // The pull request is checked now and then, and edited files that the repository has changed since are found.
   useWorkWatcher();
+  // What the preview and new components build on follows the editor's changes (a Tailwind add-on that isn't merged yet).
+  useStagedStack();
   // A component made here is in the list while its files are among the changes: undoing its creation, or sending it as a
   // pull request, puts it away until it is in the repository.
   useEffect(() => {

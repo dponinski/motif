@@ -204,5 +204,9 @@ describe("refreshWork and statusOf", () => {
     expect(statusOf({ ...base, refreshed: { state: "closed", mergeableState: null } })).toMatchObject({ kind: "attention", reason: "closed" });
     expect(statusOf({ ...base, error: "boom" })).toMatchObject({ kind: "attention", reason: "error", text: "boom" });
     expect(statusOf({ ...base, stale: 2 })).toMatchObject({ kind: "attention", reason: "stale" });
+    // Token changes in Motif wait to be turned into files by the next sync.
+    expect(statusOf({ ...base, tokens: 2 })).toMatchObject({ kind: "waiting", text: "2 token changes waiting to sync", waiting: 2 });
+    expect(statusOf({ ...base, changed: [ch("a.tsx", "A0", "A2")], tokens: 1 }).text).toBe("1 file and 1 token change waiting to sync");
+    expect(statusOf({ ...base, tokens: 1, tokenNote: "Open Tokens" })).toMatchObject({ kind: "attention", reason: "tokens", text: "Open Tokens" });
   });
 });

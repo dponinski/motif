@@ -175,12 +175,18 @@ export interface Status {
   text: string;
   waiting: number;
   // Why it needs attention, when it does.
-  reason?: "behind" | "conflict" | "closed" | "error" | "stale";
+  reason?: "behind" | "conflict" | "closed" | "error" | "stale" | "tokens";
 }
 
-export function statusOf(input: { changed: Changed[]; work: WorkState | null; refreshed: Refreshed | null; syncing: boolean; error: string | null; stale: number }): Status {
+export function statusOf(input: {
+  changed: Changed[]; work: WorkState | null; refreshed: Refreshed | null; syncing: boolean; error: string | null; stale: number;
+  // Token changes in Motif that are not in the files yet, and what the last sync had to say about tokens.
+  tokens?: number; tokenNote?: string | null;
+}): Status {
   const p = plan(input.changed, input.work);
-  const waiting = waitingCount(p);
+  const files = waitingCount(p);
+  const tokens = input.tokens ?? 0;
+  const waiting = files + tokens;
   const pr = input.work?.pr;
   const open = input.refreshed?.state === "open" || (!input.refreshed && !!pr);
 
@@ -188,9 +194,13 @@ export function statusOf(input: { changed: Changed[]; work: WorkState | null; re
   if (input.error) return { kind: "attention", text: input.error, waiting, reason: "error" };
   if (input.refreshed?.state === "closed") return { kind: "attention", text: `Pull request #${pr?.number} was closed without being merged. The next sync opens a new one.`, waiting, reason: "closed" };
   if (open && input.refreshed?.mergeableState === "dirty") return { kind: "attention", text: `Pull request #${pr?.number} conflicts with the default branch. Resolve it on GitHub.`, waiting, reason: "conflict" };
+  if (input.tokenNote) return { kind: "attention", text: input.tokenNote, waiting, reason: "tokens" };
   if (input.stale > 0) return { kind: "attention", text: `${input.stale} file${input.stale === 1 ? " has" : "s have"} changed in the repository since you edited ${input.stale === 1 ? "it" : "them"}.`, waiting, reason: "stale" };
   if (open && input.refreshed?.mergeableState === "behind") return { kind: "attention", text: `Pull request #${pr?.number} is behind the default branch. Update the branch to bring it up to date.`, waiting, reason: "behind" };
-  if (waiting > 0) return { kind: "waiting", text: `${waiting} file${waiting === 1 ? "" : "s"} waiting to sync`, waiting };
+  if (waiting > 0) {
+    const parts = [files > 0 && `${files} file${files === 1 ? "" : "s"}`, tokens > 0 && `${tokens} token change${tokens === 1 ? "" : "s"}`].filter(Boolean);
+    return { kind: "waiting", text: `${parts.join(" and ")} waiting to sync`, waiting };
+  }
   if (pr && open) return { kind: "synced", text: `In sync with pull request #${pr.number}`, waiting: 0 };
   return { kind: "none", text: "Nothing to sync", waiting: 0 };
 }

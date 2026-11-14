@@ -3,7 +3,7 @@ import type { RepoAnalysis } from "../repo-scan/types";
 import { readerSource } from "../repo-scan/source";
 import { applyDoc, cssName, readMotifTokens, readRepoTokens, type LinkShape, type RepoSnapshot, type SyncDoc, type TokenSlices } from "./doc";
 import { changesToRepo, describeChanges, mergeTokens, type TokenChange, type TokenMerge } from "./merge";
-import type { FileWrite, TokenPr } from "./pr";
+import type { FileWrite } from "./pr";
 import { generateTokensCss } from "./write";
 
 // The connection between a Motif token set and a repository.
@@ -12,7 +12,10 @@ export interface TokenLink extends LinkShape {
   branch: string;
   // The repository's tokens as of the last sync: the common ancestor for the next merge.
   base: SyncDoc;
-  pending: TokenPr | null;
+  // The Motif tokens that the token files among the editor's changes were written from, and which files they are: what is
+  // waiting is the difference between this (or, before anything is staged, `base`) and Motif's tokens. Cleared when the
+  // pull request is merged or one of the files is given up. Only a hint for the status; Sync plans from the real state.
+  staged?: { doc: SyncDoc; paths: string[] } | null;
   syncedAt: number;
 }
 
@@ -81,7 +84,7 @@ export function newTokensPath(analysis: RepoAnalysis): string {
 }
 
 export interface ExportPlan {
-  link: Omit<TokenLink, "repo" | "branch" | "pending" | "syncedAt">;
+  link: Omit<TokenLink, "repo" | "branch" | "staged" | "syncedAt">;
   doc: SyncDoc;
   files: Record<string, FileWrite>;
   changes: TokenChange[];

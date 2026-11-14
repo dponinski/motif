@@ -23,6 +23,8 @@ interface LibraryStore {
   setLive: (id: string, component: LibraryComponent | null) => void;
   // Components made here and not in the repository yet: they stay in the list across reads until the repository has them.
   drafts: LibraryComponent[];
+  // The stack the preview and new components build on, when the editor's changes alter it (a staged Tailwind add-on).
+  setStack: (stack: Pick<LibrarySource, "tailwindVersion" | "tailwindEntry" | "styleFiles">) => void;
   addDraft: (component: LibraryComponent) => void;
   // Gives up the drafts whose files are among these.
   dropDrafts: (files: string[]) => void;
@@ -67,6 +69,13 @@ export const useLibraryStore = create<LibraryStore>()(
       activeId: null,
       live: {},
       drafts: [],
+      setStack: (stack) =>
+        set((s) => {
+          if (!s.source) return s;
+          const { tailwindVersion, tailwindEntry, styleFiles } = s.source;
+          const same = tailwindVersion === stack.tailwindVersion && tailwindEntry === stack.tailwindEntry && styleFiles.length === stack.styleFiles.length && styleFiles.every((f, i) => f === stack.styleFiles[i]);
+          return same ? s : { source: { ...s.source, ...stack } };
+        }),
       addDraft: (component) =>
         set((s) => ({
           components: [...s.components.filter((c) => c.id !== component.id), component],

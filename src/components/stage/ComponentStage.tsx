@@ -17,6 +17,7 @@ import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/li
 import { usePreviewStore } from "@/store/preview";
 import { useNavRequest } from "@/store/nav";
 import { useWorkRuntime } from "@/store/work";
+import { useTokenChanges } from "@/components/work/useWork";
 import { plan, waitingCount } from "@/lib/work/sync";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import StageCanvas from "./StageCanvas";
@@ -150,7 +151,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   // sent without losing the repository's change. Found by the editor (components/work/useWork.ts).
   const stale = useWorkRuntime((s) => s.stale);
   const work = useGitStore((s) => s.work ?? null);
-  const waiting = useEditStore((s) => { const p = plan(changedFiles(s).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })), work); return waitingCount(p); });
+  const tokenChanges = useTokenChanges().length;
+  const waiting = useEditStore((s) => { const p = plan(changedFiles(s).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })), work); return waitingCount(p); }) + tokenChanges;
   const [editError, setEditError] = useState<string | null>(null);
 
   // The props and variants shown for a component follow the edits made to its file.
@@ -277,7 +279,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             <button onClick={() => useEditStore.getState().redo()} disabled={!canRedo} aria-label="Redo" title="Redo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Redo2 size={13} /></button>
           </div>
         )}
-        {(changed > 0 || work) && (
+        {(changed > 0 || work || tokenChanges > 0) && (
           <button
             onClick={() => useNavRequest.getState().ask("sync")}
             aria-label="Sync"

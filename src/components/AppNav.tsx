@@ -8,6 +8,7 @@ import { statusOf } from "@/lib/work/sync";
 import { changedFiles, useEditStore } from "@/store/edit";
 import { useGitStore } from "@/store/git";
 import { useWorkRuntime } from "@/store/work";
+import { useTokenChanges } from "./work/useWork";
 
 export type NavItem = "components" | "tokens" | "docs" | "chat" | "git" | "repo" | "sync";
 
@@ -24,11 +25,12 @@ export default function AppNav({
   const work = useGitStore((s) => s.work ?? null);
   const connected = useGitStore((s) => s.connection !== null);
   const runtime = useWorkRuntime();
+  const tokens = useTokenChanges().length;
   const status = useMemo(() => statusOf({
     changed: changedFiles({ history, index, bases }).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })),
-    work, refreshed: runtime.refreshed, syncing: runtime.syncing, error: runtime.error,
+    work, refreshed: runtime.refreshed, syncing: runtime.syncing, error: runtime.error, tokens, tokenNote: runtime.tokenNote,
     stale: runtime.stale.filter((p) => !(work && p in work.pushed)).length,
-  }), [history, index, bases, work, runtime.refreshed, runtime.syncing, runtime.error, runtime.stale]);
+  }), [history, index, bases, work, tokens, runtime.refreshed, runtime.syncing, runtime.error, runtime.tokenNote, runtime.stale]);
   const dot = { none: "", waiting: "bg-amber-500", syncing: "bg-accent", synced: "bg-emerald-500", attention: "bg-red-400" }[status.kind];
 
   const items: { id: NavItem; icon: React.ReactNode; label: string }[] = [

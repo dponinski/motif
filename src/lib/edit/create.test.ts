@@ -141,3 +141,23 @@ describe("the library's entry for it", () => {
     expect(analysis.styleFiles).toContain("src/components/Button.css");
   });
 });
+
+describe("a second component made before the first is merged", () => {
+  it("adds to the first one's barrel and package.json when read through the editor's changes", async () => {
+    const { overlayReader } = await import("../work/overlay");
+    const files = { "package.json": `{ "name": "ds" }\n`, "src/index.ts": "export {};\n" };
+    const first = await planIn(files, "Card");
+    const overlay = { texts: first.plan.texts, bases: first.plan.bases };
+    const reader = overlayReader(memoryReader(files), overlay);
+    const analysis = await analysisOf(files);
+    const second = await planComponent({ name: "Tag", analysis, components: toLibrary(analysis.components), paths: Object.keys(files), reader, ref: "main" });
+    expect(second.texts["src/index.ts"]).toContain('export { Card } from "./components/Card";');
+    expect(second.texts["src/index.ts"]).toContain('export { Tag } from "./components/Tag";');
+    // React was added by the first one's step; the second finds it there and leaves the file alone.
+    expect(first.plan.texts["package.json"]).toContain('"react"');
+    expect(second.texts["package.json"]).toBeUndefined();
+    // Read from the repository alone, the second would have dropped the first's export.
+    const alone = await planComponent({ name: "Tag", analysis, components: toLibrary(analysis.components), paths: Object.keys(files), reader: memoryReader(files), ref: "main" });
+    expect(alone.texts["src/index.ts"]).not.toContain("Card");
+  });
+});

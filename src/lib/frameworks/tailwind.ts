@@ -124,17 +124,6 @@ export async function planTailwind(host: Pick<GitHost, "getFile">, repo: RepoSta
   return { files, summary, notes };
 }
 
-export const tailwindPrBody = (plan: FrameworkPlan): string =>
-  [
-    "Adds Tailwind CSS v4 to this repository, from Motif.",
-    "",
-    "### Changes",
-    "",
-    ...plan.summary.map((s) => `- \`${s.path}\`: ${s.what}`),
-    ...(plan.notes.length ? ["", "### To do", "", ...plan.notes.map((n) => `- ${n}`)] : []),
-    "",
-    "---",
-    "Opened from Motif.",
-  ].join("\n");
-
-export const tailwindBranchName = (now = Date.now()) => `motif/tailwind-${now.toString(36)}`;
+// The step the editor records for it: the first line says what was done, the rest are details for the pull request.
+export const tailwindSummary = (plan: FrameworkPlan): string =>
+  ["Add Tailwind CSS v4", ...plan.summary.map((s) => `\`${s.path}\`: ${s.what}`), ...plan.notes.map((n) => `To do: ${n}`)].join("\n");
