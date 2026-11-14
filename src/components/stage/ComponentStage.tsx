@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, Palette, Pencil, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { gitBlobSha } from "@/lib/github";
 import { buildGraph } from "@/lib/preview/graph";
 import { parseMotifKey } from "@/lib/edit/instrument";
 import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
@@ -16,8 +15,10 @@ import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { changedFiles, createdTexts, useEditStore } from "@/store/edit";
 import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
+import { useNavRequest } from "@/store/nav";
+import { useWorkRuntime } from "@/store/work";
+import { plan, waitingCount } from "@/lib/work/sync";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
-import EditPrDialog from "./EditPrDialog";
 import StageCanvas from "./StageCanvas";
 import { loadTree, useSrcdoc, useTokenOverrides, type Host } from "./preview-core";
 import { readerFor, versionOf } from "./reader";
@@ -144,24 +145,12 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const canUndo = useEditStore((s) => s.index > 0);
   const canRedo = useEditStore((s) => s.index < s.history.length - 1);
   const changed = useEditStore((s) => changedFiles(s).length);
-  const [prOpen, setPrOpen] = useState(false);
 
-  // Files that were edited earlier (maybe before a reload) and that the repository has changed since, which a
-  // pull request couldn't be made for without losing the repository's change.
-  const [stale, setStale] = useState<string[]>([]);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const out: string[] = [];
-      for (const f of changedFiles(useEditStore.getState())) {
-        const text = await reader.readText(f.path, source.branch).catch(() => null);
-        // A file made here is stale once the repository has one of the same name; another, once it differs.
-        if (f.sha === null ? text !== null : text === null || (await gitBlobSha(text)) !== f.sha) out.push(f.path);
-      }
-      if (alive) setStale(out);
-    })();
-    return () => { alive = false; };
-  }, [reader, source.branch, changed]);
+  // Files that were edited earlier (maybe before a reload) and that the repository has changed since, which can't be
+  // sent without losing the repository's change. Found by the editor (components/work/useWork.ts).
+  const stale = useWorkRuntime((s) => s.stale);
+  const work = useGitStore((s) => s.work ?? null);
+  const waiting = useEditStore((s) => { const p = plan(changedFiles(s).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })), work); return waitingCount(p); });
   const [editError, setEditError] = useState<string | null>(null);
 
   // The props and variants shown for a component follow the edits made to its file.
@@ -288,14 +277,14 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             <button onClick={() => useEditStore.getState().redo()} disabled={!canRedo} aria-label="Redo" title="Redo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Redo2 size={13} /></button>
           </div>
         )}
-        {changed > 0 && (
+        {(changed > 0 || work) && (
           <button
-            onClick={() => setPrOpen(true)}
-            aria-label="Create pull request"
-            title={`${changed} file${changed === 1 ? "" : "s"} changed. Open a pull request with the changes.`}
-            className="flex items-center gap-1 rounded bg-accent px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-accent/90"
+            onClick={() => useNavRequest.getState().ask("sync")}
+            aria-label="Sync"
+            title={waiting > 0 ? `${waiting} file${waiting === 1 ? "" : "s"} waiting. Open the Sync panel.` : "Everything is in the pull request. Open the Sync panel."}
+            className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors", waiting > 0 ? "bg-accent text-white hover:bg-accent/90" : "bg-surface-subtle text-text-secondary hover:bg-surface-border")}
           >
-            <GitPullRequest size={11} /> {changed} {changed === 1 ? "file" : "files"}
+            <GitPullRequest size={11} /> {waiting > 0 ? `Sync (${waiting})` : "Synced"}
           </button>
         )}
 
@@ -323,7 +312,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         <div role="alert" className="flex flex-shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-500">
           <AlertTriangle size={12} className="flex-shrink-0" />
           <span className="min-w-0 flex-1 truncate" title={stale.join(", ")}>
-            {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} A pull request can't be made for them as they are.
+            {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} They aren't sent until you give up those edits.
           </span>
           <button
             onClick={() => { useEditStore.getState().discard(stale); useLibraryStore.getState().dropDrafts(stale); }}
@@ -388,7 +377,6 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           </StageCanvas>
         )}
       </div>
-      <EditPrDialog open={prOpen} onOpenChange={setPrOpen} connection={connection} source={source} subject={component.name} />
     </div>
   );
 }

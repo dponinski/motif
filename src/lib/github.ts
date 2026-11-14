@@ -23,6 +23,11 @@ export interface GitHost {
   getFile(path: string, branch: string): Promise<RemoteFile | null>;
   getBlob(sha: string): Promise<string | null>;
   putFile(args: PutFileArgs): Promise<{ sha: string; commitUrl: string }>;
+  // The commit a branch is at, or null when there is no such branch.
+  getRef(branch: string): Promise<string | null>;
+  // Several files in one commit on an existing branch. A text of null takes the file away. The branch only moves
+  // forward: if it moved while the commit was made, nothing is changed and this says so.
+  commitFiles(args: { branch: string; message: string; files: { path: string; text: string | null }[] }): Promise<{ sha: string; url: string }>;
 }
 
 // What reading a repository's code needs; kept apart from GitHost so sync can be tested without it.
@@ -36,11 +41,17 @@ export interface PullRequestInfo {
   url: string;
   state: "open" | "closed";
   merged: boolean;
+  // GitHub's word for whether it can be merged: "clean", "behind" (the base has moved on), "dirty" (it conflicts with
+  // the base), "blocked", "unstable", or "unknown" while GitHub is still working it out.
+  mergeableState?: string | null;
 }
 
 export interface PrHost {
   createPullRequest(args: { title: string; body: string; head: string; base: string }): Promise<{ number: number; url: string }>;
   getPullRequest(number: number): Promise<PullRequestInfo>;
+  updatePullRequest(number: number, changes: { title?: string; body?: string }): Promise<void>;
+  // Brings the base branch's new commits into the pull request's branch.
+  updateBranch(number: number): Promise<void>;
 }
 
 export class GitHostError extends Error {
@@ -223,8 +234,48 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     },
 
     async getPullRequest(number) {
-      const pr = await request<{ number: number; html_url: string; state: string; merged?: boolean; merged_at?: string | null }>(`/pulls/${number}`);
-      return { number: pr!.number, url: pr!.html_url, state: pr!.state === "open" ? "open" : "closed", merged: pr!.merged ?? Boolean(pr!.merged_at) };
+      const pr = await request<{ number: number; html_url: string; state: string; merged?: boolean; merged_at?: string | null; mergeable_state?: string | null }>(`/pulls/${number}`);
+      return { number: pr!.number, url: pr!.html_url, state: pr!.state === "open" ? "open" : "closed", merged: pr!.merged ?? Boolean(pr!.merged_at), mergeableState: pr!.mergeable_state ?? null };
+    },
+
+    async updatePullRequest(number, changes) {
+      await request(`/pulls/${number}`, { method: "PATCH", body: changes });
+    },
+
+    async updateBranch(number) {
+      try {
+        await request(`/pulls/${number}/update-branch`, { method: "PUT", body: {} });
+      } catch (err) {
+        if (err instanceof GitHostError && err.status === 422) throw new GitHostError("The branch can't be brought up to date by itself: it has changes that conflict with the base branch. Resolve them on GitHub.", err.status);
+        throw err;
+      }
+    },
+
+    async getRef(branch) {
+      const ref = await request<{ object: { sha: string } }>(`/git/ref/heads/${encodePath(branch)}`, { allow404: true });
+      return ref?.object.sha ?? null;
+    },
+
+    async commitFiles({ branch, message, files }) {
+      const head = await this.getRef(branch);
+      if (!head) throw new GitHostError(`The branch ${branch} was not found`, 404);
+      const commit = await request<{ tree: { sha: string } }>(`/git/commits/${head}`);
+      // Files go into the tree as they are (a null sha takes one away), so no blob is made beforehand.
+      const tree = await request<{ sha: string }>("/git/trees", {
+        method: "POST",
+        body: {
+          base_tree: commit!.tree.sha,
+          tree: files.map((f) => (f.text === null ? { path: f.path, mode: "100644", type: "blob", sha: null } : { path: f.path, mode: "100644", type: "blob", content: f.text })),
+        },
+      });
+      const created = await request<{ sha: string }>("/git/commits", { method: "POST", body: { message, tree: tree!.sha, parents: [head] } });
+      try {
+        await request(`/git/refs/heads/${encodePath(branch)}`, { method: "PATCH", body: { sha: created!.sha, force: false } });
+      } catch (err) {
+        if (err instanceof GitHostError && (err.status === 422 || err.status === 409)) throw new GitHostError(`${branch} changed while the changes were being sent. Try again.`, err.status);
+        throw err;
+      }
+      return { sha: created!.sha, url: `https://github.com/${conn.owner}/${conn.repo}/commit/${created!.sha}` };
     },
 
     async putFile({ path, branch, text, message, sha }) {

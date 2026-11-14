@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 // Lets a panel ask the editor to show another one ("Connect a repository" in the Components panel opens Git).
 interface NavRequest {
-  request: "git" | "components" | "docs" | "tokens" | null;
+  request: "git" | "components" | "docs" | "tokens" | "sync" | null;
   ask: (to: NonNullable<NavRequest["request"]>) => void;
   clear: () => void;
 }

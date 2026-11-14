@@ -51,6 +51,9 @@ interface EditStore {
   clear: () => void;
   // Gives up the changes to some files, for example because the repository has changed them since.
   discard: (paths: string[]) => void;
+  // After a pull request is merged: these files are what the repository has now, so they are the files' new starting
+  // point, and only what was edited after the last sync is still a change. Undo doesn't go back past this.
+  rebase: (files: Record<string, Base>) => void;
 }
 
 const START: Entry = { texts: {}, selection: null, summary: "" };
@@ -106,6 +109,20 @@ export const useEditStore = create<EditStore>()(
             selection: null,
             revision: s.revision + 1,
           };
+        }),
+      rebase: (files) =>
+        set((s) => {
+          const paths = Object.keys(files).filter((p) => p in s.bases);
+          if (paths.length === 0) return s;
+          const now = s.history[s.index].texts;
+          const bases = { ...s.bases };
+          const texts = { ...now };
+          for (const p of paths) {
+            // A file that is what the repository has now isn't a change, and nothing about it needs keeping.
+            if (!(p in now) || now[p] === files[p].text) { delete bases[p]; delete texts[p]; }
+            else bases[p] = files[p];
+          }
+          return { bases, history: [{ texts, selection: null, summary: "" }], index: 0, selection: null, revision: s.revision + 1 };
         }),
     }),
     {
