@@ -24,6 +24,8 @@ const button = "flex h-8 items-center justify-center gap-1.5 rounded-md px-3 tex
 export default function ProjectOverview() {
   const connection = useGitStore((s) => s.connection);
   const analysis = useGitStore((s) => s.analysis);
+  // The stack follows the changes in the editor (a framework that is in the pull request but not merged).
+  const source = useLibraryStore((s) => s.source);
   const components = useLibraryStore((s) => s.components);
   const setActive = useLibraryStore((s) => s.setActive);
   const tokens = useDesignSystemStore((s) => s.colors.length + s.typography.length + s.spacing.length + s.radii.length + s.shadows.length);
@@ -41,7 +43,8 @@ export default function ProjectOverview() {
     let live = true;
     host.isEmpty().then((e) => { if (live) setEmpty(e); }, () => { if (live) setEmpty(false); });
     return () => { live = false; };
-  }, [connection, none, host]);
+  // Asked again whenever the repository is read again (a first commit made from the Sync panel is followed by a read).
+  }, [connection, none, host, analysis?.scannedAt]);
 
   const header = connection && (
     <p className="mb-1 flex items-center gap-1.5 text-xs text-text-tertiary"><GitBranch size={12} /> {repoSlug(connection)}</p>
@@ -100,7 +103,7 @@ export default function ProjectOverview() {
               <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary"><Palette size={13} /> Add tokens</span>
               <span className="text-2xs leading-relaxed text-text-tertiary">Colors, type, spacing and more, kept as CSS variables in the repository.{tokens > 0 ? ` ${tokens} so far.` : ""}</span>
             </button>
-            {analysis.stack.tailwindVersion === null && (
+            {(source?.tailwindVersion ?? analysis.stack.tailwindVersion) === null && (
               <button
                 onClick={() => setFrameworkOpen(true)}
                 className="flex flex-col gap-1 rounded-lg border border-surface-border bg-surface-raised px-3 py-3 text-left transition-colors hover:border-accent/50"

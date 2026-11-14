@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef } from "react";
 import { gitBlobSha } from "@/lib/github";
 import { editPrBody } from "@/lib/work/body";
 import { refreshWork, syncWork, SyncFailed, WorkEnded, type Changed, type WorkState } from "@/lib/work/sync";
+import { overlayOf, overlayReader } from "@/lib/work/overlay";
+import { advanceLink, changedTokenNames, stageTokens, waitingTokenChanges } from "@/lib/work/tokens";
+import { readRepoState } from "@/lib/token-sync/flow";
+import { tokenSlices } from "@/store/token-sync";
+import { useDesignSystemStore } from "@/store/design-system";
 import { errorMessage, useCanSend, useGitHost } from "@/components/git/hooks";
 import { useReadRepository } from "@/components/stage/useReadRepository";
 import { changedFiles, editLog, useEditStore, type Base } from "@/store/edit";
@@ -18,6 +23,13 @@ export const TITLE = "Changes from Motif";
 
 const toChanged = (): Changed[] => changedFiles(useEditStore.getState()).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha }));
 
+// The repository and branch the editor's changes belong to (store/edit.ts `adopt`): the one the library was read from, so
+// it is the same wherever changes are put in.
+export function editScope(connection: GitConnection): string {
+  const source = useLibraryStore.getState().source;
+  return source ? `${source.repo}@${source.branch}` : `${connection.owner}/${connection.repo}@${connection.defaultBranch}`;
+}
+
 // Edited files that the default branch has changed since they were read. A file made here is stale once the repository
 // has one of the same name; another, once it differs.
 export async function findStale(host: { readText: (path: string, ref: string) => Promise<string | null> }, branch: string): Promise<string[]> {
@@ -31,6 +43,9 @@ export async function findStale(host: { readText: (path: string, ref: string) =>
 
 // Gives up the edits to some files, and the components made here that they were.
 export function discardChanges(paths: string[]) {
+  // Token files that are given up are no longer what Motif's tokens were written to: they are waiting again.
+  const link = useGitStore.getState().tokenLink;
+  if (link?.staged && paths.some((p) => link.staged!.paths.includes(p))) useGitStore.getState().setTokenLink({ ...link, staged: null });
   useEditStore.getState().discard(paths);
   useLibraryStore.getState().dropDrafts(paths);
 }
@@ -55,6 +70,15 @@ export function useWorkActions() {
       if (!conn) return;
       // The component being worked on stays open: it is read from the repository now, with the same changes in it.
       const open = useLibraryStore.getState().activeId;
+      // Which tokens the pull request changed, while the editor still holds its changes.
+      const link = useGitStore.getState().tokenLink;
+      let touched: string[] = [];
+      if (link && link.repo === `${conn.owner}/${conn.repo}`) {
+        try {
+          const planned = await readRepoState(overlayReader(host, overlayOf(useEditStore.getState())), link.repo, link.branch);
+          touched = changedTokenNames(planned.snapshot.doc, link.base);
+        } catch { /* the tokens' base then stays as it was, which only leaves the badge up */ }
+      }
       const bases: Record<string, Base> = {};
       for (const path of Object.keys(work.pushed)) {
         const file = await host.getFile(path, conn.defaultBranch).catch(() => null);
@@ -67,6 +91,12 @@ export function useWorkActions() {
       setWork(null);
       runtime().set({ refreshed: null, note: "", error: null, notice: `Pull request #${work.pr?.number} was merged. The repository has your changes now.` });
       await readRepository();
+      const current = useGitStore.getState().tokenLink;
+      if (current && link && current.repo === link.repo) {
+        let merged = {} as Awaited<ReturnType<typeof readRepoState>>["snapshot"]["doc"];
+        if (touched.length > 0) merged = await readRepoState(host, current.repo, current.branch).then((r) => r.snapshot.doc).catch(() => ({}));
+        useGitStore.getState().setTokenLink(advanceLink(current, touched, merged));
+      }
       if (open && useLibraryStore.getState().components.some((c) => c.id === open)) useLibraryStore.getState().setActive(open);
     };
 
@@ -95,8 +125,22 @@ export function useWorkActions() {
       const conn = useGitStore.getState().connection;
       if (!conn || busy.current) return;
       busy.current = true;
-      runtime().set({ syncing: true, error: null, notice: null });
+      runtime().set({ syncing: true, error: null, notice: null, tokenNote: null });
       try {
+        // Token changes made in Motif become file changes first, so they go in the same commit as everything else.
+        const link = useGitStore.getState().tokenLink;
+        if (link && link.branch === conn.defaultBranch && waitingTokenChanges(link, tokenSlices()).length > 0) {
+          const set = useDesignSystemStore.getState().sets.find((x) => x.id === link.setId);
+          if (set) {
+            try {
+              const staged = await stageTokens({ host, link, slices: tokenSlices(), set, overlay: overlayOf(useEditStore.getState()), scope: editScope(conn) });
+              useGitStore.getState().setTokenLink(staged.link);
+              runtime().set({ tokenNote: staged.attention });
+            } catch (err) {
+              runtime().set({ tokenNote: `The tokens couldn't be added to the pull request: ${errorMessage(err)}` });
+            }
+          }
+        }
         for (let attempt = 0; attempt < 2; attempt++) {
           const work = useGitStore.getState().work ?? null;
           // Looked at again now: the repository may have changed since the editor last looked.
@@ -152,6 +196,21 @@ export function useWorkActions() {
   }, [host, canSend, readRepository]);
 }
 
+// Token changes in Motif that aren't in the editor's files yet (no request: see lib/work/tokens.ts).
+export function useTokenChanges() {
+  const link = useGitStore((s) => s.tokenLink);
+  const colors = useDesignSystemStore((s) => s.colors);
+  const spacing = useDesignSystemStore((s) => s.spacing);
+  const radii = useDesignSystemStore((s) => s.radii);
+  const shadows = useDesignSystemStore((s) => s.shadows);
+  const connection = useGitStore((s) => s.connection);
+  return useMemo(() => {
+    // A link to a branch other than the one the pull request is from isn't sent, so nothing waits for it.
+    if (!link || (connection && link.branch !== connection.defaultBranch)) return [];
+    return waitingTokenChanges(link, { colors, spacing, radii, shadows });
+  }, [link, connection, colors, spacing, radii, shadows]);
+}
+
 // Mounted once while a project is open: checks the pull request now and then, and which of the edited files the
 // default branch has changed since.
 export function useWorkWatcher() {
@@ -164,6 +223,10 @@ export function useWorkWatcher() {
   const bases = useEditStore((s) => s.bases);
   const latest = useRef(actions);
   latest.current = actions;
+
+  // What a sync said about the tokens is out of date once the link has moved (the person applied the repository's changes).
+  const syncedAt = useGitStore((s) => s.tokenLink?.syncedAt ?? null);
+  useEffect(() => { useWorkRuntime.getState().set({ tokenNote: null }); }, [syncedAt]);
 
   // A different pull request (or none) starts from what is known: nothing.
   useEffect(() => {

@@ -9,6 +9,7 @@ import { useEditStore } from "@/store/edit";
 import { useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
+import { overlayOf, overlayPaths, overlayReader } from "@/lib/work/overlay";
 import { loadTree } from "./preview-core";
 import { readerFor } from "./reader";
 
@@ -27,7 +28,8 @@ function Body({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState<string[]>([]);
 
   const dir = useMemo(() => componentDir(components), [components]);
-  const tailwind = analysis?.stack.tailwindVersion === 4;
+  // The stack follows the changes in the editor: a Tailwind add-on in the pull request already counts.
+  const tailwind = (source ? source.tailwindVersion : analysis?.stack.tailwindVersion) === 4;
   const problem = name ? checkName(name, { components: components.map((c) => c.name), paths: [] }, dir) : null;
 
   const create = async (e: React.FormEvent) => {
@@ -36,9 +38,12 @@ function Body({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const reader = readerFor(source, host);
-      const paths = await loadTree(source, host);
-      const plan = await planComponent({ name, analysis, components, paths, reader, ref: source.branch });
+      // Planned against the repository with the editor's changes in it, so a second new component adds to the first one's
+      // barrel instead of replacing it, and a staged package.json is built on.
+      const overlay = overlayOf(useEditStore.getState());
+      const reader = overlayReader(readerFor(source, host), overlay);
+      const paths = overlayPaths(await loadTree(source, host), overlay);
+      const plan = await planComponent({ name, analysis: { ...analysis, stack: { ...analysis.stack, tailwindVersion: source.tailwindVersion } }, components, paths, reader, ref: source.branch });
       const entry = await libraryEntry(plan, { reader, ref: source.branch, paths });
       // The editor's changes belong to a repository and branch; they are set before anything is put in them.
       useEditStore.getState().adopt(`${source.repo}@${source.branch}`);

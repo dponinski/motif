@@ -5,15 +5,18 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowRight, ExternalLink, Loader2, RefreshCw, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isColorValue } from "@/lib/repo-scan/summary";
-import FirstCommit from "./FirstCommit";
 import { planExport, planSync, readRepoState, type RepoState, type SyncPlan, type TokenLink } from "@/lib/token-sync/flow";
 import { displayValue, type TokenChange, type TokenConflict } from "@/lib/token-sync/merge";
-import { openTokenPr, prBody } from "@/lib/token-sync/pr";
-import { applyEdits, filesNeeded } from "@/lib/token-sync/write";
+import { tokenSummary } from "@/lib/token-sync/pr";
+import { overlayOf, overlayReader } from "@/lib/work/overlay";
+import { stageFiles } from "@/lib/work/stage";
+import { editScope } from "@/components/work/useWork";
+import { useEditStore } from "@/store/edit";
+import { useNavRequest } from "@/store/nav";
 import { useDesignSystemStore } from "@/store/design-system";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { applySyncPlan, importRepoTokens, tokenSlices } from "@/store/token-sync";
-import { errorMessage, useBranches, useCanSend, useGitHost } from "./hooks";
+import { errorMessage, useBranches, useGitHost } from "./hooks";
 
 const btnPrimary = "h-7 px-3 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const btnSecondary = "h-7 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
@@ -152,8 +155,7 @@ function ImportSection({ state, repo, branch, onDone }: { state: RepoState; repo
 
 // ── Not linked yet: the repository has no tokens ──────────────────────────────
 
-function ExportSection({ state, connection, host, branch, empty, onFirstCommit, onDone }: { state: RepoState; connection: GitConnection; host: Host; branch: string; empty: boolean; onFirstCommit: () => void; onDone: (n: Notice) => void }) {
-  const canSend = useCanSend(connection);
+function ExportSection({ state, connection, host, branch, onDone, onOpenSync }: { state: RepoState; connection: GitConnection; host: Host; branch: string; onDone: (n: Notice) => void; onOpenSync: () => void }) {
   const sets = useDesignSystemStore((s) => s.sets);
   const colors = useDesignSystemStore((s) => s.colors);
   const radii = useDesignSystemStore((s) => s.radii);
@@ -164,6 +166,8 @@ function ExportSection({ state, connection, host, branch, empty, onFirstCommit, 
   const [setId, setSetId] = useState(options[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The pull request is made from the default branch, so that is where the tokens go.
+  const wrongBranch = branch !== connection.defaultBranch;
 
   const create = async () => {
     const set = sets.find((s) => s.id === setId);
@@ -171,19 +175,18 @@ function ExportSection({ state, connection, host, branch, empty, onFirstCommit, 
     setBusy(true);
     setError(null);
     try {
-      const plan = await planExport(host, state, branch, set, tokenSlices());
-      const tailwind = state.analysis.stack.tailwindVersion === 4;
-      const note = plan.imported
-        ? ""
-        : `\n\n> Import \`${plan.tokensPath}\` from your stylesheet${tailwind ? " after the Tailwind import" : ""} to use these tokens.`;
-      const pr = await openTokenPr({
-        host, base: branch, files: plan.files,
-        title: "Add design tokens from Motif",
-        body: prBody(plan.changes, plan.skipped.map((s) => ({ ...s, theme: null })), { generated: true }) + note,
-        message: "Add design tokens from Motif",
-      });
-      useGitStore.getState().setTokenLink({ ...plan.link, repo: repoSlug(connection), branch, pending: pr, syncedAt: Date.now() });
-      onDone({ kind: "ok", text: `Opened pull request #${pr.number} adding ${Object.keys(plan.doc).length} tokens in ${plan.tokensPath}.`, href: pr.url });
+      // Planned against the repository with the editor's changes in it: a framework that is already in the pull request
+      // is part of it.
+      const oh = overlayReader(host, overlayOf(useEditStore.getState()));
+      const planned = await readRepoState(oh, repoSlug(connection), branch);
+      const plan = await planExport(oh, planned, branch, set, tokenSlices());
+      const tailwind = planned.analysis.stack.tailwindVersion === 4;
+      const summary = tokenSummary(plan.changes, plan.skipped.map((s) => ({ ...s, theme: null })), { generated: true })
+        + (plan.imported ? "" : `\nImport \`${plan.tokensPath}\` from your stylesheet${tailwind ? " after the Tailwind import" : ""} to use these tokens.`);
+      const files = Object.fromEntries(Object.entries(plan.files).map(([p, f]) => [p, f.text]));
+      await stageFiles({ host, branch, scope: editScope(connection), files, summary });
+      useGitStore.getState().setTokenLink({ ...plan.link, repo: repoSlug(connection), branch, staged: { doc: plan.doc, paths: Object.keys(files) }, syncedAt: Date.now() });
+      onDone({ kind: "ok", text: `Added ${Object.keys(plan.doc).length} tokens in ${plan.tokensPath} to your pull request. Press Sync to send them.` });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -194,7 +197,7 @@ function ExportSection({ state, connection, host, branch, empty, onFirstCommit, 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs leading-relaxed text-text-secondary">
-        This repository has no design tokens yet. Send a Motif token set to it as a pull request that adds a stylesheet of CSS variables{state.analysis.stack.tailwindVersion === 4 ? " wired into Tailwind" : ""}.
+        This repository has no design tokens yet. Add a Motif token set to your pull request as a stylesheet of CSS variables{state.analysis.stack.tailwindVersion === 4 ? " wired into Tailwind" : ""}. It is sent with everything else when you press Sync.
       </p>
       {options.length === 0 ? (
         <p className="text-xs text-text-tertiary">There are no tokens in Motif to send yet.</p>
@@ -206,23 +209,24 @@ function ExportSection({ state, connection, host, branch, empty, onFirstCommit, 
           </select>
         </label>
       )}
-      {empty && <FirstCommit connection={connection} onDone={onFirstCommit} />}
-      {!canSend && <p className="text-xs text-amber-500">Opening a pull request needs you to sign in with GitHub, or an access token with Contents and Pull requests read and write. Either is in the Git panel.</p>}
+      {wrongBranch && <p className="text-xs text-amber-500">Changes go to a pull request from {connection.defaultBranch}. Choose {connection.defaultBranch} to add tokens.</p>}
       {error && <p className="text-xs text-red-400">{error}</p>}
-      <button className={btnPrimary} onClick={create} disabled={busy || !canSend || !setId || empty}>
-        {busy && <Loader2 size={12} className="animate-spin" />}
-        Create pull request
-      </button>
+      <div className="flex gap-2">
+        <button className={btnPrimary} onClick={create} disabled={busy || !setId || wrongBranch}>
+          {busy && <Loader2 size={12} className="animate-spin" />}
+          Add to pull request
+        </button>
+        <button className={btnSecondary} onClick={onOpenSync}>Open Sync</button>
+      </div>
     </div>
   );
 }
 
 // ── Linked ────────────────────────────────────────────────────────────────────
 
-function SyncSection({ link, state, connection, host, onRefresh, notify }: {
-  link: TokenLink; state: RepoState; connection: GitConnection; host: Host; onRefresh: () => void; notify: (n: Notice) => void;
+function SyncSection({ link, state, connection, onOpenSync, notify }: {
+  link: TokenLink; state: RepoState; connection: GitConnection; onOpenSync: () => void; notify: (n: Notice) => void;
 }) {
-  const canSend = useCanSend(connection);
   const setLink = useGitStore((s) => s.setTokenLink);
   const colors = useDesignSystemStore((s) => s.colors);
   const spacing = useDesignSystemStore((s) => s.spacing);
@@ -231,25 +235,11 @@ function SyncSection({ link, state, connection, host, onRefresh, notify }: {
   const setName = useDesignSystemStore((s) => s.sets.find((x) => x.id === link.setId)?.name);
   const plan: SyncPlan = useMemo(() => planSync(link, { colors, spacing, radii, shadows }, state), [link, colors, spacing, radii, shadows, state]);
   const [takeTheirs, setTakeTheirs] = useState<Set<number>>(new Set());
-  const [busy, setBusy] = useState<"apply" | "pr" | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const { conflicts } = plan.merge;
   const needsApply = conflicts.length > 0 || plan.toMotif.length > 0 || plan.merge.restored.length > 0;
   const inSync = !needsApply && plan.toRepo.length === 0;
-
-  useEffect(() => {
-    if (!link.pending) return;
-    let stale = false;
-    host.getPullRequest(link.pending.number).then((info) => {
-      if (stale || info.state === "open") return;
-      setLink({ ...link, pending: null });
-      notify({ kind: "ok", text: info.merged ? `Pull request #${info.number} was merged.` : `Pull request #${info.number} was closed without merging.` });
-      if (info.merged) onRefresh();
-    }, () => undefined);
-    return () => { stale = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [link.pending?.number]);
+  const wrongBranch = link.branch !== connection.defaultBranch;
 
   const apply = () => {
     const next = applySyncPlan(link, plan, [...takeTheirs], state);
@@ -259,54 +249,15 @@ function SyncSection({ link, state, connection, host, onRefresh, notify }: {
     return next;
   };
 
-  const createPr = async () => {
-    setBusy("pr");
-    setError(null);
-    try {
-      const paths = filesNeeded(state.analysis);
-      const read = await Promise.all(paths.map(async (p) => [p, await host.getFile(p, link.branch)] as const));
-      const texts: Record<string, string> = {};
-      const shas: Record<string, string> = {};
-      for (const [path, file] of read) if (file) { texts[path] = file.text; shas[path] = file.sha; }
-
-      const result = await applyEdits(texts, state.analysis, state.snapshot, plan.toRepo);
-      const changed = Object.keys(result.files);
-      if (changed.length === 0) {
-        setError(result.skipped.length ? `Nothing could be written: ${result.skipped[0].reason}` : "There is nothing to send.");
-        return;
-      }
-      const left = new Set(result.skipped.map((s) => `${s.name}/${s.theme ?? ""}`));
-      const written = plan.toRepo.filter((c) => !left.has(`${c.name}/${c.theme}`) && !left.has(`${c.name}/`));
-      const pr = await openTokenPr({
-        host, base: link.branch,
-        files: Object.fromEntries(changed.map((p) => [p, { text: result.files[p], sha: shas[p] ?? null }])),
-        title: "Update design tokens from Motif",
-        body: prBody(written, result.skipped, { generated: false }),
-        message: "Update design tokens from Motif",
-      });
-      setLink({ ...link, pending: pr });
-      notify({ kind: "ok", text: `Opened pull request #${pr.number} with ${written.length} changes.`, href: pr.url });
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const prBlocked = !canSend ? "Opening a pull request needs you to sign in with GitHub, or an access token. Either is in the Git panel."
-    : needsApply ? "Apply the changes above first."
-    : link.pending ? `Pull request #${link.pending.number} is still open. Merge or close it first.`
-    : null;
-
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-text-secondary">
         Synced with <span className="font-medium text-text-primary">{link.repo}</span> on <span className="font-mono">{link.branch}</span>, using the set <span className="font-medium text-text-primary">{setName}</span>.
       </p>
 
-      {link.pending && (
-        <p className="text-xs text-text-secondary">
-          Pull request <a href={link.pending.url} target="_blank" rel="noreferrer" className="underline">#{link.pending.number}</a> is open with Motif&apos;s changes.
+      {wrongBranch && (
+        <p className="text-xs text-amber-500">
+          This link is to {link.branch}, but changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent. Stop syncing this set and link it again on {connection.defaultBranch}.
         </p>
       )}
 
@@ -323,23 +274,22 @@ function SyncSection({ link, state, connection, host, onRefresh, notify }: {
         </p>
       )}
       {needsApply && (
-        <button className={btnPrimary} onClick={apply} disabled={busy !== null}>
+        <button className={btnPrimary} onClick={apply}>
           {conflicts.length > 0 ? "Apply my choices" : "Apply to Motif"}
         </button>
       )}
 
       {plan.toRepo.length > 0 && (
         <>
-          <ChangeList changes={plan.toRepo} label="Going to the repository" />
-          {prBlocked && <p className="text-2xs leading-relaxed text-text-tertiary">{prBlocked}</p>}
-          <button className={btnPrimary} onClick={createPr} disabled={busy !== null || prBlocked !== null}>
-            {busy === "pr" && <Loader2 size={12} className="animate-spin" />}
-            Create pull request
-          </button>
+          <ChangeList changes={plan.toRepo} label="Not in the repository yet" />
+          <p className="text-2xs leading-relaxed text-text-tertiary">
+            {needsApply
+              ? "Apply the changes above first: until then these tokens are not added to the pull request."
+              : "These are added to your pull request when you press Sync, together with your other changes."}
+          </p>
+          <button className={btnSecondary} onClick={onOpenSync}>Open Sync</button>
         </>
       )}
-
-      {error && <p className="text-xs text-red-400">{error}</p>}
 
       <button className="self-start text-2xs text-text-tertiary underline hover:text-text-primary" onClick={() => setLink(null)}>
         Stop syncing this set
@@ -350,7 +300,7 @@ function SyncSection({ link, state, connection, host, onRefresh, notify }: {
 
 // ── Dialog ────────────────────────────────────────────────────────────────────
 
-function Body({ connection }: { connection: GitConnection }) {
+function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSync: () => void }) {
   const host = useGitHost(connection);
   const slug = repoSlug(connection);
   const storedLink = useGitStore((s) => s.tokenLink);
@@ -364,15 +314,12 @@ function Body({ connection }: { connection: GitConnection }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [empty, setEmpty] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const next = await readRepoState(host, slug, branch);
-      // With nothing in the repository, say whether that is because it has no commits at all.
-      setEmpty(Object.keys(next.snapshot.doc).length === 0 ? await host.isEmpty().catch(() => false) : false);
       setState(next);
     } catch (err) {
       setError(errorMessage(err));
@@ -406,10 +353,10 @@ function Body({ connection }: { connection: GitConnection }) {
 
       {state && (
         link
-          ? <SyncSection link={link} state={state} connection={connection} host={host} onRefresh={refresh} notify={setNotice} />
+          ? <SyncSection link={link} state={state} connection={connection} onOpenSync={onOpenSync} notify={setNotice} />
           : Object.keys(state.snapshot.doc).length > 0
             ? <ImportSection state={state} repo={slug} branch={branch} onDone={setNotice} />
-            : <ExportSection state={state} connection={connection} host={host} branch={branch} empty={empty} onFirstCommit={refresh} onDone={setNotice} />
+            : <ExportSection state={state} connection={connection} host={host} branch={branch} onDone={setNotice} onOpenSync={onOpenSync} />
       )}
     </div>
   );
@@ -432,7 +379,7 @@ export default function TokenSyncDialog({ open, onOpenChange }: { open: boolean;
             </Dialog.Close>
           </div>
           <div className="overflow-y-auto p-4">
-            {connection ? <Body connection={connection} /> : <p className="text-xs text-text-secondary">Connect a repository in the Git panel first.</p>}
+            {connection ? <Body connection={connection} onOpenSync={() => { onOpenChange(false); useNavRequest.getState().ask("sync"); }} /> : <p className="text-xs text-text-secondary">Connect a repository in the Git panel first.</p>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

@@ -84,7 +84,11 @@ export async function applyEdits(
   files: Record<string, string>,
   analysis: RepoAnalysis,
   snapshot: RepoSnapshot,
-  changes: TokenChange[]
+  changes: TokenChange[],
+  // What the repository really has, when the files being edited already hold earlier edits: a value that is changed back to
+  // the repository's own is written exactly as the repository had it, not as a converted equivalent (oklch(0.52 …) would
+  // come back as oklch(0.519 …), a change nobody made).
+  options: { original?: RepoSnapshot } = {}
 ): Promise<WriteResult> {
   const postcss: Postcss = await import("postcss");
   const roots = new Map<string, Root>();
@@ -147,7 +151,10 @@ export async function applyEdits(
       if (!target && d.source?.start?.line === loc.line) target = d;
     });
     if (!target) { skipped.push({ name: change.name, theme: change.theme, reason: `Couldn't find it in ${loc.file}; the file changed since it was read` }); continue; }
-    (target as import("postcss").Declaration).value = writtenValue(change, analysis, snapshot);
+    const own = options.original;
+    const key = change.theme ?? own?.baseTheme ?? snapshot.baseTheme;
+    const restored = own && own.doc[change.name]?.values[key] === change.after ? own.raw[change.name]?.[key] : undefined;
+    (target as import("postcss").Declaration).value = restored ?? writtenValue(change, analysis, snapshot);
     touched.add(loc.file);
   }
 

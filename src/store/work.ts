@@ -12,6 +12,8 @@ interface WorkRuntime {
   notice: string | null;
   // The note for the pull request's description, as typed.
   note: string;
+  // Said after a sync: the tokens couldn't all be put in, or the repository has token changes Motif hasn't taken.
+  tokenNote: string | null;
   // Edited files that the default branch has changed since: they aren't sent.
   stale: string[];
   set: (partial: Partial<Omit<WorkRuntime, "set">>) => void;
@@ -24,6 +26,7 @@ export const useWorkRuntime = create<WorkRuntime>((set) => ({
   error: null,
   notice: null,
   note: "",
+  tokenNote: null,
   stale: [],
   set: (partial) => set(partial),
 }));

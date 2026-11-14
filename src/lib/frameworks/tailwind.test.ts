@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { scanRepository, memorySource } from "../repo-scan";
 import { readRepoState, planExport } from "../token-sync/flow";
-import { FrameworkRefusal, TAILWIND_VERSION, addDevDependency, newPackageJson, planTailwind, tailwindPrBody } from "./tailwind";
+import { FrameworkRefusal, TAILWIND_VERSION, addDevDependency, newPackageJson, planTailwind, tailwindSummary } from "./tailwind";
 
 // A host holding files in memory, with the sha each has.
 const host = (files: Record<string, string>) => ({
@@ -106,13 +106,14 @@ describe("planning Tailwind for a repository", () => {
     await expect(planTailwind(host(listed), await stateOf(listed), "main", "ds")).rejects.toThrow(/already set up/);
   });
 
-  it("writes a pull request description that lists every file", async () => {
+  it("writes the step for the pull request: what was done, then every file and what to do", async () => {
     const files = { "README.md": "# ds" };
     const plan = await planTailwind(host(files), await stateOf(files), "main", "ds");
-    const body = tailwindPrBody(plan);
-    expect(body).toContain("`package.json`");
-    expect(body).toContain("`src/styles/tailwind.css`");
-    expect(body).toContain("Opened from Motif.");
+    const lines = tailwindSummary(plan).split("\n");
+    expect(lines[0]).toBe("Add Tailwind CSS v4");
+    expect(lines.some((l) => l.startsWith("`package.json`"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("`src/styles/tailwind.css`"))).toBe(true);
+    expect(lines.some((l) => l.startsWith("To do: Import src/styles/tailwind.css once"))).toBe(true);
   });
 
   it("once it is merged, the repository reads as a Tailwind v4 one, and tokens export in Tailwind's form", async () => {
@@ -146,5 +147,31 @@ describe("tokens made from scratch in a repository with no framework", () => {
     expect(css).toContain("#99bbff");
     expect(css).not.toContain("@theme");
     expect(plan.imported).toBe(false);
+  });
+});
+
+describe("planned over what is already in the pull request", () => {
+  it("refuses a second time, builds on a staged tokens file, and imports it", async () => {
+    const { overlayReader } = await import("../work/overlay");
+    const files: Record<string, string> = { "README.md": "# ds" };
+    const reader = { listTree: async () => ({ paths: Object.keys(files), truncated: false }), readText: async (p: string) => files[p] ?? null, ...host(files) };
+
+    // Tokens are in the pull request (a file made here), then Tailwind is planned over it.
+    const slices = { colors: [{ id: "c", name: "Primary", value: "#3366ff", group: "base", setId: "s", themeValues: { t: "#3366ff" } }], spacing: [], radii: [], shadows: [] };
+    const staged = await planExport(host(files), await stateOf(files), "main", { id: "s", themes: [{ id: "t", name: "Default" }] }, slices);
+    const overlayTexts = Object.fromEntries(Object.entries(staged.files).map(([p, f]) => [p, f.text]));
+    const overlay = { texts: overlayTexts, bases: Object.fromEntries(Object.keys(overlayTexts).map((p) => [p, { text: "", sha: null }])) };
+    const oh = overlayReader(reader, overlay);
+    const state = await readRepoState(oh, "acme/ds", "main");
+    const plan = await planTailwind(oh, state, "main", "ds");
+    // The staged tokens file is rewritten for Tailwind and imported by the new stylesheet.
+    expect(plan.files["src/styles/tokens.css"].text).toContain("@theme");
+    expect(plan.files["src/styles/tailwind.css"].text).toContain('@import "./tokens.css";');
+
+    // With that staged too, the repository as the pull request will have it already uses Tailwind.
+    const both = { ...overlayTexts, ...Object.fromEntries(Object.entries(plan.files).map(([p, f]) => [p, f.text])) };
+    const overlay2 = { texts: both, bases: Object.fromEntries(Object.keys(both).map((p) => [p, { text: "", sha: null }])) };
+    const oh2 = overlayReader(reader, overlay2);
+    await expect(planTailwind(oh2, await readRepoState(oh2, "acme/ds", "main"), "main", "ds")).rejects.toThrow(/already set up/);
   });
 });

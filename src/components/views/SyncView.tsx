@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, ExternalLink, Loader2, RefreshCw, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { diffLines } from "@/lib/edit/diff";
@@ -8,7 +8,12 @@ import { plan, statusOf, type Changed } from "@/lib/work/sync";
 import { changedFiles, useEditStore, type ChangedFile } from "@/store/edit";
 import { useGitStore } from "@/store/git";
 import { useWorkRuntime } from "@/store/work";
-import { discardChanges, useWorkActions } from "@/components/work/useWork";
+import { discardChanges, useTokenChanges, useWorkActions } from "@/components/work/useWork";
+import { changeLine } from "@/lib/token-sync/pr";
+import FirstCommit from "@/components/git/FirstCommit";
+import { useGitHost } from "@/components/git/hooks";
+
+const NONE = { owner: "", repo: "", token: "", defaultBranch: "main" };
 
 // A new file is all additions: there is no empty line before it to show as taken away.
 function diffOf(f: ChangedFile) {
@@ -61,11 +66,21 @@ export default function SyncView() {
   const bases = useEditStore((s) => s.bases);
   const files = useMemo(() => changedFiles({ history, index, bases }), [history, index, bases]);
   const runtime = useWorkRuntime();
+  const tokenChanges = useTokenChanges();
+  const host = useGitHost(connection ?? NONE);
+  // A repository with no commits has nothing to start a branch from: the first commit is offered here, where sending happens.
+  const [empty, setEmpty] = useState(false);
+  useEffect(() => {
+    if (!connection) return;
+    let alive = true;
+    host.isEmpty().then((e) => { if (alive) setEmpty(e); }, () => undefined);
+    return () => { alive = false; };
+  }, [host, connection]);
   const { sync, updateBranch, canSend } = useWorkActions();
   const [confirming, setConfirming] = useState(false);
 
   const changed: Changed[] = useMemo(() => files.map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })), [files]);
-  const status = statusOf({ changed, work, refreshed: runtime.refreshed, syncing: runtime.syncing, error: runtime.error, stale: runtime.stale.filter((p) => !(work && p in work.pushed)).length });
+  const status = statusOf({ changed, work, refreshed: runtime.refreshed, syncing: runtime.syncing, error: runtime.error, tokens: tokenChanges.length, tokenNote: runtime.tokenNote, stale: runtime.stale.filter((p) => !(work && p in work.pushed)).length });
   const p = useMemo(() => plan(changed, work), [changed, work]);
   const waitingPaths = new Set([...p.push.map((f) => f.path)]);
   const waiting = files.filter((f) => waitingPaths.has(f.path));
@@ -74,7 +89,7 @@ export default function SyncView() {
 
   if (!connection) return <p className="p-3 text-xs text-text-tertiary">Connect a repository to sync changes to it.</p>;
 
-  const canSync = canSend && !runtime.syncing && (p.push.length + p.restore.length > 0 || (!!work && !work.pr));
+  const canSync = canSend && !runtime.syncing && !empty && (p.push.length + p.restore.length + tokenChanges.length > 0 || (!!work && !work.pr));
   const behind = status.reason === "behind";
 
   return (
@@ -91,6 +106,19 @@ export default function SyncView() {
         <a href={work.pr.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-accent hover:underline">
           Open pull request #{work.pr.number} <ExternalLink size={10} />
         </a>
+      )}
+
+      {tokenChanges.length > 0 && (
+        <section className="flex flex-col gap-1.5" aria-label="Token changes">
+          <h3 className="text-2xs font-medium uppercase tracking-wide text-text-tertiary">Token changes ({tokenChanges.length})</h3>
+          <ul className="rounded-md border border-surface-border">
+            {tokenChanges.slice(0, 8).map((c) => (
+              <li key={`${c.name}/${c.theme}`} className="truncate border-b border-surface-border-subtle px-2 py-1 font-mono text-2xs text-text-secondary last:border-b-0" title={changeLine(c)}>{c.name}{c.theme ? ` (${c.theme})` : ""} <span className="font-sans text-text-tertiary">{c.type}</span></li>
+            ))}
+          </ul>
+          {tokenChanges.length > 8 && <p className="text-2xs text-text-tertiary">…and {tokenChanges.length - 8} more</p>}
+          <p className="text-2xs leading-relaxed text-text-tertiary">Added to the pull request as files when you press Sync.</p>
+        </section>
       )}
 
       {(waiting.length > 0 || reverted.length > 0) && (
@@ -112,12 +140,14 @@ export default function SyncView() {
         </section>
       )}
 
-      {files.length === 0 && reverted.length === 0 && !work && <p className="text-xs leading-relaxed text-text-tertiary">Changes you make to components are kept here until you press Sync. The first sync opens one pull request; every later one adds to it.</p>}
+      {files.length === 0 && reverted.length === 0 && tokenChanges.length === 0 && !work && <p className="text-xs leading-relaxed text-text-tertiary">Changes you make to components are kept here until you press Sync. The first sync opens one pull request; every later one adds to it.</p>}
 
       <label className="flex flex-col gap-1">
         <span className="text-2xs text-text-tertiary">Note for the pull request description (optional)</span>
         <textarea className="input-sm min-h-[48px]" aria-label="Pull request note" value={runtime.note} onChange={(e) => runtime.set({ note: e.target.value })} />
       </label>
+
+      {empty && connection && <FirstCommit connection={connection} onDone={() => setEmpty(false)} />}
 
       {runtime.error && <p role="alert" className="break-words text-xs text-red-400">{runtime.error}</p>}
 

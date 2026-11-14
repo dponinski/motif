@@ -2,31 +2,30 @@
 
 import { useCallback, useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Check, ExternalLink, Loader2, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FrameworkRefusal, planTailwind, tailwindBranchName, tailwindPrBody, type FrameworkPlan } from "@/lib/frameworks/tailwind";
+import { FrameworkRefusal, planTailwind, tailwindSummary, type FrameworkPlan } from "@/lib/frameworks/tailwind";
 import { readRepoState } from "@/lib/token-sync/flow";
-import { openTokenPr } from "@/lib/token-sync/pr";
-import { useReadRepository } from "@/components/stage/useReadRepository";
+import { overlayOf, overlayReader } from "@/lib/work/overlay";
+import { stageFiles } from "@/lib/work/stage";
+import { editScope } from "@/components/work/useWork";
+import { useEditStore } from "@/store/edit";
+import { useNavRequest } from "@/store/nav";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
-import FirstCommit from "./FirstCommit";
-import { errorMessage, useCanSend, useGitHost } from "./hooks";
+import { errorMessage, useGitHost } from "./hooks";
 
 const btnPrimary = "h-8 px-3 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const btnSecondary = "h-8 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 
-function Body({ connection }: { connection: GitConnection }) {
+function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSync: () => void }) {
   const host = useGitHost(connection);
-  const canSend = useCanSend(connection);
-  const read = useReadRepository();
   const branch = connection.defaultBranch;
-  const [empty, setEmpty] = useState(false);
   const [plan, setPlan] = useState<FrameworkPlan | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ number: number; url: string } | null>(null);
+  const [done, setDone] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,14 +33,16 @@ function Body({ connection }: { connection: GitConnection }) {
     setRefusal(null);
     setPlan(null);
     try {
-      if (await host.isEmpty()) { setEmpty(true); return; }
-      setEmpty(false);
-      const next = await readRepoState(host, repoSlug(connection), branch);
+      // Planned against the repository with the editor's changes in it, so what is already in the pull request counts.
+      const oh = overlayReader(host, overlayOf(useEditStore.getState()));
+      const next = await readRepoState(oh, repoSlug(connection), branch);
       try {
-        setPlan(await planTailwind(host, next, branch, connection.repo));
+        setPlan(await planTailwind(oh, next, branch, connection.repo));
       } catch (err) {
         if (!(err instanceof FrameworkRefusal)) throw err;
-        setRefusal(err.message);
+        // Say whether it is in the repository or only in the pull request.
+        const real = next.analysis.stack.tailwindVersion === 4 ? await readRepoState(host, repoSlug(connection), branch).catch(() => null) : null;
+        setRefusal(real && real.analysis.stack.tailwindVersion !== 4 ? "Tailwind CSS v4 is already in your pull request." : err.message);
       }
     } catch (err) {
       setError(errorMessage(err));
@@ -57,13 +58,8 @@ function Body({ connection }: { connection: GitConnection }) {
     setBusy(true);
     setError(null);
     try {
-      const pr = await openTokenPr({
-        host, base: branch, files: plan.files, branch: tailwindBranchName(),
-        title: "Add Tailwind CSS v4",
-        body: tailwindPrBody(plan),
-        message: "Add Tailwind CSS v4",
-      });
-      setDone({ number: pr.number, url: pr.url });
+      await stageFiles({ host, branch, scope: editScope(connection), files: Object.fromEntries(Object.entries(plan.files).map(([p, f]) => [p, f.text])), summary: tailwindSummary(plan) });
+      setDone(true);
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -74,7 +70,7 @@ function Body({ connection }: { connection: GitConnection }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-text-secondary">
-        A framework is added to the repository like a dependency: as a pull request. Once it is merged and the repository is read again, Motif edits styles with the framework&apos;s classes.
+        A framework is added to the repository like a dependency: in your pull request, with your other changes. Motif edits styles with the framework&apos;s classes straight away, and the repository has it once the pull request is merged.
       </p>
 
       <div className="flex flex-col gap-1.5">
@@ -91,30 +87,27 @@ function Body({ connection }: { connection: GitConnection }) {
       {loading && <p className="flex items-center gap-2 text-xs text-text-tertiary"><Loader2 size={12} className="animate-spin" /> Reading the repository…</p>}
       {error && <p className="break-words text-xs text-red-400" role="alert">{error}</p>}
       {refusal && <p className="text-xs leading-relaxed text-text-secondary" role="status" data-refused>{refusal}</p>}
-      {empty && <FirstCommit connection={connection} onDone={() => void load()} />}
 
       {plan && !done && (
         <div className="flex flex-col gap-2" data-plan>
-          <p className="text-2xs font-medium uppercase tracking-wider text-text-tertiary">The pull request will</p>
+          <p className="text-2xs font-medium uppercase tracking-wider text-text-tertiary">Your pull request will get</p>
           <ul className="flex flex-col gap-1">
             {plan.summary.map((s) => (
               <li key={s.path} className="text-xs text-text-secondary"><span className="font-mono text-text-primary">{s.path}</span>: {s.what}</li>
             ))}
           </ul>
           {plan.notes.map((n) => <p key={n} className="text-2xs leading-relaxed text-amber-500">{n}</p>)}
-          {!canSend && <p className="text-xs text-amber-500">Opening a pull request needs you to sign in with GitHub, or an access token with Contents and Pull requests read and write. Either is in the Git panel.</p>}
-          <button className={cn(btnPrimary, "self-start")} onClick={() => void create()} disabled={busy || !canSend}>
-            {busy && <Loader2 size={12} className="animate-spin" />} Create pull request
+          <button className={cn(btnPrimary, "self-start")} onClick={() => void create()} disabled={busy}>
+            {busy && <Loader2 size={12} className="animate-spin" />} Add to pull request
           </button>
         </div>
       )}
 
       {done && (
         <div className="flex flex-col gap-2 rounded-md border border-surface-border p-3" role="status" data-done>
-          <p className="flex items-center gap-1.5 text-xs text-text-primary"><Check size={12} className="text-emerald-500" /> Opened pull request #{done.number}.</p>
-          <a href={done.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-accent underline">View it on GitHub <ExternalLink size={10} /></a>
-          <p className="text-2xs leading-relaxed text-text-tertiary">Merge it, then read the repository again.</p>
-          <button className={cn(btnSecondary, "self-start")} onClick={() => void read()}>Read the repository again</button>
+          <p className="flex items-center gap-1.5 text-xs text-text-primary"><Check size={12} className="text-emerald-500" /> Added to your pull request.</p>
+          <p className="text-2xs leading-relaxed text-text-tertiary">Press Sync to send it with your other changes.</p>
+          <button className={cn(btnSecondary, "self-start")} onClick={onOpenSync}>Open Sync</button>
         </div>
       )}
     </div>
@@ -136,7 +129,7 @@ export default function FrameworkDialog({ open, onOpenChange }: { open: boolean;
             <Dialog.Close className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary" aria-label="Close"><X size={13} /></Dialog.Close>
           </div>
           <div className="overflow-y-auto p-4">
-            {connection ? <Body connection={connection} /> : <p className="text-xs text-text-secondary">Connect a repository first.</p>}
+            {connection ? <Body connection={connection} onOpenSync={() => { onOpenChange(false); useNavRequest.getState().ask("sync"); }} /> : <p className="text-xs text-text-secondary">Connect a repository first.</p>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
