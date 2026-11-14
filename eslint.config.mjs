@@ -18,5 +18,5 @@ export default defineConfig([
       "react-hooks/refs": "warn",
     },
   },
-  globalIgnores([".next/**", "out/**", "node_modules/**", "src-tauri/**", "next-env.d.ts", "public/**", "src/lib/repo-scan/fixtures/**"]),
+  globalIgnores([".next/**", "out/**", "node_modules/**", "src-tauri/**", "next-env.d.ts", "public/**", "src/lib/repo-scan/fixtures/**", "e2e/**"]),
 ]);

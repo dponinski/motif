@@ -19,6 +19,23 @@ npm run dev                        # http://localhost:3000
 
 The same typecheck, lint and tests run on every pull request (`.github/workflows/ci.yml`).
 
+### Browser suites
+
+`e2e/` holds the end-to-end suites: each drives the real editor in a browser (Playwright) against fake GitHub, CDN, mail and sign-in servers, so nothing outside the machine is touched. They are the coverage for the UI.
+
+```bash
+npm run e2e:setup    # once: the packages the fake CDN serves (e2e/cdn)
+npx playwright install chromium   # once: the browser
+npm run e2e          # every suite that needs no database (starts the app itself)
+npm run e2e:db       # accounts, sync and teams: needs PostgreSQL
+node e2e/run.js edit tokens   # named suites
+```
+
+- `npm run e2e` starts `next dev` on port 3000 (or `next start` with `E2E_PROD=1` after `npm run build`; `E2E_REUSE=1` uses a server that is already running). The suites that start a server of their own use port 3100.
+- The database suites make a database for the run. They connect as an administrator to create it (`E2E_DB_ADMIN_URL`, default `postgresql://postgres@127.0.0.1:5433`) and the app connects as the role that owns it (`E2E_DB_APP_URL`, default `postgresql://motif:motifpw@127.0.0.1:5433`, so that role has to exist).
+- Screenshots the suites take go to `e2e/out/` (not kept in git). Shared pieces (the fake servers, seeding a project) are in `e2e/support/`.
+- CI runs both groups on every pull request, against a production build.
+
 ## What Motif is
 
 A design system builder. It works on the React components and design tokens of a GitHub repository: it reads them, shows them running, lets a designer change them visually and assign tokens to them, documents them, and sends every change back as a pull request. The code in the repository is the source of truth; Motif keeps nothing that the repository doesn't have except documentation and unsent edits. It is not a prototyping tool: there are no shapes, frames or free-form layouts, only the components and tokens of the repository.

@@ -34,3 +34,44 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # The browser suites (e2e/): the whole editor against fake GitHub, CDN, mail and sign-in servers. The accounts, sync and
+  # teams suites need a database; the role the app connects as is made here, and each suite makes its own database.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_DB_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432
+      E2E_DB_APP_URL: postgresql://motif:motifpw@127.0.0.1:5432
+      E2E_PROD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run e2e:setup
+      - run: npx playwright install --with-deps chromium
+      - run: psql "$E2E_DB_ADMIN_URL/postgres" -c "CREATE ROLE motif LOGIN PASSWORD 'motifpw' CREATEDB"
+      - run: npm run build
+      - run: npm run e2e
+      - run: npm run e2e:db
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: e2e/out
+          if-no-files-found: ignore

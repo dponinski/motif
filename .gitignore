@@ -41,3 +41,7 @@ src-tauri/WixTools/
 
 # stray temp Next config files
 *.next.config.*
+
+# browser suites: screenshots and the fake CDN's packages
+/e2e/out/
+/e2e/cdn/node_modules/
