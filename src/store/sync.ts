@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { safeStorage } from "../lib/safe-storage";
-import { applyTake, decide, type Meta } from "../lib/sync/engine";
+import { applyTake, decide, metaOf, resolveClash, type Meta } from "../lib/sync/engine";
+import type { ItemConflict } from "../lib/sync/items";
 import { hashSections, sameHashes, toPayload, type Hashes, type ProjectPayload, type Section } from "../lib/sync/payload";
 import { api, SignedOut, Unreachable } from "../lib/sync/api";
 import { applyPayload, projectFromPayload, type ServerInfo } from "../lib/sync/project";
@@ -21,7 +22,12 @@ export interface Conflict {
   deleted: boolean;
   version: number;
   data: ProjectPayload | null;
+  // Whole parts changed differently, and the items (of the tokens and the documentation) that both sides changed.
   sections: Section[];
+  items?: ItemConflict[];
+  // The project with everything that doesn't clash merged, and the clashes taken from this device, or from the server.
+  withLocal?: ProjectPayload;
+  withServer?: ProjectPayload;
   // Who made the version the server has, when it is a teammate.
   updatedBy?: string | null;
 }
@@ -127,7 +133,7 @@ export const useSync = create<SyncState>()(
         const r = await api<{ version: number }>("PUT", `/api/projects/${encodeURIComponent(id)}`, { baseVersion: base, data: payload, ...(teamId ? { teamId } : {}) });
         if (r.status === 200) {
           const saved = r.body as { version: number; teamId?: string | null; updatedBy?: string | null };
-          setMeta(id, { version: saved.version, hashes });
+          setMeta(id, metaOf(saved.version, payload));
           // Who last changed a team's design system is whoever just did.
           if (saved.teamId) setTeam(id, saved.teamId, saved.updatedBy ?? null);
           if (get().refused[id]) set((s) => { const next = { ...s.refused }; delete next[id]; return { refused: next }; });
@@ -170,7 +176,7 @@ export const useSync = create<SyncState>()(
         const serverHashes = hashSections(server.data);
         if (!p) {
           adopt(projectFromPayload(id, server.data, infoOf(server)));
-          setMeta(id, { version: server.version, hashes: serverHashes });
+          setMeta(id, metaOf(server.version, server.data));
           return;
         }
         // Where it lives and who last changed it are the server's to say.
@@ -180,11 +186,11 @@ export const useSync = create<SyncState>()(
         const d = decide(m ?? null, localHashes, serverHashes);
         switch (d.kind) {
           case "idle":
-            setMeta(id, { version: server.version, hashes: localHashes });
+            setMeta(id, metaOf(server.version, local));
             return;
           case "pull":
             adopt(applyPayload(localProject(id) ?? p, server.data, infoOf(server)));
-            setMeta(id, { version: server.version, hashes: serverHashes });
+            setMeta(id, metaOf(server.version, server.data));
             return;
           case "push":
             await push(id, local, server.version, depth);
@@ -193,13 +199,22 @@ export const useSync = create<SyncState>()(
             const merged = applyTake(local, server.data, d.take);
             adopt(applyPayload(localProject(id) ?? p, merged, { updatedBy: server.updatedBy ?? null }));
             // The server's version is the one the merged project is based on.
-            setMeta(id, { version: server.version, hashes: serverHashes });
+            setMeta(id, metaOf(server.version, server.data));
             await push(id, merged, server.version, depth);
             return;
           }
-          case "conflict":
-            setConflict(id, { deleted: false, version: server.version, data: server.data, sections: d.sections, updatedBy: server.updatedBy ?? null });
+          case "conflict": {
+            // A part changed on both sides is narrowed to the items that both changed, where there is a record of them.
+            const clash = resolveClash(m ?? null, local, server.data, d.sections);
+            if (clash.kind === "merge") {
+              adopt(applyPayload(localProject(id) ?? p, clash.payload, { updatedBy: server.updatedBy ?? null }));
+              setMeta(id, metaOf(server.version, server.data));
+              await push(id, clash.payload, server.version, depth);
+              return;
+            }
+            setConflict(id, { deleted: false, version: server.version, data: server.data, sections: clash.sections, items: clash.items, withLocal: clash.withLocal, withServer: clash.withServer, updatedBy: server.updatedBy ?? null });
             return;
+          }
         }
       };
 
@@ -385,10 +400,12 @@ export const useSync = create<SyncState>()(
           try {
             if (take === "server") {
               if (c.deleted) { if (p) dropLocal(id); setMeta(id, null); }
-              else if (p && c.data) { adopt(applyPayload(p, c.data, { updatedBy: c.updatedBy ?? null })); setMeta(id, { version: c.version, hashes: hashSections(c.data) }); }
+              else if (p && c.data) { adopt(applyPayload(p, c.withServer ?? c.data, { updatedBy: c.updatedBy ?? null })); setMeta(id, metaOf(c.version, c.data)); }
             } else if (p) {
               // Keep this device's version: send it over the server's, based on the version the server has now.
-              await push(id, toPayload(p), c.version);
+              // With the other side's changes to everything that didn't clash merged in, which this device has to hold too.
+              if (c.withLocal) { adopt(applyPayload(p, c.withLocal, { updatedBy: c.updatedBy ?? null })); setMeta(id, metaOf(c.version, c.data ?? c.withLocal)); }
+              await push(id, c.withLocal ?? toPayload(p), c.version);
             }
           } catch (err) {
             if (!(err instanceof SignedOut) && !(err instanceof Unreachable)) throw err;

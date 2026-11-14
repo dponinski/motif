@@ -264,7 +264,7 @@ export default function Dashboard() {
           )
         ) : (
           <>
-            {(personal.length > 0 || teams.length === 0) && (
+            {(personal.length > 0 || (teams.length === 0 && strangers.length === 0)) && (
               <Section title={teams.length > 0 ? "My design systems" : "Design systems"}>
                 <div className={GRID}>
                   {personal.map((project) => (
