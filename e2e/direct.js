@@ -159,6 +159,12 @@ const check = (name, ok, detail = "") => {
   };
   const classesOf = async () => { await tab("Code").click(); const text = await aside.getByLabel(/^Classes: /).first().inputValue(); await tab("Design").click(); return text; };
   const undo = () => page.getByRole("button", { name: "Undo" }).click();
+  // A click on the canvas takes the keyboard from whatever had it; a key is only pressed once it has (the panel can already be showing
+  // the same element, so waiting for it to show says nothing about the click having been dealt with).
+  const clickCanvas = async (locator, options) => {
+    await locator.click(options);
+    await page.waitForFunction(() => document.activeElement === document.body || document.activeElement?.tagName === "IFRAME", null, { timeout: 10000 });
+  };
   // Undo goes back to what was picked before, which for a first edit is nothing.
   const reselect = async () => { await root.click({ position: { x: 4, y: 4 } }); await aside.getByText("<div>").waitFor({ timeout: 10000 }); };
 
@@ -211,7 +217,7 @@ const check = (name, ok, detail = "") => {
   check("as one step", undoable && backToStart && !(await classesOf()).match(/\bw-/));
 
   // ── The keyboard ─────────────────────────────────────────────────────────
-  await root.click({ position: { x: 4, y: 4 } });
+  await clickCanvas(root, { position: { x: 4, y: 4 } });
   await aside.getByText("<div>").waitFor();
   await page.keyboard.press("Enter");
   check("Enter picks the first element inside", await aside.getByText("<h2>").waitFor({ timeout: 5000 }).then(() => true, () => false));
@@ -224,16 +230,16 @@ const check = (name, ok, detail = "") => {
   await page.keyboard.press("Escape");
   check("and then lets go", await aside.getByText("Click an element in the preview").waitFor({ timeout: 5000 }).then(() => true, () => false));
 
-  await stage.locator("small").click();
+  await clickCanvas(stage.locator("small"));
   await aside.getByText("<small>").waitFor();
   await page.keyboard.press("Control+d");
   check("Ctrl+D duplicates the element", await settle(async () => (await stage.locator("small").count()) === 2));
   await page.keyboard.press("Delete");
   check("Delete takes it away", await settle(async () => (await stage.locator("small").count()) === 1));
-  await stage.locator("p").click();
+  await clickCanvas(stage.locator("p"));
   await aside.getByText("<p>").waitFor();
   await page.keyboard.press("Control+c");
-  await stage.locator("small").click();
+  await clickCanvas(stage.locator("small"));
   await aside.getByText("<small>").waitFor();
   await page.keyboard.press("Control+v");
   check("copy and paste puts the element after the picked one", await settle(async () => (await stage.locator("div.rounded-lg > *").evaluateAll((els) => els.map((e) => e.tagName).join())) === "H2,P,SMALL,P"));
