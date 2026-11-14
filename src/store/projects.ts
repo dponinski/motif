@@ -20,6 +20,10 @@ export interface Project {
   tokens: TokenData;
   // The documentation pages the designer wrote or edited; generated pages exist without being stored.
   docs: DocPage[];
+  // The team that shares it (null or missing for a person's own), and who last changed it there. They come from the
+  // server and are not part of what is synced as the project's content.
+  teamId?: string | null;
+  updatedBy?: string | null;
 }
 
 // The parts of a project the editor works on and writes back.
@@ -27,7 +31,7 @@ export type ProjectData = Pick<Project, "repo" | "library" | "tokens" | "docs">;
 
 interface ProjectsStore {
   projects: Project[];
-  create: (connection: GitConnection, name?: string) => Project;
+  create: (connection: GitConnection, name?: string, teamId?: string | null) => Project;
   save: (id: string, data: ProjectData) => void;
   // Adds a project, or replaces the one with its id, as it is (used when projects arrive from the account).
   put: (project: Project) => void;
@@ -40,7 +44,7 @@ export const useProjectsStore = create<ProjectsStore>()(
     (set) => ({
       projects: [],
 
-      create: (connection, name) => {
+      create: (connection, name, teamId) => {
         const now = Date.now();
         const project: Project = {
           id: nanoid(8),
@@ -51,6 +55,7 @@ export const useProjectsStore = create<ProjectsStore>()(
           library: { source: null, components: [] },
           tokens: emptyTokenData(),
           docs: [],
+          ...(teamId ? { teamId } : {}),
         };
         set((s) => ({ projects: [...s.projects, project] }));
         return project;

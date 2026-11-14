@@ -10,6 +10,9 @@ export interface User {
   email: string;
   name: string | null;
   avatar: string | null;
+  // Set when a request is made: they may sign in because a team brought them in, not because the server lists them. A guest
+  // uses their teams' design systems and nothing the server pays for.
+  guest?: boolean;
 }
 
 interface UserRow { id: string; email: string; name: string | null; avatar_url: string | null }

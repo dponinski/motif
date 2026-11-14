@@ -4,6 +4,7 @@ import { readAuthConfig, type AuthConfig } from "./config";
 import { getDb, type Db } from "./db";
 import { isAllowed } from "./allowlist";
 import { getSession, hit, type User } from "./store";
+import { teamAccess } from "./teams";
 
 // The parts of the account routes that are about the request: cookies, who is asking, where this site is.
 
@@ -58,14 +59,17 @@ export async function authOf(env: Record<string, string | undefined> = process.e
   return { config, db: await getDb(config.databaseUrl) };
 }
 
-// Who is signed in, for a request. The list of who may sign in is checked again each time, so taking someone off it
-// ends their access at once, and a session that is not theirs any more is nothing.
+// Who is signed in, for a request. Who may sign in (the list, or a team) is checked again each time, so taking someone off
+// it, or out of their last team, ends their access at once, and a session that is not theirs any more is nothing.
 export async function currentUser(req: NextRequest, auth: Auth, now = Date.now()): Promise<{ user: User; expiresAt: number } | null> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const session = await getSession(auth.db, token, now);
-  if (!session || !isAllowed(session.user.email, auth.config.allowed)) return null;
-  return session;
+  if (!session) return null;
+  // On the server's list, or brought in by a team (and only a guest then): leaving the team ends it, with the same check.
+  if (isAllowed(session.user.email, auth.config.allowed)) return { user: { ...session.user, guest: false }, expiresAt: session.expiresAt };
+  if (!(await teamAccess(auth.db, session.user.email, now))) return null;
+  return { user: { ...session.user, guest: true }, expiresAt: session.expiresAt };
 }
 
 // Counts a use of something that is limited, and says whether it is allowed. The count is kept in the database, so

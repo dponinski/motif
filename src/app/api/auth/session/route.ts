@@ -16,6 +16,6 @@ export async function GET(req: NextRequest) {
     providers: providersOf(auth.config, !!readGitHubConfig()),
     // A server that hasn't been told who may sign in lets nobody, and says so rather than failing quietly.
     nobodyAllowed: auth.config.allowed.length === 0,
-    user: session ? { id: session.user.id, email: session.user.email, name: session.user.name, avatar: session.user.avatar } : null,
+    user: session ? { id: session.user.id, email: session.user.email, name: session.user.name, avatar: session.user.avatar, guest: !!session.user.guest } : null,
   }, { headers: noStore });
 }

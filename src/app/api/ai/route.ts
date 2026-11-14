@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
       if (!fromThisApp(req, auth.config)) return NextResponse.json({ error: "Not from this app" }, { status: 400 });
       const session = await currentUser(req, auth);
       if (!session) return NextResponse.json({ error: "Sign in to use the assistant.", signInRequired: true }, { status: 401 });
+      // Someone a team brought in isn't on the server's list: the assistant is paid for by the server, so it is not theirs.
+      if (session.user.guest) return NextResponse.json({ error: "The assistant isn't available to guests of a team." }, { status: 403 });
       const allowance = await limited(auth, `chat:${session.user.id}`, auth.config.chatPerHour, HOUR);
       if (!allowance.ok) {
         const minutes = Math.max(1, Math.ceil((allowance.resetsAt - Date.now()) / 60_000));

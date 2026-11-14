@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAllowed } from "@/lib/auth/allowlist";
+import { mayEnter } from "@/lib/auth/teams";
 import { authOf, clientIp, fromThisApp, isSecure, limited, sanitizeReturnTo, setSessionCookie } from "@/lib/auth/http";
 import { completeSignIn } from "@/lib/auth/signin";
 import { consumeLoginToken, createSession, hashToken } from "@/lib/auth/store";
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const email = typeof body?.token === "string" ? await consumeLoginToken(auth.db, body.token) : null;
   if (!email) return NextResponse.json({ error: GONE }, { status: 400, headers: noStore });
   // The list may have changed since the link was sent.
-  if (!isAllowed(email, auth.config.allowed)) return NextResponse.json({ error: "This address isn't allowed to sign in here." }, { status: 403, headers: noStore });
+  if (!(await mayEnter(auth.db, email, auth.config.allowed))) return NextResponse.json({ error: "This address isn't allowed to sign in here." }, { status: 403, headers: noStore });
 
   const result = await completeSignIn(auth.db, auth.config.allowed, { provider: "email", subject: email, emails: [{ email, verified: true }] });
   if (!result.ok) return NextResponse.json({ error: "This address isn't allowed to sign in here." }, { status: 403, headers: noStore });

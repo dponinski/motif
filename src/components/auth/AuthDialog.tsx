@@ -71,7 +71,7 @@ export default function AuthDialog() {
             <Dialog.Close className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary" aria-label="Close"><X size={13} /></Dialog.Close>
           </div>
           <div className="flex flex-col gap-2.5">
-            <p className="text-xs leading-relaxed text-text-secondary">Signing in lets you use the assistant. Only people who have been added to the list of who may sign in can.</p>
+            <p className="text-xs leading-relaxed text-text-secondary">Signing in saves your projects to your account, lets you share them with a team, and lets you use the assistant. Only people on the list of who may sign in, or invited to a team, can.</p>
             {nobodyAllowed && (
               <p className="rounded-md border border-amber-500/40 px-3 py-2 text-xs leading-relaxed text-amber-500" role="alert">
                 Nobody is allowed to sign in yet: whoever runs this site needs to set <span className="font-mono">ALLOWED_EMAILS</span>.

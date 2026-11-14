@@ -1,6 +1,6 @@
-import { allowedEmail, isAllowed } from "./allowlist";
 import type { Provider } from "./config";
 import type { Db } from "./db";
+import { enterEmail, mayEnter } from "./teams";
 import { createUser, findIdentity, findUserByEmail, isDuplicate, linkIdentity, touchUser, type User } from "./store";
 
 // Finishing a sign-in, whichever way the person came: a provider vouched for who they are, and now they are let in,
@@ -28,23 +28,23 @@ const isRelay = (email: string) => /@privaterelay\.appleid\.com$/i.test(email);
 
 export async function completeSignIn(db: Db, allowed: string[], claim: Claim, now = Date.now()): Promise<SignInResult> {
   // Someone who has signed in this way before is the same person, whatever address the provider reports now. They
-  // are still let in only while their address is on the list.
+  // are still let in only while their address is on the list, or a team has them or has asked them.
   const known = await findIdentity(db, claim.provider, claim.subject);
   if (known) {
-    if (!isAllowed(known.email, allowed)) return { ok: false, reason: "not-allowed", email: known.email };
+    if (!(await mayEnter(db, known.email, allowed, now))) return { ok: false, reason: "not-allowed", email: known.email };
     await touchUser(db, known.id, { name: claim.name, avatar: claim.avatar }, now);
     return { ok: true, user: known, created: false, linked: false };
   }
 
   const verified = claim.emails.filter((e) => e.verified);
   if (verified.length === 0) return { ok: false, reason: "no-verified-email" };
-  const email = allowedEmail(verified, allowed);
+  const email = await enterEmail(db, verified, allowed, now);
   if (!email) {
     if (claim.provider === "apple" && verified.every((e) => isRelay(e.email))) return { ok: false, reason: "private-email" };
     return { ok: false, reason: "not-allowed", email: verified[0]?.email ?? null };
   }
 
-  // The address is verified by the provider and is on the list, so the account that has it is theirs.
+  // The address is verified by the provider and lets them in (the list, or a team), so the account that has it is theirs.
   let existing = await findUserByEmail(db, email);
   let user = existing;
   if (!user) {

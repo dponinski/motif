@@ -4,6 +4,7 @@ import { readRepository } from "@/lib/read-repository";
 import { useAccount } from "@/store/account";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useReadStatus } from "@/store/read-status";
+import { useProjectsStore } from "@/store/projects";
 
 const NONE: GitConnection = { owner: "", repo: "", token: "", defaultBranch: "main" };
 
@@ -21,7 +22,11 @@ export function useReadRepository() {
       useReadStatus.getState().set({ busy: false, error: null });
       return analysis;
     } catch (err) {
-      useReadStatus.getState().set({ busy: false, error: errorMessage(err) });
+      // Everyone in a team opens the repository with their own GitHub access, so a teammate who has none is told what to do.
+      const shared = useProjectsStore.getState().projects.some((p) => p.teamId && p.repo.connection?.owner === conn.owner && p.repo.connection.repo === conn.repo);
+      const message = errorMessage(err);
+      const hint = shared && /not found/i.test(message) ? " This design system is shared with a team, and each person opens the repository with their own GitHub access: ask a team owner to give you access to it on GitHub, or add an access token in the Git panel." : "";
+      useReadStatus.getState().set({ busy: false, error: message + hint });
       return null;
     }
   }, [host]);

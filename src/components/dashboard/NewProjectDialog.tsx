@@ -12,6 +12,7 @@ import { SignInButton } from "@/components/git/AccountControls";
 import { clientFor, errorMessage } from "@/components/git/hooks";
 import { appTokenSource, useAccount } from "@/store/account";
 import { useProjectsStore } from "@/store/projects";
+import { useTeams } from "@/store/teams";
 
 // A project is one repository. Connecting it checks that it can be reached, so a typo or a missing permission
 // shows here and not in the editor. Signed in with the GitHub App, the repositories to pick from are the ones the
@@ -29,6 +30,9 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
   const [filter, setFilter] = useState("");
   const [repos, setRepos] = useState<InstalledRepo[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  // Where it will live: a person's own, or a team's, shared with everyone in it.
+  const teams = useTeams((s) => s.teams);
+  const [teamId, setTeamId] = useState("");
 
   const signedIn = status === "signed-in";
   const offered = status === "signed-in" || status === "signed-out";
@@ -75,7 +79,7 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
     try {
       // No token typed in means the signed-in account's, when there is one.
       const { defaultBranch } = await clientFor({ owner, repo, token: typed }).getRepo();
-      const project = useProjectsStore.getState().create({ owner, repo, token: typed, defaultBranch });
+      const project = useProjectsStore.getState().create({ owner, repo, token: typed, defaultBranch }, undefined, teams.some((t) => t.id === teamId) ? teamId : null);
       setOpen(false);
       router.push(`/editor/${project.id}`);
     } catch (err) {
@@ -152,6 +156,16 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
             <p className="text-xs text-text-secondary leading-relaxed">
               A design system is a GitHub repository of React components and their tokens. Motif reads it, lets you edit it visually and document it, and sends every change back as a pull request.
             </p>
+
+            {teams.length > 0 && (
+              <label className="flex flex-col gap-1">
+                <span className="text-2xs text-text-tertiary">In</span>
+                <select className="input-sm" aria-label="Where to keep it" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+                  <option value="">My projects</option>
+                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name} (shared with the team)</option>)}
+                </select>
+              </label>
+            )}
 
             {status === "signed-out" && (
               <div className="flex flex-col gap-1.5 rounded-lg border border-surface-border p-3">

@@ -5,8 +5,8 @@ import { MAX_PAYLOAD_CHARS, readPayload } from "@/lib/sync/payload";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const view = (p: { id: string; version: number; updatedAt: number; deleted: boolean; name: string; data: unknown }) =>
-  ({ id: p.id, version: p.version, updatedAt: p.updatedAt, deleted: p.deleted, data: p.data });
+const view = (p: { id: string; version: number; updatedAt: number; deleted: boolean; name: string; data: unknown; teamId: string | null; updatedBy: string | null }) =>
+  ({ id: p.id, version: p.version, updatedAt: p.updatedAt, deleted: p.deleted, data: p.data, teamId: p.teamId, updatedBy: p.updatedBy });
 
 export async function GET(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
@@ -27,15 +27,18 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
   if (who instanceof NextResponse) return who;
   if (Number(req.headers.get("content-length") ?? 0) > MAX_PAYLOAD_CHARS * 2) return fail(413, "This project is too large to save to your account");
 
-  const body = (await req.json().catch(() => null)) as { baseVersion?: unknown; data?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { baseVersion?: unknown; data?: unknown; teamId?: unknown } | null;
   const baseVersion = body?.baseVersion;
   if (typeof baseVersion !== "number" || !Number.isInteger(baseVersion) || baseVersion < 0) return fail(400, "The version is missing");
   const read = readPayload(body?.data);
   if (!read.ok) return fail(422, read.error);
 
-  const result = await saveProject(who.auth.db, who.user.id, id, baseVersion, read.payload);
-  if (result.ok) return NextResponse.json({ version: result.version, updatedAt: result.updatedAt }, { headers: noStore });
-  if (result.reason === "limit") return fail(409, "You have reached the limit of projects saved to your account", { limit: true });
+  // Only a new project says where it goes: a team that shares it, or nothing for the person's own.
+  const teamId = typeof body?.teamId === "string" && body.teamId ? body.teamId : null;
+  const result = await saveProject(who.auth.db, who.user.id, id, baseVersion, read.payload, Date.now(), { teamId });
+  if (result.ok) return NextResponse.json({ version: result.version, updatedAt: result.updatedAt, teamId: result.teamId, updatedBy: result.teamId ? who.user.name || who.user.email : null }, { headers: noStore });
+  if (result.reason === "forbidden") return fail(403, "You aren't in that team", { forbidden: true });
+  if (result.reason === "limit") return fail(409, result.team ? "This team has reached the limit of design systems" : "You have reached the limit of projects saved to your account", { limit: true });
   return fail(409, "This project was changed somewhere else", { conflict: true, current: view(result.current) });
 }
 
@@ -48,5 +51,6 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
   if (!Number.isInteger(base) || base < 0) return fail(400, "The version is missing");
   const result = await removeProject(who.auth.db, who.user.id, id, base);
   if (result.ok) return NextResponse.json({ ok: true }, { headers: noStore });
+  if (result.reason === "forbidden") return fail(403, "Only an owner of the team can delete its design systems", { forbidden: true });
   return fail(409, "This project was changed somewhere else", { conflict: true, current: view(result.current) });
 }

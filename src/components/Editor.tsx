@@ -15,6 +15,7 @@ import { useWorkWatcher } from "./work/useWork";
 import { useStagedStack } from "./work/useStagedStack";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
+import { useAuth } from "@/store/auth";
 import { createdTexts, useEditStore } from "@/store/edit";
 
 export default function Editor({ projectId }: { projectId: string }) {
@@ -46,7 +47,7 @@ export default function Editor({ projectId }: { projectId: string }) {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k" && !useAuth.getState().user?.guest) {
         e.preventDefault();
         setActiveNav((prev) => (prev === "chat" ? null : "chat"));
       }
