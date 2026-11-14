@@ -22,18 +22,9 @@ import { useTokenChanges } from "@/components/work/useWork";
 import { plan, waitingCount } from "@/lib/work/sync";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import StageCanvas from "./StageCanvas";
+import { BreakpointBar, FrameLabel, WidthHandle } from "./Frame";
 import { loadTree, useSrcdoc, useTokenOverrides, type Host } from "./preview-core";
 import { readerFor, versionOf } from "./reader";
-
-// "Auto" is the width the view calls for: a component on its own, or a page of them side by side.
-const WIDTHS: { label: string; value: number | null }[] = [
-  { label: "Auto", value: null },
-  { label: "375", value: 375 },
-  { label: "640", value: 640 },
-  { label: "768", value: 768 },
-  { label: "1024", value: 1024 },
-  { label: "1280", value: 1280 },
-];
 
 const exampleIndexes = new Map<string, Promise<ExampleIndex>>();
 
@@ -102,6 +93,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const [rendered, setRendered] = useState(false);
   const [height, setHeight] = useState(120);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  // While the edge of the frame is being dragged, the canvas keeps its view.
+  const [resizing, setResizing] = useState(false);
 
   useEffect(() => { setReady(false); setRendered(false); setRuntimeError(null); }, [srcdoc]);
 
@@ -248,6 +241,9 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     return () => window.removeEventListener("keydown", onKey);
   }, [editing, canUndo, canRedo]);
 
+  // The width of the frame: the one chosen, or the one the view calls for.
+  const frameWidth = width ?? (mode === "variants" || mode === "examples" ? 960 : 640);
+
   const githubUrl = `https://github.com/${source.repo}/blob/${source.branch}/${component.file}#L${component.line}`;
 
   return (
@@ -306,9 +302,6 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         <button onClick={() => setDark(!dark)} className="tool-btn !h-7 !w-7" title={dark ? "Switch to light" : "Switch to dark"} aria-label={dark ? "Light theme" : "Dark theme"}>
           {dark ? <Moon size={13} /> : <Sun size={13} />}
         </button>
-        <select className="input-sm !w-[72px]" aria-label="Preview width" value={width ?? ""} onChange={(e) => setWidth(e.target.value ? Number(e.target.value) : null)}>
-          {WIDTHS.map((w) => <option key={w.label} value={w.value ?? ""}>{w.label}</option>)}
-        </select>
       </div>
 
       {stale.length > 0 && (
@@ -340,6 +333,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         ) : (
           <StageCanvas
             resetKey={`${component.id}|${mode === "edit" || mode === "playground" ? "one" : mode}|${width ?? "auto"}`}
+            freeze={resizing}
             overlay={
               <>
                 {!rendered && (
@@ -348,7 +342,15 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                     {srcdoc ? "Loading packages…" : `Reading ${component.name} from ${source.repo}…`}
                   </div>
                 )}
-                <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-col gap-2">
+                <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                  <BreakpointBar width={width} onChange={setWidth} />
+                </div>
+                {editing && !selection && rendered && (
+                  <p data-canvas-hint className="pointer-events-none absolute inset-x-0 bottom-4 text-center text-2xs text-text-tertiary">
+                    Click an element to style it · scroll to pan · Ctrl or ⌘ and scroll to zoom
+                  </p>
+                )}
+                <div className="pointer-events-none absolute inset-x-3 top-14 flex flex-col gap-2">
                   {editError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can&apos;t run: {editError}</p>}
                   {runtimeError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
                 </div>
@@ -366,16 +368,22 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             }
           >
             {srcdoc && (
-              <iframe
-                ref={iframeRef}
-                title="Component preview"
-                // Opaque origin: no access to Motif's storage, tokens or cookies.
-                sandbox="allow-scripts"
-                srcDoc={srcdoc}
-                // Content-box, so a 768 preview is 768 wide inside its border and a `md:` class applies.
-                style={{ display: "block", width: width ?? (mode === "variants" || mode === "examples" ? 960 : 640), height: Math.max(height, 80), boxSizing: width ? "content-box" : "border-box" }}
-                className="rounded-lg border border-surface-border bg-white shadow-sm"
-              />
+              <div data-frame className="flex flex-col gap-1.5">
+                <FrameLabel name={component.name} width={frameWidth} height={Math.max(height, 80)} dark={dark} />
+                <div className="relative">
+                  <iframe
+                    ref={iframeRef}
+                    title="Component preview"
+                    // Opaque origin: no access to Motif's storage, tokens or cookies.
+                    sandbox="allow-scripts"
+                    srcDoc={srcdoc}
+                    // Content-box, so a 768 preview is 768 wide inside its border and a `md:` class applies.
+                    style={{ display: "block", width: frameWidth, height: Math.max(height, 80), boxSizing: width ? "content-box" : "border-box", backgroundColor: dark ? "#0b0b0f" : "#ffffff" }}
+                    className="rounded-lg border border-surface-border shadow-sm"
+                  />
+                  <WidthHandle start={() => frameWidth} onResize={setWidth} onResizing={setResizing} />
+                </div>
+              </div>
             )}
           </StageCanvas>
         )}

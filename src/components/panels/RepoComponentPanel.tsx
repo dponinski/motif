@@ -1,6 +1,8 @@
 "use client";
 
 import { useShallow } from "zustand/react/shallow";
+import { useState } from "react";
+import * as Tabs from "@radix-ui/react-tabs";
 import { RotateCcw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
@@ -79,19 +81,13 @@ export function Row({ control, value, onChange }: { control: PropControl; value:
   }
 }
 
-export default function RepoComponentPanel({ component }: { component: LibraryComponent }) {
+function PropsContent({ component }: { component: LibraryComponent }) {
   const overrides = usePreviewStore((s) => s.values[component.id]);
   const { setValue, resetValues } = usePreviewStore(useShallow((s) => ({ setValue: s.setValue, resetValues: s.resetValues })));
   const controls = controlsFor(component);
   const current = { ...initialProps(component), ...(overrides ?? {}) };
-  const editing = usePreviewStore((s) => s.mode === "edit");
-  const source = useLibraryStore((s) => s.source);
-  const connection = useGitStore((s) => s.connection);
-
   return (
-    <div className="flex-1 select-text overflow-y-auto">
-      {editing && source && connection && <ElementInspector component={component} source={source} connection={connection} />}
-      {editing && source && connection && <PropsEditor component={component} source={source} connection={connection} />}
+    <>
       <div className="border-b border-surface-border px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className="flex-1 truncate text-sm font-medium text-text-primary">{component.name}</span>
@@ -133,6 +129,49 @@ export default function RepoComponentPanel({ component }: { component: LibraryCo
           {component.notes.length > 0 && <ul className="list-disc pl-4 text-2xs leading-relaxed text-amber-500">{component.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
         </div>
       )}
-    </div>
+    </>
+  );
+}
+
+type Tab = "design" | "props" | "code";
+const TABS: { id: Tab; label: string; hint: string }[] = [
+  { id: "design", label: "Design", hint: "Layout, spacing, size, type and color of the element you picked" },
+  { id: "props", label: "Props", hint: "The component's props and variants" },
+  { id: "code", label: "Code", hint: "The element's classes, and its place in the markup" },
+];
+
+export default function RepoComponentPanel({ component }: { component: LibraryComponent }) {
+  const editing = usePreviewStore((s) => s.mode === "edit");
+  const source = useLibraryStore((s) => s.source);
+  const connection = useGitStore((s) => s.connection);
+  const [tab, setTab] = useState<Tab>("design");
+
+  // Outside Design there is nothing picked to change: the props are what there is.
+  if (!(editing && source && connection)) {
+    return <div className="flex-1 select-text overflow-y-auto"><PropsContent component={component} /></div>;
+  }
+  return (
+    <Tabs.Root value={tab} onValueChange={(v) => setTab(v as Tab)} className="flex min-h-0 flex-1 flex-col">
+      <Tabs.List aria-label="Component panel" className="flex flex-shrink-0 border-b border-surface-border bg-surface-raised">
+        {TABS.map((t) => (
+          <Tabs.Trigger
+            key={t.id}
+            value={t.id}
+            title={t.hint}
+            className="relative flex-1 px-2 py-2 text-xs text-text-tertiary outline-none transition-colors hover:text-text-secondary data-[state=active]:text-text-primary data-[state=active]:after:absolute data-[state=active]:after:inset-x-2 data-[state=active]:after:bottom-0 data-[state=active]:after:h-0.5 data-[state=active]:after:rounded-full data-[state=active]:after:bg-accent"
+          >
+            {t.label}
+          </Tabs.Trigger>
+        ))}
+      </Tabs.List>
+      <div className="min-h-0 flex-1 select-text overflow-y-auto">
+        <Tabs.Content value="design" className="outline-none"><ElementInspector component={component} source={source} connection={connection} part="design" /></Tabs.Content>
+        <Tabs.Content value="props" className="outline-none">
+          <PropsEditor component={component} source={source} connection={connection} />
+          <PropsContent component={component} />
+        </Tabs.Content>
+        <Tabs.Content value="code" className="outline-none"><ElementInspector component={component} source={source} connection={connection} part="code" /></Tabs.Content>
+      </div>
+    </Tabs.Root>
   );
 }

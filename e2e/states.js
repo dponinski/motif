@@ -146,7 +146,7 @@ const check = (name, ok, detail = "") => {
   const field = (label) => aside.getByLabel(label, { exact: true });
   const setColor = async (label, value) => { await field(label).click(); const box = page.getByLabel(`${label}: search tokens or type a value`); await box.fill(value); await box.press("Enter"); };
 
-  const widthOf = () => page.getByLabel("Preview width").inputValue();
+  const widthOf = () => page.getByLabel("Preview width", { exact: true }).inputValue();
   const iframeWidth = () => page.locator('iframe[title="Component preview"]').evaluate((el) => el.getBoundingClientRect().width);
   const hoverBg = async () => { await stage.locator("#root button").hover(); await page.waitForTimeout(300); return stage.locator("#root button").evaluate((el) => getComputedStyle(el).backgroundColor); };
 
@@ -173,32 +173,36 @@ const check = (name, ok, detail = "") => {
   check("and leaves the resting color alone", plain.startsWith("oklch(0.52"), plain);
   await field("State").selectOption("");
   check("back on the plain state the plain color is still primary", (await field("Background").getAttribute("data-value")) === "primary");
+  await page.getByRole("tab", { name: "Code", exact: true }).click();
   const raw = aside.getByLabel("Classes: variant: primary");
   check("only the hover class changed in the source", (await raw.inputValue()) === "bg-primary text-primary-foreground hover:bg-muted", await raw.inputValue());
+  await page.getByRole("tab", { name: "Design", exact: true }).click();
   await page.screenshot({ path: `${OUT}/states-hover.png` });
 
   // ── Breakpoint ───────────────────────────────────────────────────────────
-  await field("State").selectOption("md:");
+  await field("Applies to").selectOption("md:");
   check("choosing a breakpoint puts the preview at that width", (await widthOf()) === "768");
   check("a property that only the plain class sets shows as inherited", (await field("Gap").inputValue()) === "" && (await field("Gap").locator("option").first().innerText()).includes("inherits 2"));
   await field("Gap").selectOption("6");
   for (let i = 0; i < 40 && (await stage.locator("#root button").evaluate((el) => getComputedStyle(el).gap)) !== "24px"; i++) await page.waitForTimeout(100);
   check("an md: class applies at 768 wide", (await stage.locator("#root button").evaluate((el) => getComputedStyle(el).gap)) === "24px", `${await stage.locator("html").evaluate(() => innerWidth)}px wide, gap ${await stage.locator("#root button").evaluate((el) => getComputedStyle(el).gap)}`);
-  await page.getByLabel("Preview width").selectOption("375");
+  await page.getByRole("button", { name: "Preview width: 375" }).click();
   for (let i = 0; i < 40 && (await stage.locator("#root button").evaluate((el) => getComputedStyle(el).gap)) !== "8px"; i++) await page.waitForTimeout(100);
   check("and not below it", (await stage.locator("#root button").evaluate((el) => getComputedStyle(el).gap)) === "8px");
+  await page.getByRole("tab", { name: "Code", exact: true }).click();
   const rawBase = aside.getByLabel("Classes: buttonVariants base");
   check("the source has md:gap-6 next to the plain gap-2", (await rawBase.inputValue()).includes("gap-2") && (await rawBase.inputValue()).includes("md:gap-6"), await rawBase.inputValue());
+  await page.getByRole("tab", { name: "Design", exact: true }).click();
 
   // ── Dark ─────────────────────────────────────────────────────────────────
-  await field("State").selectOption("dark:");
+  await field("Applies to").selectOption("dark:");
   check("the dark state turns the dark theme on", await page.getByRole("button", { name: "Light theme" }).isVisible());
   await setColor("Background", "danger");
   for (let i = 0; i < 40 && !(await css("#root button", "backgroundColor")).startsWith("oklch(0.66 0.19 25)") === false; i++) await page.waitForTimeout(100);
   // The repository's own dark danger color, not the light one.
   await page.waitForTimeout(500);
   check("a dark: class applies in the dark theme", (await css("#root button", "backgroundColor")).startsWith("oklch(0.66 0.19 25)"), await css("#root button", "backgroundColor"));
-  await field("State").selectOption("");
+  await field("Applies to").selectOption("");
   check("leaving dark puts the light theme back", await page.getByRole("button", { name: "Dark theme" }).isVisible());
   check("and the plain background is unchanged", (await field("Background").getAttribute("data-value")) === "primary");
 

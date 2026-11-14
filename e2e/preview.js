@@ -165,9 +165,9 @@ const check = (name, ok, detail = "") => {
   check("the dark theme uses the repository's own dark mode", (await stage.locator("html").getAttribute("class")) === "dark" && (await style()).bg === "oklch(0.65 0.18 270)");
   await page.screenshot({ path: `${OUT}/preview-dark.png` });
   await page.getByRole("button", { name: "Light theme" }).click();
-  await page.getByLabel("Preview width").selectOption("375");
+  await page.getByRole("button", { name: "Preview width: 375" }).click();
   check("the width control resizes the preview", (await stage.locator("html").evaluate(() => innerWidth)) === 375);
-  await page.getByLabel("Preview width").selectOption("");
+  await page.getByRole("button", { name: "Preview width: Auto" }).click();
 
   // ── All variants ──────────────────────────────────────────────────────────
   await page.getByRole("button", { name: "Variants", exact: true }).click();

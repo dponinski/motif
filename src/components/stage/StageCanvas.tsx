@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { StageZoom } from "./Frame";
 
 interface View { x: number; y: number; zoom: number }
 
@@ -18,9 +19,11 @@ const clamp = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 // The same works with the pointer over the component: its page passes the wheel and Space up (see CanvasMessage).
 // Until the view has been moved by hand it keeps the content fitted, so it follows the content as it loads.
 export default function StageCanvas({
-  children, resetKey, overlay,
+  children, resetKey, overlay, freeze = false,
 }: {
   children: React.ReactNode;
+  // Keeps the view where it is (while something on the surface is being resized, so it doesn't fit itself to every size).
+  freeze?: boolean;
   // A new key (another component, mode or width) goes back to fitting the content.
   resetKey: string;
   // Drawn over the surface, not zoomed with it.
@@ -61,6 +64,7 @@ export default function StageCanvas({
   }, []);
 
   useEffect(() => { moved.current = false; }, [resetKey]);
+  useEffect(() => { if (freeze) moved.current = true; }, [freeze]);
   useEffect(() => { if (!moved.current) fit(); }, [fit, resetKey]);
   useEffect(() => {
     const b = box.current;
@@ -183,7 +187,7 @@ export default function StageCanvas({
         className="absolute left-0 top-0 w-max"
         style={{ transformOrigin: "0 0", transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
       >
-        {children}
+        <StageZoom.Provider value={view.zoom}>{children}</StageZoom.Provider>
       </div>
 
       {space && <div className={cn("absolute inset-0 z-20", panning ? "cursor-grabbing" : "cursor-grab")} />}

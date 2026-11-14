@@ -171,8 +171,10 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/edit-change.png` });
 
   // Raw classes of the variant that is showing.
+  await page.getByRole("tab", { name: "Code", exact: true }).click();
   const raw = aside.getByLabel("Classes: variant: primary");
   check("the variant's own classes can be read as text", (await raw.inputValue()) === "bg-danger text-primary-foreground hover:bg-primary/90");
+  await page.getByRole("tab", { name: "Design", exact: true }).click();
 
   await page.getByRole("button", { name: "Undo" }).click();
   for (let i = 0; i < 40 && !(await css("#root button", "backgroundColor")).startsWith("oklch(0.52"); i++) await page.waitForTimeout(100);
@@ -213,7 +215,7 @@ const check = (name, ok, detail = "") => {
   await stage.locator("div.rounded-lg").click({ position: { x: 4, y: 4 } });
   await aside.getByText("<div>").waitFor();
   check("the root of a component can't be deleted", await aside.getByRole("button", { name: "Delete element" }).isDisabled());
-  await field("Direction").selectOption("row");
+  await aside.getByRole("button", { name: "Direction: row", exact: true }).click();
   for (let i = 0; i < 40 && (await css("div.rounded-lg", "flexDirection")) !== "row"; i++) await page.waitForTimeout(100);
   check("layout is a control: direction row", (await css("div.rounded-lg", "flexDirection")) === "row");
   await page.screenshot({ path: `${OUT}/edit-structure.png` });

@@ -145,29 +145,36 @@ const check = (name, ok, detail = "") => {
   const editButton = page.getByRole("button", { name: "Design", exact: true });
   const field = (label) => aside.getByLabel(label, { exact: true });
 
-  const pick = async (selector, tag) => { await stage.locator(selector).first().click(); await aside.getByText(`<${tag}>`).waitFor({ timeout: 10000 }); };
+  const pick = async (selector, tag) => { await stage.locator(selector).first().click(); await page.getByRole("tab", { name: "Design", exact: true }).click(); await aside.getByText(`<${tag}>`).waitFor({ timeout: 10000 }); };
   const settle = async (fn, ms = 4000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
 
   await rowFor("Banner").click();
   await stage.locator("h2").waitFor({ timeout: 60000 });
   await editButton.click();
 
+  const tab = (name) => page.getByRole("tab", { name, exact: true }).click();
+
   // ── Insert ───────────────────────────────────────────────────────────────
   await pick("p", "p");
+  await tab("Code");
   await aside.getByLabel("Insert position").selectOption("after");
   await aside.getByLabel("Insert element").selectOption({ label: "Heading" });
+  await tab("Design");
   check("an element is added after the selected one", await settle(async () => (await stage.locator("div.rounded-lg > *").evaluateAll((els) => els.map((e) => e.tagName).join())) === "H2,P,H2,SMALL"));
   check("and the new element is the one selected", await aside.getByText("<h2>").isVisible() && (await field("Text").inputValue()) === "Heading");
 
   await pick("div.rounded-lg", "div");
+  await tab("Code");
   await aside.getByLabel("Insert position").selectOption("last-child");
   await aside.getByLabel("Insert element").selectOption({ label: "Badge" });
+  await tab("Design");
   check("a library component can be added inside, and renders", await settle(async () => (await stage.locator("div.rounded-lg > span").count()) === 1 && (await stage.locator("div.rounded-lg > span").innerText()).includes("Badge")));
   check("and is selected, as the component it is", await aside.getByText("<Badge>").isVisible());
   await page.screenshot({ path: `${OUT}/struct-insert.png` });
 
   // ── Change tag ───────────────────────────────────────────────────────────
   await pick("div.rounded-lg > h2:nth-of-type(2)", "h2");
+  await tab("Code");
   await aside.getByLabel("Tag").selectOption("h3");
   const became = await settle(async () => (await stage.locator("div.rounded-lg > h3").count()) === 1);
   check("an element can become another kind", became, became ? "" : "see debug-struct.png");
@@ -176,16 +183,21 @@ const check = (name, ok, detail = "") => {
 
   // ── Wrap and unwrap ──────────────────────────────────────────────────────
   await pick("div.rounded-lg > p", "p");
+  await tab("Code");
   await aside.getByLabel("Wrap in").selectOption("column");
   check("an element can be wrapped", await settle(async () => (await stage.locator("div.rounded-lg > div.flex-col > p").count()) === 1));
+  await tab("Design");
   check("and the wrapper is selected", await aside.getByText("<div>").isVisible() && (await field("Gap").inputValue()) === "2");
+  await tab("Code");
   check("a wrapper with one element in it can be taken off", await aside.getByRole("button", { name: "Unwrap element" }).isEnabled());
   await aside.getByRole("button", { name: "Unwrap element" }).click();
   check("which puts the element back where it was", await settle(async () => (await stage.locator("div.rounded-lg > p").count()) === 1 && (await stage.locator("div.flex-col div.flex-col").count()) === 0));
 
   await page.getByRole("button", { name: "Wrap in" }).count();
   await pick("div.rounded-lg > small", "small");
+  await tab("Code");
   await aside.getByLabel("Wrap in").selectOption({ label: "Badge" });
+  await tab("Design");
   check("an element can be wrapped in a library component", await settle(async () => (await stage.locator("div.rounded-lg > span > small").count()) === 1));
 
   // ── Undo ─────────────────────────────────────────────────────────────────

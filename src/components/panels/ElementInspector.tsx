@@ -3,6 +3,9 @@
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, MousePointer2, Trash2, X } from "lucide-react";
+import { describeTag } from "@/lib/edit/names";
+import ElementIcon from "./ElementIcon";
+import { IconChoice, SizeShortcuts, hasIcons } from "./controls";
 import { cn } from "@/lib/utils";
 import { gitBlobSha } from "@/lib/github";
 import { recordChange } from "./useEditRunner";
@@ -32,6 +35,11 @@ const SHOWN: Record<string, string[]> = {
   type: ["text-size", "font-weight", "text-color"],
   fill: ["bg", "border-width", "border-color", "radius", "shadow"],
 };
+
+const STATE_IDS = ["hover:", "focus:", "active:", "disabled:"];
+const SCOPE_IDS = ["dark:", "sm:", "md:", "lg:", "xl:"];
+// The spacing controls, short: what each is for, since the section already says it is spacing.
+const SPACING_CAPTION: Record<string, string> = { p: "All sides", px: "Horizontal", py: "Vertical", m: "Margin" };
 
 const starting = (g: ClassGroup): string => {
   // A stylesheet's groups say what they start as.
@@ -96,7 +104,7 @@ function Commit({ value, onCommit, label, list, multiline, placeholder }: { valu
   );
 }
 
-export default function ElementInspector({ component, source, connection }: { component: LibraryComponent; source: LibrarySource; connection: GitConnection }) {
+export default function ElementInspector({ component, source, connection, part = "design" }: { component: LibraryComponent; source: LibrarySource; connection: GitConnection; part?: "design" | "code" }) {
   const host = useGitHost(connection);
   const reader = useMemo(() => readerFor(source, host), [source, host]);
   const selection = useEditStore((s) => s.selection);
@@ -125,6 +133,13 @@ export default function ElementInspector({ component, source, connection }: { co
     else if (BREAKPOINT_WIDTH[modifier]) setWidth(null);
     setModifier(id);
   };
+
+  // The state of an element (hover, focus) and where a style applies (dark, a width) are two choices, but one modifier: they
+  // are edited one at a time, so choosing one sets the other back to its plain value.
+  const stateValue = STATE_IDS.includes(modifier) ? modifier : "";
+  const scopeValue = SCOPE_IDS.includes(modifier) ? modifier : "";
+  const chooseStateOnly = (id: string) => { if (id === "" && SCOPE_IDS.includes(modifier)) return; chooseState(id); };
+  const chooseScope = (id: string) => { if (id === "" && STATE_IDS.includes(modifier)) return; chooseState(id); };
 
   // What variant choices are showing, so the classes of the variant on screen are the ones edited.
   const values = useMemo(
@@ -230,12 +245,140 @@ export default function ElementInspector({ component, source, connection }: { co
   const flagged = groups.filter((g) => fieldStatus(g, valueOf(g, modifier), index) === "flag").length;
   const state = MODIFIERS.find((m) => m.id === modifier);
   const line = source ? `${selection.path}` : "";
+  const { kind } = describeTag(info.tag);
+  const row = (g: ClassGroup) => {
+    const value = valueOf(g, modifier);
+    // Under a state, what the plain class gives is what applies until the state sets its own.
+    const inherited = modifier ? valueOf(g, "") : null;
+    const control =
+      g.control === "color" ? <ColorField group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} onChange={(v) => change(g, v)} />
+      : hasIcons(g.id, value) ? <IconChoice groupId={g.id} label={g.label} value={value} inherited={inherited} onChange={(v) => change(g, v)} />
+      : <ChoiceField group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} scaleLabel={css ? "Values" : undefined} onChange={(v) => change(g, v)} />;
+    return { value, inherited, control };
+  };
+
+  if (part === "code") {
+    return (
+      <div>
+        <div className="px-3 py-2.5">
+          <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Structure</p>
+          <div className="flex flex-col gap-1.5">
+            <Field label="Add">
+              <div className="grid grid-cols-2 gap-1.5">
+                <select className="input-sm w-full" aria-label="Insert position" value={position} onChange={(e) => setPosition(e.target.value as InsertPosition)}>
+                  <option value="last-child">Inside, last</option>
+                  <option value="first-child">Inside, first</option>
+                  <option value="before" disabled={!info.canDelete}>Before</option>
+                  <option value="after" disabled={!info.canDelete}>After</option>
+                </select>
+                <select
+                  className="input-sm w-full"
+                  aria-label="Insert element"
+                  value=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (!id) return;
+                    if (id.startsWith("lib:")) {
+                      const component = library.find((c) => c.id === id.slice(4));
+                      if (!component) return;
+                      const { jsx, imp } = componentSnippet(component);
+                      void run((c, s) => insertElement(selection.path, c, s, position, jsx, imp));
+                    } else {
+                      const snippet = SNIPPETS.find((x) => x.id === id);
+                      if (snippet) void run((c, s) => insertElement(selection.path, c, s, position, css ? plain(snippet.jsx) : snippet.jsx));
+                    }
+                  }}
+                >
+                  <option value="">Element…</option>
+                  <optgroup label="HTML">{SNIPPETS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>
+                  {library.length > 0 && <optgroup label="Components">{library.map((c) => <option key={c.id} value={`lib:${c.id}`}>{c.name}</option>)}</optgroup>}
+                </select>
+              </div>
+            </Field>
+            <Field label="Wrap in">
+              <select
+                className="input-sm w-full"
+                aria-label="Wrap in"
+                value=""
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) return;
+                  if (id.startsWith("lib:")) {
+                    const component = library.find((c) => c.id === id.slice(4));
+                    if (!component) return;
+                    const { imp } = componentSnippet(component);
+                    void run((c, s) => wrapElement(selection.path, c, s, component.name, null, imp));
+                  } else {
+                    const wrapper = WRAPPERS.find((x) => x.id === id);
+                    if (wrapper) void run((c, s) => wrapElement(selection.path, c, s, wrapper.tag, css ? null : wrapper.classes));
+                  }
+                }}
+              >
+                <option value="">Wrapper…</option>
+                <optgroup label="HTML">{WRAPPERS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>
+                {library.length > 0 && <optgroup label="Components">{library.map((c) => <option key={c.id} value={`lib:${c.id}`}>{c.name}</option>)}</optgroup>}
+              </select>
+            </Field>
+            <div className="grid grid-cols-[84px_1fr] items-center gap-1.5">
+              <span className="text-xs text-text-secondary">Tag</span>
+              <div className="flex items-center gap-1.5">
+                {/^[a-z]/.test(info.tag) ? (
+                  <select className="input-sm min-w-0 flex-1" aria-label="Tag" value={info.tag} onChange={(e) => { const tag = e.target.value; void run((c, s) => changeTag(selection.path, c, s, tag)); }}>
+                    {!HOST_TAGS.includes(info.tag) && <option value={info.tag}>{info.tag}</option>}
+                    {HOST_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                ) : <span className="min-w-0 flex-1 truncate font-mono text-2xs text-text-tertiary">{info.tag}</span>}
+                <button
+                  onClick={() => void run((c, s) => unwrapElement(selection.path, c, s))}
+                  disabled={!info.canUnwrap}
+                  className="h-7 flex-shrink-0 rounded-md border border-surface-border px-2 text-2xs text-text-secondary hover:bg-surface-subtle disabled:opacity-40"
+                  aria-label="Unwrap element"
+                  title="Take this element's wrapper off, keeping the element inside"
+                >
+                  Unwrap
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="mx-3 mb-2 break-words rounded border border-red-400/30 bg-red-400/10 px-2 py-1.5 text-2xs text-red-400">{error}</p>}
+        {editable && (
+          <div className="border-t border-surface-border px-3 py-2.5">
+            <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Classes</p>
+            {info.slots.length === 0 ? (
+              <p className="text-xs text-text-tertiary">No classes yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {info.slots.map((slot) => (
+                  <div key={slot.id} className={cn("flex flex-col gap-1", !slot.active && "opacity-50")}>
+                    <span className="text-2xs text-text-tertiary">{slot.label}{slot.active ? "" : " (not shown)"}</span>
+                    <Commit
+                      multiline
+                      label={`Classes: ${slot.label}`}
+                      value={slotText(slot)}
+                      onCommit={(v) => run((c, s) => setSlotClasses(selection.path, c, s, slot.id, v, values))}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {!editable && <p className="px-3 pb-3 text-xs leading-relaxed text-text-tertiary">{info.dynamicReason}</p>}
+      </div>
+    );
+  }
 
   return (
-    <div className="border-b border-surface-border">
-      <div className="flex items-center gap-1 px-3 py-2.5">
+    <div>
+      <div className="flex items-center gap-1 px-3 py-2.5" data-element-row>
+        <ElementIcon name={describeTag(info.tag).icon} size={14} className="flex-shrink-0 text-accent" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-text-primary">&lt;{info.tag}&gt;</p>
+          <p className="flex items-baseline gap-1.5 truncate text-sm font-medium text-text-primary">
+            {kind}
+            <span className="font-mono text-2xs font-normal text-text-tertiary">&lt;{info.tag}&gt;</span>
+          </p>
           <p className="truncate font-mono text-2xs text-text-tertiary" title={line}>{line}</p>
         </div>
         {([
@@ -259,96 +402,25 @@ export default function ElementInspector({ component, source, connection }: { co
         </p>
       )}
 
-      <div className="border-t border-surface-border px-3 py-2.5">
-        <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Structure</p>
-        <div className="flex flex-col gap-1.5">
-          <Field label="Add">
-            <div className="grid grid-cols-2 gap-1.5">
-              <select className="input-sm w-full" aria-label="Insert position" value={position} onChange={(e) => setPosition(e.target.value as InsertPosition)}>
-                <option value="last-child">Inside, last</option>
-                <option value="first-child">Inside, first</option>
-                <option value="before" disabled={!info.canDelete}>Before</option>
-                <option value="after" disabled={!info.canDelete}>After</option>
-              </select>
-              <select
-                className="input-sm w-full"
-                aria-label="Insert element"
-                value=""
-                onChange={(e) => {
-                  const id = e.target.value;
-                  if (!id) return;
-                  if (id.startsWith("lib:")) {
-                    const component = library.find((c) => c.id === id.slice(4));
-                    if (!component) return;
-                    const { jsx, imp } = componentSnippet(component);
-                    void run((c, s) => insertElement(selection.path, c, s, position, jsx, imp));
-                  } else {
-                    const snippet = SNIPPETS.find((x) => x.id === id);
-                    if (snippet) void run((c, s) => insertElement(selection.path, c, s, position, css ? plain(snippet.jsx) : snippet.jsx));
-                  }
-                }}
-              >
-                <option value="">Element…</option>
-                <optgroup label="HTML">{SNIPPETS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>
-                {library.length > 0 && <optgroup label="Components">{library.map((c) => <option key={c.id} value={`lib:${c.id}`}>{c.name}</option>)}</optgroup>}
-              </select>
-            </div>
-          </Field>
-          <Field label="Wrap in">
-            <select
-              className="input-sm w-full"
-              aria-label="Wrap in"
-              value=""
-              onChange={(e) => {
-                const id = e.target.value;
-                if (!id) return;
-                if (id.startsWith("lib:")) {
-                  const component = library.find((c) => c.id === id.slice(4));
-                  if (!component) return;
-                  const { imp } = componentSnippet(component);
-                  void run((c, s) => wrapElement(selection.path, c, s, component.name, null, imp));
-                } else {
-                  const wrapper = WRAPPERS.find((x) => x.id === id);
-                  if (wrapper) void run((c, s) => wrapElement(selection.path, c, s, wrapper.tag, css ? null : wrapper.classes));
-                }
-              }}
-            >
-              <option value="">Wrapper…</option>
-              <optgroup label="HTML">{WRAPPERS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>
-              {library.length > 0 && <optgroup label="Components">{library.map((c) => <option key={c.id} value={`lib:${c.id}`}>{c.name}</option>)}</optgroup>}
-            </select>
-          </Field>
-          <div className="grid grid-cols-[84px_1fr] items-center gap-1.5">
-            <span className="text-xs text-text-secondary">Tag</span>
-            <div className="flex items-center gap-1.5">
-              {/^[a-z]/.test(info.tag) ? (
-                <select className="input-sm min-w-0 flex-1" aria-label="Tag" value={info.tag} onChange={(e) => { const tag = e.target.value; void run((c, s) => changeTag(selection.path, c, s, tag)); }}>
-                  {!HOST_TAGS.includes(info.tag) && <option value={info.tag}>{info.tag}</option>}
-                  {HOST_TAGS.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              ) : <span className="min-w-0 flex-1 truncate font-mono text-2xs text-text-tertiary">{info.tag}</span>}
-              <button
-                onClick={() => void run((c, s) => unwrapElement(selection.path, c, s))}
-                disabled={!info.canUnwrap}
-                className="h-7 flex-shrink-0 rounded-md border border-surface-border px-2 text-2xs text-text-secondary hover:bg-surface-subtle disabled:opacity-40"
-                aria-label="Unwrap element"
-                title="Take this element's wrapper off, keeping the element inside"
-              >
-                Unwrap
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {editable && (
-        <div className="border-t border-surface-border px-3 py-2.5">
-          <Field label="State">
-            <select className="input-sm w-full" aria-label="State" value={modifier} onChange={(e) => chooseState(e.target.value)}>
-              {MODIFIERS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </Field>
-          {state?.hint && <p className="mt-1.5 text-2xs leading-relaxed text-text-tertiary">{state.hint}</p>}
+        <div className="border-t border-surface-border px-3 py-2.5" data-editing-for>
+          <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Editing the style for</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="flex flex-col gap-0.5 text-2xs text-text-tertiary">
+              State
+              <select className="input-sm w-full text-xs text-text-primary" aria-label="State" value={stateValue} onChange={(e) => chooseStateOnly(e.target.value)}>
+                {MODIFIERS.filter((m) => m.id === "" || STATE_IDS.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-0.5 text-2xs text-text-tertiary">
+              Applies to
+              <select className="input-sm w-full text-xs text-text-primary" aria-label="Applies to" value={scopeValue} onChange={(e) => chooseScope(e.target.value)}>
+                {MODIFIERS.filter((m) => m.id === "" || SCOPE_IDS.includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.id === "" ? "Always" : m.label}</option>)}
+              </select>
+            </label>
+          </div>
+          {state?.hint && <p className="mt-1.5 text-2xs leading-relaxed text-text-tertiary">{state.hint}{BREAKPOINT_WIDTH[modifier] ? ` The frame is set to ${BREAKPOINT_WIDTH[modifier]} px so you can see it.` : ""}</p>}
+          {modifier && <p className="mt-1 text-2xs leading-relaxed text-text-tertiary">A state and a screen size are edited one at a time.</p>}
           {flagged > 0 && (
             <p className="mt-1.5 text-2xs leading-relaxed text-amber-500" role="status" data-flagged={flagged}>
               {flagged === 1 ? "1 value here is not a token." : `${flagged} values here are not tokens.`} They are marked below.
@@ -366,65 +438,58 @@ export default function ElementInspector({ component, source, connection }: { co
       {!editable ? (
         <p className="px-3 pb-3 text-xs leading-relaxed text-text-tertiary">{info.dynamicReason}</p>
       ) : (
-        <>
-          {SECTIONS.map((section) => {
-            const { ordered, rest } = groupsFor(section.id);
-            return (
-              <div key={section.id} className="border-t border-surface-border px-3 py-2.5">
-                <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">{section.label}</p>
-                <div className="flex flex-col gap-1.5">
-                  {ordered.map((g) => {
-                    const value = valueOf(g, modifier);
-                    // Under a state, what the plain class gives is what applies until the state sets its own.
-                    const inherited = modifier ? valueOf(g, "") : null;
+        SECTIONS.map((section) => {
+          const { ordered, rest } = groupsFor(section.id);
+          return (
+            <div key={section.id} className="border-t border-surface-border px-3 py-2.5" data-section={section.id}>
+              <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">{section.label}</p>
+              <div className={cn(section.id === "spacing" ? "grid grid-cols-2 gap-x-2 gap-y-1.5" : "flex flex-col gap-1.5")}>
+                {ordered.map((g) => {
+                  const { value, control } = row(g);
+                  if (section.id === "spacing") {
                     return (
-                      <div key={g.id} className="flex flex-col gap-1">
-                        <Field label={g.label} status={fieldStatus(g, value, index)} onRemove={value !== null ? () => change(g, null) : undefined}>
-                          {g.control === "color"
-                            ? <ColorField group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} onChange={(v) => change(g, v)} />
-                            : <ChoiceField group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} scaleLabel={css ? "Values" : undefined} onChange={(v) => change(g, v)} />}
-                        </Field>
-                        <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} />
+                      <div key={g.id} className="flex min-w-0 flex-col gap-0.5">
+                        <span className="flex items-center gap-1 text-2xs text-text-tertiary" title={g.label}>
+                          <span className="truncate">{SPACING_CAPTION[g.id] ?? g.label}</span>
+                          {fieldStatus(g, value, index) && <span data-token-status={fieldStatus(g, value, index)} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", fieldStatus(g, value, index) === "token" ? "bg-accent" : "bg-amber-500")} />}
+                          {value !== null && (
+                            <button onClick={() => change(g, null)} aria-label={`Remove ${g.label}`} title="Remove" className="ml-auto rounded text-text-tertiary hover:text-text-primary"><X size={10} /></button>
+                          )}
+                        </span>
+                        {control}
+                        <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} indent={false} />
                       </div>
                     );
-                  })}
-                  {rest.length > 0 && (
-                    <select
-                      className="input-sm w-full text-text-tertiary"
-                      aria-label={`Add ${section.label.toLowerCase()} property`}
-                      value=""
-                      onChange={(e) => { const g = groups.find((x) => x.id === e.target.value); if (g) change(g, starting(g)); }}
-                    >
-                      <option value="">Add…</option>
-                      {rest.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-                    </select>
-                  )}
-                </div>
+                  }
+                  return (
+                    <div key={g.id} className="flex flex-col gap-1">
+                      <Field label={g.label} status={fieldStatus(g, value, index)} onRemove={value !== null ? () => change(g, null) : undefined}>
+                        {g.id === "w" || g.id === "h" ? (
+                          <div className="flex min-w-0 flex-col gap-1">
+                            {control}
+                            <SizeShortcuts label={g.label} value={value} onChange={(v) => change(g, v)} />
+                          </div>
+                        ) : control}
+                      </Field>
+                      <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} />
+                    </div>
+                  );
+                })}
+                {rest.length > 0 && (
+                  <select
+                    className={cn("input-sm w-full text-text-tertiary", section.id === "spacing" && "col-span-2")}
+                    aria-label={`Add ${section.label.toLowerCase()} property`}
+                    value=""
+                    onChange={(e) => { const g = groups.find((x) => x.id === e.target.value); if (g) change(g, starting(g)); }}
+                  >
+                    <option value="">Add…</option>
+                    {rest.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
+                  </select>
+                )}
               </div>
-            );
-          })}
-
-          <div className="border-t border-surface-border px-3 py-2.5">
-            <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Classes</p>
-            {info.slots.length === 0 ? (
-              <p className="text-xs text-text-tertiary">No classes yet.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {info.slots.map((slot) => (
-                  <div key={slot.id} className={cn("flex flex-col gap-1", !slot.active && "opacity-50")}>
-                    <span className="text-2xs text-text-tertiary">{slot.label}{slot.active ? "" : " (not shown)"}</span>
-                    <Commit
-                      multiline
-                      label={`Classes: ${slot.label}`}
-                      value={slotText(slot)}
-                      onCommit={(v) => run((c, s) => setSlotClasses(selection.path, c, s, slot.id, v, values))}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+            </div>
+          );
+        })
       )}
     </div>
   );
