@@ -143,7 +143,7 @@ const check = (name, ok, detail = "") => {
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
-  const editButton = page.getByRole("button", { name: "Edit", exact: true });
+  const editButton = page.getByRole("button", { name: "Design", exact: true });
   const field = (label) => aside.getByLabel(label, { exact: true });
   const setColor = async (label, value) => { await field(label).click(); const box = page.getByLabel(`${label}: search tokens or type a value`); await box.fill(value); await box.press("Enter"); };
 
@@ -154,6 +154,7 @@ const check = (name, ok, detail = "") => {
   await rowFor("Badge").click();
   await stage.locator("#root span.rounded-full").waitFor({ timeout: 60000 });
   await editButton.click();
+  await page.getByRole("tab", { name: "Props", exact: true }).click();
 
   // ── Options ──────────────────────────────────────────────────────────────
   await group.getByLabel("Rename variant neutral").waitFor();
@@ -161,7 +162,7 @@ const check = (name, ok, detail = "") => {
   await aside.getByLabel("New variant option").fill("ghost");
   await aside.getByLabel("Add variant option").click();
   check("a new option appears in the list straight away", await settle(async () => (await group.getByLabel("Rename variant ghost").count()) === 1));
-  await page.getByRole("button", { name: "All variants" }).click();
+  await page.getByRole("button", { name: "Variants", exact: true }).click();
   check("and in All variants", await settle(async () => (await badgeCount()) === 7));
   await editButton.click();
   check("and in the props controls", (await aside.getByLabel("variant", { exact: true }).locator("option").allInnerTexts()).includes("ghost"));
@@ -170,9 +171,12 @@ const check = (name, ok, detail = "") => {
   // The new option is edited like any other: choose it, pick the element, change its look.
   await aside.getByLabel("variant", { exact: true }).selectOption("ghost");
   await stage.locator("#root span.rounded-full").first().click();
+  await page.getByRole("tab", { name: "Design", exact: true }).click();
   await aside.getByText("<span>").waitFor({ timeout: 10000 });
   await setColor("Background", "transparent");
+  await page.getByRole("tab", { name: "Code", exact: true }).click();
   check("the new option's classes are the ones the inspector edits", (await aside.getByLabel("Classes: variant: ghost").inputValue()) === "bg-transparent text-foreground", await aside.getByLabel("Classes: variant: ghost").inputValue());
+  await page.getByRole("tab", { name: "Props", exact: true }).click();
 
   // ── Default, rename, remove ──────────────────────────────────────────────
   await aside.getByLabel("Default variant").selectOption("ghost");
@@ -229,7 +233,8 @@ const check = (name, ok, detail = "") => {
   // Merged: the repository has them now, and the editor shows the repository's file.
   prs[0].merged = true; prs[0].state = "closed"; repos["acme/ds"].main = new Map(repos["acme/ds"][pr.head]);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  check("once merged the editor shows the repository's version, which has them", await settle(async () => (await page.locator('main button[aria-label="Sync"]').count()) === 0 && (await group.getByLabel("Rename variant ghost").count()) === 1 && (await group.getByLabel("Rename variant outline").count()) === 0, 20000), JSON.stringify({ btn: await page.locator('main button[aria-label="Sync"]').count(), ghost: await group.getByLabel("Rename variant ghost").count(), outline: await group.getByLabel("Rename variant outline").count(), edits: await readEdits(page, 0).then((r) => ({ bases: Object.keys(r.state.bases), h: r.state.history.length })) }));
+  // (The panel starts again when the repository is read again: back to the tab the variants are in.)
+  check("once merged the editor shows the repository's version, which has them", await settle(async () => { await page.getByRole("tab", { name: "Props", exact: true }).click(); return (await page.locator('main button[aria-label="Sync"]').count()) === 0 && (await group.getByLabel("Rename variant ghost").count()) === 1 && (await group.getByLabel("Rename variant outline").count()) === 0; }, 20000), JSON.stringify({ btn: await page.locator('main button[aria-label="Sync"]').count(), ghost: await group.getByLabel("Rename variant ghost").count(), outline: await group.getByLabel("Rename variant outline").count(), edits: await readEdits(page, 0).then((r) => ({ bases: Object.keys(r.state.bases), h: r.state.history.length })) }));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

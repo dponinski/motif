@@ -277,7 +277,7 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   const stage = page.frameLocator('iframe[title="Component preview"]');
   await page.locator("aside button[title*='src/']").filter({ hasText: /^Banner$/ }).click();
   await stage.locator("#root h2").waitFor({ timeout: 60000 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Design", exact: true }).click();
   await stage.locator("#root h2").click();
   const aside = page.locator("aside").last();
   await aside.getByLabel("Text size", { exact: true }).selectOption("2xl");

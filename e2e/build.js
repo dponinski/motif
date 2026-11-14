@@ -108,7 +108,9 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/build-styled.png` });
 
   // ── Add an element and style it: it gets its own class ───────────────────
+  await page.getByRole("tab", { name: "Code", exact: true }).click();
   await aside().getByLabel("Insert element").selectOption("heading");
+  await page.getByRole("tab", { name: "Design", exact: true }).click();
   await settle(async () => (await stage.locator("h2").count()) === 1);
   check("a heading is added to the component", (await stage.locator("h2").innerText()) === "Heading");
   check("with no Tailwind classes on it", (await textOf("src/components/Button.tsx"))?.includes("<h2>Heading</h2>"), await textOf("src/components/Button.tsx"));

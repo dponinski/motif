@@ -139,7 +139,7 @@ const check = (name, ok, detail = "") => {
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
-  const editButton = page.getByRole("button", { name: "Edit", exact: true });
+  const editButton = page.getByRole("button", { name: "Design", exact: true });
   const field = (label) => aside.getByLabel(label, { exact: true });
 
   // ── There is no free-form canvas ──────────────────────────────────────────
@@ -238,10 +238,10 @@ const check = (name, ok, detail = "") => {
   check("Space held while the component's page has the focus pans as well", Math.abs(spaced2.x - home2.x - 60) < 2 && Math.abs(spaced2.y - home2.y - 40) < 2, JSON.stringify({ home2, spaced2 }));
 
   // ── The width ─────────────────────────────────────────────────────────────
-  await page.getByLabel("Preview width").selectOption({ label: "375" });
+  await page.getByRole("button", { name: "Preview width: 375" }).click();
   await page.waitForTimeout(300);
   check("the width switch sets the page's own width, whatever the zoom", (await page.locator("iframe[title='Component preview']").evaluate((el) => el.offsetWidth)) === 375 + 2);
-  await page.getByLabel("Preview width").selectOption({ label: "Auto" });
+  await page.getByRole("button", { name: "Preview width: Auto" }).click();
 
   // ── Edit at another zoom, with the layers ─────────────────────────────────
   await rowFor("Banner").click();
@@ -253,7 +253,7 @@ const check = (name, ok, detail = "") => {
 
   await page.locator("[data-layer]", { hasText: "<p>" }).getByRole("button", { name: /<p>/ }).click();
   await aside.getByText("<p>").waitFor({ timeout: 10000 });
-  check("picking a layer selects that element for editing", await page.getByRole("button", { name: "Edit", exact: true }).getAttribute("aria-pressed") === "true");
+  check("picking a layer selects that element for editing", await page.getByRole("button", { name: "Design", exact: true }).getAttribute("aria-pressed") === "true");
   await page.getByLabel("Zoom to 100%").click();
   await page.getByLabel("Zoom out").click();
   await page.getByLabel("Zoom out").click();

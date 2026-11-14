@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { elementTree, pathTo, type TreeNode } from "@/lib/edit/tree";
+import { describeTag } from "@/lib/edit/names";
+import ElementIcon from "./ElementIcon";
 import { useEditStore } from "@/store/edit";
 import { NO_CONNECTION, useGitStore } from "@/store/git";
 import { activeComponent, useLibraryStore } from "@/store/library";
-import { usePreviewStore } from "@/store/preview";
 import { useGitHost } from "@/components/git/hooks";
 import { readerFor } from "@/components/stage/reader";
 
@@ -44,8 +45,10 @@ function Node({ node, depth, selected, open, toggle, pick }: {
           title={node.selectable ? undefined : `${node.tag} is another component: open it to edit it`}
           className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left disabled:cursor-default"
         >
-          <span className={cn("flex-shrink-0 font-mono text-2xs", node.selectable ? "" : "italic")}>{node.selectable ? `<${node.tag}>` : node.tag}</span>
-          {node.label && <span className="truncate text-2xs text-text-tertiary">{node.label}</span>}
+          <ElementIcon name={describeTag(node.tag).icon} size={11} className="flex-shrink-0 text-text-tertiary" />
+          <span className={cn("flex-shrink-0", node.selectable ? "" : "italic")}>{describeTag(node.tag).kind}</span>
+          {node.label && <span className="min-w-0 truncate text-2xs text-text-tertiary">· {node.label}</span>}
+          {node.selectable && <span className="ml-auto flex-shrink-0 pl-1 font-mono text-2xs opacity-50">{`<${node.tag}>`}</span>}
         </button>
       </div>
       {expanded && node.children.map((child) => (
@@ -107,7 +110,6 @@ export default function LayersSection() {
   const toggle = (start: number) => setOpen((o) => { const next = new Set(o); if (!next.delete(start)) next.add(start); return next; });
   const pick = (node: TreeNode) => {
     if (!component) return;
-    usePreviewStore.getState().setMode("edit");
     useEditStore.getState().select({ path: component.file, start: node.start });
   };
 

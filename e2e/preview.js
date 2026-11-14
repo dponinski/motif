@@ -142,6 +142,8 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/preview-button.png` });
 
   // ── Props change the component ────────────────────────────────────────────
+  // (Opening a component lands in Design; its props are the Preview mode's panel.)
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
   await aside.getByLabel("variant").selectOption("danger");
   await page.waitForTimeout(600);
   s = await style();
@@ -163,16 +165,16 @@ const check = (name, ok, detail = "") => {
   check("the dark theme uses the repository's own dark mode", (await stage.locator("html").getAttribute("class")) === "dark" && (await style()).bg === "oklch(0.65 0.18 270)");
   await page.screenshot({ path: `${OUT}/preview-dark.png` });
   await page.getByRole("button", { name: "Light theme" }).click();
-  await page.getByLabel("Preview width").selectOption("375");
+  await page.getByRole("button", { name: "Preview width: 375" }).click();
   check("the width control resizes the preview", (await stage.locator("html").evaluate(() => innerWidth)) === 375);
-  await page.getByLabel("Preview width").selectOption("");
+  await page.getByRole("button", { name: "Preview width: Auto" }).click();
 
   // ── All variants ──────────────────────────────────────────────────────────
-  await page.getByRole("button", { name: "All variants" }).click();
+  await page.getByRole("button", { name: "Variants", exact: true }).click();
   await page.waitForTimeout(1200);
   check("all variants shows every combination, labelled", (await stage.locator("button").count()) === 20 && (await stage.getByText("danger · icon", { exact: true }).count()) === 1);
   await page.screenshot({ path: `${OUT}/preview-variants.png` });
-  await page.getByRole("button", { name: "Playground" }).click();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
 
   // ── Every component in the design system renders without an error ────────
   const names = ["Alert", "Avatar", "Badge", "Button", "Card", "CardContent", "CardDescription", "CardFooter", "CardHeader", "CardTitle", "Checkbox", "Field", "Input", "Label", "Modal", "Select", "Switch", "Tabs", "TabsContent", "TabsList", "TabsTrigger", "Textarea"];
@@ -262,7 +264,7 @@ const check = (name, ok, detail = "") => {
   await closeGit();
   await nav("Components");
   await openRepoComponent("Button");
-  await page.getByRole("button", { name: "Playground" }).click();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
   await stage.locator("#root button").waitFor({ timeout: 60000 });
   const bgOf = () => stage.locator("#root button").first().evaluate((el) => getComputedStyle(el).backgroundColor);
   check("with nothing changed in Motif, previews show the repository's own tokens", (await bgOf()).startsWith("oklch(0.52") && (await page.getByLabel("Motif token changes").count()) === 0);
@@ -283,7 +285,7 @@ const check = (name, ok, detail = "") => {
   await page.waitForTimeout(800);
   if (!(await rowFor("Button").isVisible())) await nav("Components");
   await openRepoComponent("Button");
-  await page.getByRole("button", { name: "Playground" }).click();
+  await page.getByRole("button", { name: "Preview", exact: true }).click();
   await stage.locator("#root button").waitFor({ timeout: 60000 });
   await page.getByLabel("Motif token changes").waitFor();
   await page.waitForTimeout(500);

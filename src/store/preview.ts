@@ -22,7 +22,8 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
   values: {},
   dark: false,
   width: null,
-  mode: "playground",
+  // Opening a component lands in Design: the canvas you work on. "playground" is shown as Preview, to use the component.
+  mode: "edit",
   motifTokens: true,
   setValue: (id, name, value) =>
     set((s) => {

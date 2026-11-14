@@ -249,20 +249,22 @@ export function fieldStatus(group: ClassGroup, value: string | null, index: Toke
 
 // Under a field whose value is written out: what is wrong with it, and one press to make it the token it matches.
 export function RawHint({
-  group, label, value, index, onUse,
+  group, label, value, index, onUse, indent = true,
 }: {
   group: ClassGroup;
   label: string;
   value: string | null;
   index: TokenIndex;
   onUse: (value: string) => void;
+  // Lines up under the control of a row with a label in front of it.
+  indent?: boolean;
 }) {
   if (!group.role || value === null || !isFlagged(group.role, value, index)) return null;
   const found = suggest(group, value, index);
   const palette = statusOf(group.role, value, index) === "palette";
   const name = found ? shown(found.value) : "";
   return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 pl-[90px] text-2xs text-amber-500" data-raw={group.id}>
+    <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs text-amber-500", indent && "pl-[90px]")} data-raw={group.id}>
       <span>{palette ? "Tailwind color, not a token" : "Not a token"}</span>
       {found && (
         <button
