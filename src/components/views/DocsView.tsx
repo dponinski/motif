@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { ArrowDown, ArrowUp, BookOpen, Download, Plus, Trash2, X } from "lucide-react";
@@ -27,7 +28,7 @@ function useRepoComponents() {
 
 function useDocsContext(): DocsContext {
   const repo = useRepoComponents();
-  const { colors, typography, spacing, radii, shadows } = useDesignSystemStore();
+  const { colors, typography, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
 
   return useMemo(
     () => ({

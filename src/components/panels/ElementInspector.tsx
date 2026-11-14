@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, MousePointer2, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -115,7 +116,7 @@ export default function ElementInspector({ component, source, connection }: { co
   const [modifier, setModifier] = useState("");
   const [position, setPosition] = useState<InsertPosition>("last-child");
   const library = useLibraryStore((s) => s.components);
-  const { setDark, setWidth } = usePreviewStore();
+  const { setDark, setWidth } = usePreviewStore(useShallow((s) => ({ setDark: s.setDark, setWidth: s.setWidth })));
   const chooseState = (id: string) => {
     // The preview is put where the state can be seen: dark theme, or a width the breakpoint applies at.
     if (id === "dark:") setDark(true);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { memoReader } from "@/lib/github";
 import { hashText } from "@/lib/sync/payload";
 import { readRepoState } from "@/lib/token-sync/flow";
 import { overlayOf, overlayReader } from "@/lib/work/overlay";
@@ -27,6 +28,11 @@ export function useStagedStack() {
     [history, index, bases]
   );
 
+  // The repository's files are the same between one edit and the next: only the editor's changes put over them differ, so the
+  // files are read once for as long as the repository's read stays the same (a new read of it starts again).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sourceKey is what says the repository was read again
+  const reader = useMemo(() => memoReader(host), [host, sourceKey]);
+
   useEffect(() => {
     const source = useLibraryStore.getState().source;
     if (!source || !connection) return;
@@ -37,12 +43,12 @@ export function useStagedStack() {
         const staged = Object.keys(overlay.texts).some(relevant);
         // Without relevant changes the stack is the repository's: what the last read found.
         const analysis = staged
-          ? (await readRepoState(overlayReader(host, overlay), source.repo, source.branch)).analysis
+          ? (await readRepoState(overlayReader(reader, overlay), source.repo, source.branch)).analysis
           : useGitStore.getState().analysis;
         if (!alive || !analysis) return;
         useLibraryStore.getState().setStack({ tailwindVersion: analysis.stack.tailwindVersion, tailwindEntry: analysis.tailwindEntry, styleFiles: analysis.styleFiles });
       } catch { /* the stack stays as it was */ }
     }, 400);
     return () => { alive = false; clearTimeout(timer); };
-  }, [host, connection, sourceKey, key]);
+  }, [reader, connection, sourceKey, key]);
 }

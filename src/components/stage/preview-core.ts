@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
 import { changedValues, tokenOverrides } from "@/lib/preview/overrides";
@@ -71,7 +72,7 @@ export function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, 
 export function useTokenOverrides(repo: string | null): { css: string; changed: string[]; shown: string } {
   const link = useGitStore((s) => s.tokenLink);
   const motifTokens = usePreviewStore((s) => s.motifTokens);
-  const { colors, spacing, radii, shadows } = useDesignSystemStore();
+  const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
   const motif = useMemo(
     () => (link && repo && link.repo === repo ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes)) : { css: "", changed: [] as string[] }),
     [link, repo, colors, spacing, radii, shadows]
@@ -102,7 +103,7 @@ export function useTokenIndex(repo: string | null): TokenIndex {
   const analysis = useGitStore((s) => s.analysis);
   const link = useGitStore((s) => s.tokenLink);
   const motifTokens = usePreviewStore((s) => s.motifTokens);
-  const { colors, spacing, radii, shadows } = useDesignSystemStore();
+  const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
   return useMemo(() => {
     if (!analysis || !repo || analysis.repo !== repo) return EMPTY_INDEX;
     const overrides = motifTokens && link && link.repo === repo ? changedValues(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base) : {};

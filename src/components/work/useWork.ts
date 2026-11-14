@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { gitBlobSha } from "@/lib/github";
+import { mapLimit } from "@/lib/repo-scan/source";
 import { editPrBody } from "@/lib/work/body";
 import { refreshWork, syncWork, SyncFailed, WorkEnded, type Changed, type WorkState } from "@/lib/work/sync";
 import { overlayOf, overlayReader } from "@/lib/work/overlay";
@@ -32,12 +33,13 @@ export function editScope(connection: GitConnection): string {
 // Edited files that the default branch has changed since they were read. A file made here is stale once the repository
 // has one of the same name; another, once it differs.
 export async function findStale(host: { readText: (path: string, ref: string) => Promise<string | null> }, branch: string): Promise<string[]> {
-  const out: string[] = [];
-  for (const f of changedFiles(useEditStore.getState())) {
+  const files = changedFiles(useEditStore.getState());
+  // Read together, and listed in the order of the changes.
+  const stale = await mapLimit(files, 6, async (f) => {
     const text = await host.readText(f.path, branch).catch(() => null);
-    if (f.sha === null ? text !== null : text === null || (await gitBlobSha(text)) !== f.sha) out.push(f.path);
-  }
-  return out;
+    return f.sha === null ? text !== null : text === null || (await gitBlobSha(text)) !== f.sha;
+  });
+  return files.filter((_, i) => stale[i]).map((f) => f.path);
 }
 
 // Gives up the edits to some files, and the components made here that they were.

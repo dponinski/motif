@@ -3,6 +3,7 @@
 import { BookOpen, GitBranch, GitPullRequest, LayoutTemplate, Palette, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
 import { statusOf } from "@/lib/work/sync";
 import { changedFiles, useEditStore } from "@/store/edit";
@@ -25,7 +26,7 @@ export default function AppNav({
   const bases = useEditStore((s) => s.bases);
   const work = useGitStore((s) => s.work ?? null);
   const connected = useGitStore((s) => s.connection !== null);
-  const runtime = useWorkRuntime();
+  const runtime = useWorkRuntime(useShallow((s) => ({ refreshed: s.refreshed, syncing: s.syncing, error: s.error, tokenNote: s.tokenNote, stale: s.stale })));
   const tokens = useTokenChanges().length;
   const guest = useAuth((s) => !!s.user?.guest);
   const status = useMemo(() => statusOf({

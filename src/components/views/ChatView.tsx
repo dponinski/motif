@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { memo, useRef, useEffect } from "react";
 import { Sparkles, Send, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAIStore, type AIMessage } from "@/store/ai";
@@ -16,7 +17,7 @@ const QUICK_PROMPTS = [
   "Is this component accessible?",
 ];
 
-function MessageBubble({ message }: { message: AIMessage }) {
+const MessageBubble = memo(function MessageBubble({ message }: { message: AIMessage }) {
   const isUser = message.role === "user";
   const { structured } = message;
   // The JSON of a suggestion is shown as the card under the reply, not as text.
@@ -55,10 +56,10 @@ function MessageBubble({ message }: { message: AIMessage }) {
       </div>
     </div>
   );
-}
+});
 
 export default function ChatView() {
-  const { messages, isLoading, inputValue, setInputValue, sendMessage, clearMessages } = useAIStore();
+  const { messages, isLoading, inputValue, setInputValue, sendMessage, clearMessages } = useAIStore(useShallow((s) => ({ messages: s.messages, isLoading: s.isLoading, inputValue: s.inputValue, setInputValue: s.setInputValue, sendMessage: s.sendMessage, clearMessages: s.clearMessages })));
   const src = useChatSource();
   const auth = useAuth();
   // Where accounts exist, the assistant is for people who are signed in.

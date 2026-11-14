@@ -17,9 +17,31 @@ export default function RepoDocPreview({ block }: { block: Block }) {
   const connection = useGitStore((s) => s.connection);
   const connected = !!connection && !!source && repoSlug(connection) === source.repo;
 
+  // A page can carry many of these, and each one loads React and compiles the page's styles: one is started when it is
+  // scrolled to (or nearly), and stays.
+  const [holder, near] = useNearViewport();
+
   if (!component) return <p className="md-empty">{block.ref.name} isn&apos;t among the imported repository components.</p>;
   if (!connected) return <p className="md-empty">Connect {source?.repo ?? "the repository"} in the Git panel to show {component.name} here.</p>;
-  return <Live component={component} view={block.view} source={source} connection={connection} />;
+  return (
+    <div ref={holder}>
+      {near ? <Live component={component} view={block.view} source={source} connection={connection} /> : <p className="md-empty">{component.name}</p>}
+    </div>
+  );
+}
+
+// Whether the element has been within `margin` px of the visible area (once it has, it stays true).
+export function useNearViewport(margin = 400): [React.RefObject<HTMLDivElement | null>, boolean] {
+  const holder = useRef<HTMLDivElement>(null);
+  const [near, setNear] = useState(typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    const el = holder.current;
+    if (near || !el) return;
+    const observer = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) { setNear(true); observer.disconnect(); } }, { rootMargin: `${margin}px` });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [near, margin]);
+  return [holder, near];
 }
 
 function Live({ component, view, source, connection }: { component: NonNullable<ReturnType<typeof useLibraryStore.getState>["components"][number]>; view: Block["view"]; source: NonNullable<ReturnType<typeof useLibraryStore.getState>["source"]>; connection: NonNullable<ReturnType<typeof useGitStore.getState>["connection"]> }) {

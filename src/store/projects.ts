@@ -1,7 +1,9 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
+import { debouncedStorage } from "../lib/debounced-storage";
 import { safeStorage } from "../lib/safe-storage";
+import { storageProblem } from "./storage-problem";
 import type { DocBlock, DocPage } from "../lib/motif-document";
 import { emptyTokenData, type TokenData } from "./design-system";
 import type { GitConnection, RepoState } from "./git";
@@ -37,6 +39,13 @@ interface ProjectsStore {
   put: (project: Project) => void;
   rename: (id: string, name: string) => void;
   remove: (id: string) => void;
+}
+
+let keptOf: { projects: Project[]; saved: { projects: Project[] } } | null = null;
+function keptProjects(s: ProjectsStore): { projects: Project[] } {
+  if (keptOf && keptOf.projects === s.projects) return keptOf.saved;
+  keptOf = { projects: s.projects, saved: { projects: s.projects } };
+  return keptOf.saved;
 }
 
 export const useProjectsStore = create<ProjectsStore>()(
@@ -75,7 +84,13 @@ export const useProjectsStore = create<ProjectsStore>()(
     {
       name: "motif-projects",
       version: 2,
-      storage: createJSONStorage(() => safeStorage),
+      // Written a moment after the last change, and when the page is left: a design system with its scan and components is
+      // large, and the editor saves into it every half second.
+      storage: debouncedStorage<{ projects: Project[] }>({
+        onProblem: (failed) => storageProblem.getState().set("projects", failed ? "Your projects couldn't be saved in this browser (it is out of room, or blocks storage), so a reload would lose the latest changes." : null),
+      }),
+      // What is kept is the projects, as the same object for as long as they are the same.
+      partialize: keptProjects as never,
       // Version 1 projects also held a free-form canvas and Motif's own components; only the documentation of the
       // repository's components and tokens is kept from them.
       migrate: (persisted) => {

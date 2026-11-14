@@ -12,6 +12,7 @@ import { discardChanges, useTokenChanges, useWorkActions } from "@/components/wo
 import { changeLine } from "@/lib/token-sync/pr";
 import FirstCommit from "@/components/git/FirstCommit";
 import { useGitHost } from "@/components/git/hooks";
+import { firstProblem, storageProblem } from "@/store/storage-problem";
 
 
 // A new file is all additions: there is no empty line before it to show as taken away.
@@ -65,6 +66,7 @@ export default function SyncView() {
   const bases = useEditStore((s) => s.bases);
   const files = useMemo(() => changedFiles({ history, index, bases }), [history, index, bases]);
   const runtime = useWorkRuntime();
+  const unsaved = storageProblem(firstProblem);
   const tokenChanges = useTokenChanges();
   const host = useGitHost(connection ?? NO_CONNECTION);
   // A repository with no commits has nothing to start a branch from: the first commit is offered here, where sending happens.
@@ -98,6 +100,7 @@ export default function SyncView() {
         <p className="text-xs leading-relaxed text-text-primary">{status.text}</p>
       </div>
 
+      {unsaved && <p role="alert" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-500">{unsaved}</p>}
       {runtime.notice && <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-500">{runtime.notice}</p>}
       {!canSend && <p className="text-xs text-amber-500">Syncing needs you to sign in with GitHub, or an access token with Contents and Pull requests read and write. Either is in the Git panel.</p>}
 

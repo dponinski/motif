@@ -247,7 +247,9 @@ export function normalize(path: string): string {
 export class Resolver {
   private models = new Map<string, Promise<FileModel | null>>();
 
-  constructor(private source: RepoSource, private paths: Set<string>, private warnings: string[]) {}
+  // `parsed` can be shared between resolvers (and kept between builds): a file's model depends only on its path and text,
+  // so a file that hasn't changed isn't parsed again.
+  constructor(private source: RepoSource, private paths: Set<string>, private warnings: string[], private parsed?: Map<string, FileModel>) {}
 
   model(path: string): Promise<FileModel | null> {
     let entry = this.models.get(path);
@@ -265,9 +267,18 @@ export class Resolver {
       this.warnings.push(`Skipped ${path}: file is larger than ${MAX_FILE_BYTES / 1000} KB`);
       return null;
     }
+    const key = `${path}\0${text}`;
+    const known = this.parsed?.get(key);
+    if (known) return known;
     try {
       const ast = await parseModule(text, path);
-      return buildModel(path, text, ast.program.body as AnyNode[]);
+      const model = buildModel(path, text, ast.program.body as AnyNode[]);
+      if (this.parsed) {
+        // Oldest first out, so the cache stays a size that doesn't matter.
+        if (this.parsed.size >= 400) this.parsed.delete(this.parsed.keys().next().value!);
+        this.parsed.set(key, model);
+      }
+      return model;
     } catch (err) {
       this.warnings.push(`Could not parse ${path}: ${err instanceof Error ? err.message.split("\n")[0] : "syntax error"}`);
       return null;

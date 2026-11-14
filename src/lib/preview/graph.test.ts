@@ -169,6 +169,48 @@ describe("graphs for editing", () => {
   });
 });
 
+describe("rebuilding after an edit", () => {
+  const tree: Record<string, string> = {
+    "package.json": pkg(),
+    "src/Root.tsx": 'import { A } from "./A";\nimport { B } from "./B";\nimport { C } from "./C";\nexport const Root = () => <div className="p-1"><A /><B /><C /></div>;',
+    "src/A.tsx": 'export const A = () => <i className="a1" />;',
+    "src/B.tsx": 'export const B = () => <i className="b1" />;',
+    "src/C.tsx": 'export const C = () => <i className="c1" />;',
+  };
+  const build = (reader = memoryReader(tree), overlay?: Record<string, string>) =>
+    buildGraph({ reader, repo: "a/b", ref: "main", entry: "src/Root.tsx", paths: Object.keys(tree), instrument: true, overlay, tailwindEntry: null, tailwindVersion: null, styleFiles: [] });
+
+  it("changes only the file that was edited", async () => {
+    const before = await build();
+    const after = await build(undefined, { "src/B.tsx": tree["src/B.tsx"].replace("b1", "b2") });
+    expect(after.modules["src/B.tsx"].code).toContain("b2");
+    expect(after.modules["src/B.tsx"].code).not.toContain("b1");
+    for (const p of ["src/Root.tsx", "src/A.tsx", "src/C.tsx"]) expect(after.modules[p].code).toBe(before.modules[p].code);
+    // The same text built again, then the first text again, gives what it gave the first time.
+    expect((await build()).modules["src/B.tsx"].code).toBe(before.modules["src/B.tsx"].code);
+  });
+
+  it("keeps modules in the order they were found whichever read finishes first", async () => {
+    // The files read later answer sooner: the order of the graph still follows the imports.
+    const slow = { ...memoryReader(tree), readText: async (p: string) => { await new Promise((r) => setTimeout(r, p.endsWith("A.tsx") ? 30 : 1)); return tree[p] ?? null; } };
+    const graph = await build(slow);
+    expect(Object.keys(graph.modules)).toEqual(["src/Root.tsx", "src/A.tsx", "src/B.tsx", "src/C.tsx"]);
+  });
+
+  it("reads the files an entry imports together, not one after another", async () => {
+    let now = 0;
+    let most = 0;
+    const counting = { ...memoryReader(tree), readText: async (p: string) => { now++; most = Math.max(most, now); await new Promise((r) => setTimeout(r, 5)); now--; return tree[p] ?? null; } };
+    await build(counting);
+    expect(most).toBeGreaterThan(1);
+  });
+
+  it("reports a file that can't be compiled the same way, whatever the order", async () => {
+    const broken = { ...tree, "src/A.tsx": "export const A = () => <i", "src/B.tsx": "export const B = () => <b" };
+    await expect(buildGraph({ reader: memoryReader(broken), repo: "a/b", ref: "main", entry: "src/Root.tsx", paths: Object.keys(broken), tailwindEntry: null, tailwindVersion: null, styleFiles: [] })).rejects.toThrow(/src\/A\.tsx/);
+  });
+});
+
 describe("graphs for components made in the editor", () => {
   const made = {
     "src/components/Badge.tsx": `import "./Badge.css";\nexport function Badge() { return <span className="badge">New</span>; }\n`,
