@@ -11,12 +11,28 @@ export interface Snippet {
 // Starting points for new elements. Classes are Tailwind utilities, which is what the editor edits.
 export const SNIPPETS: Snippet[] = [
   { id: "div", label: "Div", jsx: '<div className="flex flex-col gap-2"></div>' },
+  { id: "row", label: "Row", jsx: '<div className="flex items-center gap-2"></div>' },
+  { id: "column", label: "Column", jsx: '<div className="flex flex-col gap-2"></div>' },
+  { id: "image", label: "Image", jsx: '<img src="https://placehold.co/160x96" alt="" className="h-24 w-40 rounded-md object-cover" />' },
   { id: "text", label: "Text", jsx: "<span>Text</span>" },
   { id: "heading", label: "Heading", jsx: '<h2 className="text-lg font-semibold">Heading</h2>' },
   { id: "paragraph", label: "Paragraph", jsx: '<p className="text-sm">Paragraph</p>' },
   { id: "button", label: "Button", jsx: '<button type="button">Button</button>' },
   { id: "link", label: "Link", jsx: '<a href="#">Link</a>' },
   { id: "list", label: "List", jsx: '<ul className="flex flex-col gap-1">\n  <li>Item</li>\n  <li>Item</li>\n</ul>' },
+];
+
+// What the insert palette offers, in this order: the names a designer uses (a Box is a div), then the repository's own components.
+export const PALETTE: { id: string; label: string }[] = [
+  { id: "div", label: "Box" },
+  { id: "row", label: "Row" },
+  { id: "column", label: "Column" },
+  { id: "text", label: "Text" },
+  { id: "heading", label: "Heading" },
+  { id: "image", label: "Image" },
+  { id: "button", label: "Button" },
+  { id: "link", label: "Link" },
+  { id: "list", label: "List" },
 ];
 
 // A snippet without the Tailwind classes it carries, for a component whose styles are in a stylesheet.

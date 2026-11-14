@@ -1,5 +1,5 @@
 import type { AnyNode } from "../repo-scan/ast";
-import { analyze, context, findElement, siblings, type EditResult, type FileContext } from "./element";
+import { analyze, context, deleteElement, findElement, siblings, type EditResult, type FileContext } from "./element";
 import { importEdits, type ImportSpec } from "./imports";
 import { applyEdits, type Edit } from "./patch";
 
@@ -176,4 +176,36 @@ export async function changeTag(path: string, code: string, start: number, tag: 
   const closing = el.closingElement as AnyNode | null;
   if (closing) edits.push({ start: (closing.name as AnyNode).start as number, end: (closing.name as AnyNode).end as number, text: tag });
   return { ...applyEdits(code, edits, start), summary: `${from}: now <${tag}>` };
+}
+
+// An element's text as snippet text: the lines after the first with the indentation of its own line taken off, so inserting
+// it somewhere else (at another depth) indents it as the code around it is.
+function dedent(text: string, base: string): string {
+  if (base === "") return text;
+  return text.split("\n").map((l, i) => (i > 0 && l.startsWith(base) ? l.slice(base.length) : l)).join("\n");
+}
+
+// Moves an element to a place beside or inside another: before it, after it, or as its first or last child. Taken out, then put
+// in again, so the file keeps its own indentation and the diff is the move and nothing else. Null when there is nothing to do:
+// the place is the element itself or something inside it, the element has no parent to leave (the root), or it is already there.
+export async function moveElementTo(path: string, code: string, start: number, targetStart: number, position: InsertPosition): Promise<EditResult | null> {
+  const ctx = await context(path, code);
+  const el = findElement(ctx, start);
+  const target = findElement(ctx, targetStart);
+  if (!el || !target || !siblings(ctx, el)) return null;
+  const from = el.start as number;
+  const to = el.end as number;
+  // Not into itself, or beside itself.
+  if (targetStart >= from && targetStart < to) return null;
+  const lineStart = lineStartOf(code, from);
+  const base = code.slice(lineStart, from).trim() === "" ? code.slice(lineStart, from) : "";
+  const jsx = dedent(code.slice(from, to), base);
+  const info = await analyze(path, code, start);
+  const removed = await deleteElement(path, code, start);
+  if (!removed) return null;
+  // What was taken out was before the place if the place is after the element.
+  const place = targetStart >= to ? targetStart + (removed.code.length - code.length) : targetStart;
+  const placed = await insertElement(path, removed.code, place, position, jsx);
+  if (placed.code === code) return null;
+  return { ...placed, summary: `${info?.tag ?? "element"}: moved` };
 }

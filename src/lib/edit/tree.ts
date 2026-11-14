@@ -99,6 +99,19 @@ export function relatives(tree: TreeNode[], start: number): Relatives {
   return search(tree, null) ?? none;
 }
 
+// The node that starts at `start`, with everything below it.
+export function findNode(tree: TreeNode[], start: number): TreeNode | null {
+  for (const node of tree) {
+    if (node.start === start) return node;
+    const inner = findNode(node.children, start);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+// Whether `start` is the node itself or something inside it.
+export const within = (node: TreeNode, start: number): boolean => node.start === start || node.children.some((c) => within(c, start));
+
 // The element at `start` and the elements above it, outermost first, so the tree can open to a selection.
 export function pathTo(tree: TreeNode[], start: number): number[] {
   for (const node of tree) {
