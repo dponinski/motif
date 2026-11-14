@@ -11,6 +11,7 @@ import RepoView from "./views/RepoView";
 import ComponentStage from "./stage/ComponentStage";
 import ProjectOverview from "./stage/ProjectOverview";
 import { useAutoRead } from "./stage/useReadRepository";
+import { useWorkWatcher } from "./work/useWork";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
 import { createdTexts, useEditStore } from "@/store/edit";
@@ -26,6 +27,8 @@ export default function Editor({ projectId }: { projectId: string }) {
   }, [navRequest]);
   // A project that hasn't been read yet reads its repository now.
   useAutoRead();
+  // The pull request is checked now and then, and edited files that the repository has changed since are found.
+  useWorkWatcher();
   // A component made here is in the list while its files are among the changes: undoing its creation, or sending it as a
   // pull request, puts it away until it is in the repository.
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function Editor({ projectId }: { projectId: string }) {
       ) : (
         <>
           {/* Chat / Git activity panel */}
-          {(activeNav === "chat" || activeNav === "git") && (
+          {(activeNav === "chat" || activeNav === "git" || activeNav === "sync") && (
             <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
           )}
 

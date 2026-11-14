@@ -143,4 +143,34 @@ describe("keeping changes across a reload", () => {
     store().undo();
     expect(currentText(store(), "g.tsx")).toBe("y");
   });
+
+  it("after a merge, the merged files are the new starting point and only later edits remain changes", () => {
+    store().change("f.tsx", "b", null, "one", base);
+    store().change("g.tsx", "y", null, "two", { text: "x", sha: "s2" });
+    store().change("g.tsx", "z", null, "three");
+    // f.tsx was merged as "b"; g.tsx was merged as "y" and then edited again to "z".
+    store().rebase({ "f.tsx": { text: "b", sha: "m1" }, "g.tsx": { text: "y", sha: "m2" } });
+    expect(changedFiles(store()).map((f) => [f.path, f.before, f.after, f.sha])).toEqual([["g.tsx", "y", "z", "m2"]]);
+    // What is the repository's now isn't kept at all.
+    expect(store().bases["f.tsx"]).toBeUndefined();
+    expect(store().bases["g.tsx"]).toEqual({ text: "y", sha: "m2" });
+    // Undo doesn't go back before the merge.
+    expect(store().index).toBe(0);
+    store().undo();
+    expect(changedFiles(store())).toHaveLength(1);
+  });
+
+  it("a file made here is no longer new once it has been merged", () => {
+    store().change("n.tsx", "N", null, "make", { text: "", sha: null });
+    expect(changedFiles(store())[0].isNew).toBe(true);
+    store().rebase({ "n.tsx": { text: "N", sha: "m3" } });
+    expect(changedFiles(store())).toEqual([]);
+    expect(store().bases["n.tsx"]).toBeUndefined();
+  });
+
+  it("rebasing files that aren't being changed does nothing", () => {
+    const before = store().revision;
+    store().rebase({ "other.tsx": { text: "q", sha: "m" } });
+    expect(store().revision).toBe(before);
+  });
 });

@@ -38,6 +38,8 @@ export function applyPayload(project: Project, payload: ProjectPayload, now = Da
       connection: next ? { ...next, token: sameRepo ? was!.token : "" } : null,
       analysis: sameRepo || (!was && !next) ? project.repo.analysis : null,
       tokenLink: payload.tokenLink as unknown as Project["repo"]["tokenLink"],
+      // Where this device has got to with its pull request is its own, and goes with its unsent changes.
+      work: sameRepo ? project.repo.work ?? null : null,
     },
     library: sameRepo || (!was && !next) ? project.library : { source: null, components: [] },
     tokens: { ...emptyTokenData(), ...(payload.tokens as unknown as Partial<TokenData>) },
