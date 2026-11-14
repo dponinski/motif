@@ -22,11 +22,19 @@ interface Entry {
   summary: string;
 }
 
+// What a changed file was in the repository: its text and sha, or, for a file that is new, no sha and no text.
+export interface Base {
+  text: string;
+  sha: string | null;
+}
+
+export const NEW_FILE: Base = { text: "", sha: null };
+
 interface EditStore {
   // The repository and branch these changes are for; a different one starts clean.
   scope: string | null;
-  // The files as read from the repository, with the sha each had.
-  bases: Record<string, { text: string; sha: string }>;
+  // The files as read from the repository, with the sha each had (none, for files made here).
+  bases: Record<string, Base>;
   history: Entry[];
   index: number;
   selection: EditSelection | null;
@@ -34,7 +42,10 @@ interface EditStore {
   revision: number;
   adopt: (scope: string) => void;
   select: (selection: EditSelection | null) => void;
-  change: (path: string, text: string, selection: EditSelection | null, summary: string, base?: { text: string; sha: string }) => void;
+  change: (path: string, text: string, selection: EditSelection | null, summary: string, base?: Base) => void;
+  // Several files in one step, so one undo takes back all of them (a new component and its stylesheet, an element and
+  // the rule that styles it). Files with no base yet are given the one that is passed for them.
+  changeMany: (texts: Record<string, string>, selection: EditSelection | null, summary: string, bases?: Record<string, Base>) => void;
   undo: () => void;
   redo: () => void;
   clear: () => void;
@@ -66,6 +77,16 @@ export const useEditStore = create<EditStore>()(
           let history = [...s.history.slice(0, s.index + 1), { texts: { ...current.texts, [path]: text }, selection, summary }];
           if (history.length > MAX_HISTORY) history = history.slice(history.length - MAX_HISTORY);
           return { bases: base && !s.bases[path] ? { ...s.bases, [path]: base } : s.bases, history, index: history.length - 1, selection, revision: s.revision + 1 };
+        }),
+      changeMany: (texts, selection, summary, bases = {}) =>
+        set((s) => {
+          const current = s.history[s.index];
+          const changed = Object.entries(texts).filter(([path, text]) => (current.texts[path] ?? bases[path]?.text ?? s.bases[path]?.text) !== text);
+          if (changed.length === 0) return s;
+          let history = [...s.history.slice(0, s.index + 1), { texts: { ...current.texts, ...Object.fromEntries(changed) }, selection, summary }];
+          if (history.length > MAX_HISTORY) history = history.slice(history.length - MAX_HISTORY);
+          const added = Object.fromEntries(changed.filter(([path]) => !s.bases[path] && bases[path]).map(([path]) => [path, bases[path]]));
+          return { bases: { ...s.bases, ...added }, history, index: history.length - 1, selection, revision: s.revision + 1 };
         }),
       undo: () =>
         set((s) => (s.index === 0 ? s : { index: s.index - 1, selection: s.history[s.index - 1].selection, revision: s.revision + 1 })),
@@ -110,7 +131,15 @@ export interface ChangedFile {
   path: string;
   before: string;
   after: string;
-  sha: string;
+  // Null for a file that is new.
+  sha: string | null;
+  isNew: boolean;
+}
+
+// The files made here that the repository doesn't have, as they are now: what the preview needs to run a new component.
+export function createdTexts(s: Pick<EditStore, "history" | "index" | "bases">): Record<string, string> {
+  const texts = s.history[s.index].texts;
+  return Object.fromEntries(Object.entries(texts).filter(([path]) => s.bases[path]?.sha === null));
 }
 
 // Files whose text differs from the repository's, which is what a pull request would contain.
@@ -118,7 +147,7 @@ export function changedFiles(s: Pick<EditStore, "history" | "index" | "bases">):
   const texts = s.history[s.index].texts;
   return Object.entries(texts)
     .filter(([path, text]) => s.bases[path] && text !== s.bases[path].text)
-    .map(([path, after]) => ({ path, before: s.bases[path].text, after, sha: s.bases[path].sha }));
+    .map(([path, after]) => ({ path, before: s.bases[path].text, after, sha: s.bases[path].sha, isNew: s.bases[path].sha === null }));
 }
 
 // What was done, one line per change, in order, for the pull request description.

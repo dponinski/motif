@@ -66,7 +66,7 @@ describe("buildSrcdoc", () => {
     expect(v4).toContain('<style type="text/tailwindcss">@import "tailwindcss";');
     const none = build(graph(), null);
     expect(none).not.toContain("tailwindcss/browser");
-    expect(none).toContain("<style>@import");
+    expect(none).toContain('<style data-motif-css="src/app.css">@import');
     expect(() => build(graph(), 3)).toThrow("Tailwind v3 repositories can't be previewed yet");
   });
 
@@ -96,5 +96,20 @@ describe("buildSrcdoc", () => {
     const [a, b] = [newNonce(), newNonce()];
     expect(a).toMatch(/^[a-zA-Z0-9]{12,}$/);
     expect(a).not.toBe(b);
+  });
+  it("gives each stylesheet its own element when there is no Tailwind, so one can be replaced while the page is open", () => {
+    const g = { ...graph(), css: [{ path: "src/a.css", text: ".a{}" }, { path: 'src/"b".css', text: ".b{}" }] };
+    const html = build(g, null);
+    expect(html).toContain('<style data-motif-css="src/a.css">.a{}</style>');
+    expect(html).toContain('<style data-motif-css="src/&quot;b&quot;.css">.b{}</style>');
+    expect(html.indexOf("data-motif-css=\"src/a.css\"")).toBeLessThan(html.indexOf("motif-overrides"));
+    // Tailwind compiles them together
+    const v4 = build(g, 4);
+    expect(v4.match(/<style type="text\/tailwindcss">/g)).toHaveLength(1);
+    expect(v4).not.toContain("data-motif-css");
+  });
+
+  it("has no stylesheet element when there are no stylesheets", () => {
+    expect(build({ ...graph(), css: [] }, null)).not.toContain("data-motif-css");
   });
 });

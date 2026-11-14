@@ -27,14 +27,22 @@ export function editPrBody(files: string[], log: string[], note: string): string
 
 const branchName = (now = Date.now()) => `motif/edit-${now.toString(36)}`;
 
-function Body({ connection, source, subject, onClose }: { connection: GitConnection; source: LibrarySource; subject: string; onClose: () => void }) {
+function Body({ connection, source, subject, onClose, onSent }: { connection: GitConnection; source: LibrarySource; subject: string; onClose: () => void; onSent: () => void }) {
   const host = useGitHost(connection);
   const canSend = useCanSend(connection);
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);
   const bases = useEditStore((s) => s.bases);
   const files = useMemo(() => changedFiles({ history, index, bases }), [history, index, bases]);
-  const diffs = useMemo(() => files.map((f) => ({ file: f, ...diffLines(f.before, f.after) })), [files]);
+  // A new file is all additions: there is no empty line before it to show as taken away.
+  const diffs = useMemo(
+    () => files.map((f) => {
+      if (!f.isNew) return { file: f, ...diffLines(f.before, f.after) };
+      const lines = f.after.replace(/\n$/, "").split("\n");
+      return { file: f, hunks: [lines.map((text) => ({ type: "+" as const, text }))], added: lines.length, removed: 0 };
+    }),
+    [files]
+  );
 
   const [title, setTitle] = useState(`Update ${subject} from Motif`);
   const [note, setNote] = useState("");
@@ -46,6 +54,10 @@ function Body({ connection, source, subject, onClose }: { connection: GitConnect
     setBusy(true);
     setError(null);
     try {
+      // A file made here must still not be in the repository, or the pull request would overwrite it.
+      for (const f of files.filter((x) => x.isNew)) {
+        if (await host.getFile(f.path, source.branch)) throw new Error(`${f.path} has been added to the repository since it was made here. Give up that file's changes and try again.`);
+      }
       const pr = await openTokenPr({
         host, base: source.branch, branch: branchName(),
         files: Object.fromEntries(files.map((f) => [f.path, { text: f.after, sha: f.sha }])),
@@ -53,8 +65,9 @@ function Body({ connection, source, subject, onClose }: { connection: GitConnect
         body: editPrBody(files.map((f) => f.path), editLog({ history, index }), note),
       });
       setOpened({ number: pr.number, url: pr.url });
-      // The changes are in the pull request now; the preview goes back to the branch until it is merged.
-      useEditStore.getState().clear();
+      // The changes are in the pull request now. They are let go when this is closed (not before: with them gone, a
+      // component made here is put away, and this would go with it).
+      onSent();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -88,7 +101,7 @@ function Body({ connection, source, subject, onClose }: { connection: GitConnect
         {diffs.map(({ file, hunks, added, removed }) => (
           <div key={file.path} className="overflow-hidden rounded-md border border-surface-border">
             <div className="flex items-center gap-2 border-b border-surface-border bg-surface-subtle px-2.5 py-1.5">
-              <span className="flex-1 truncate font-mono text-2xs text-text-secondary">{file.path}</span>
+              <span className="flex-1 truncate font-mono text-2xs text-text-secondary">{file.path}{file.isNew && <span className="ml-1.5 rounded bg-emerald-500/15 px-1 font-sans text-emerald-500">new</span>}</span>
               <span className="text-2xs text-emerald-500">+{added}</span>
               <span className="text-2xs text-red-400">−{removed}</span>
             </div>
@@ -122,8 +135,17 @@ function Body({ connection, source, subject, onClose }: { connection: GitConnect
 }
 
 export default function EditPrDialog({ open, onOpenChange, connection, source, subject }: { open: boolean; onOpenChange: (open: boolean) => void; connection: GitConnection; source: LibrarySource; subject: string }) {
+  const [sent, setSent] = useState(false);
+  // Once the pull request is open, closing this lets go of the changes: the preview goes back to the branch until it is merged.
+  const change = (next: boolean) => {
+    if (!next && sent) {
+      setSent(false);
+      useEditStore.getState().clear();
+    }
+    onOpenChange(next);
+  };
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={change}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content
@@ -134,7 +156,7 @@ export default function EditPrDialog({ open, onOpenChange, connection, source, s
             <Dialog.Title className="flex-1 text-sm font-medium">Open a pull request with your changes</Dialog.Title>
             <Dialog.Close className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary" aria-label="Close"><X size={13} /></Dialog.Close>
           </div>
-          <div className="overflow-y-auto p-4"><Body connection={connection} source={source} subject={subject} onClose={() => onOpenChange(false)} /></div>
+          <div className="overflow-y-auto p-4"><Body connection={connection} source={source} subject={subject} onClose={() => change(false)} onSent={() => setSent(true)} /></div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

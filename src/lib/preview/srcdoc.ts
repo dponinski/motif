@@ -68,6 +68,11 @@ export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtime
   const importMap = { imports: Object.fromEntries(ALWAYS.map((spec) => [spec, externals[spec]])) };
 
   const css = graph.css.map((c) => c.text).join("\n\n");
+  // Tailwind compiles every stylesheet together, so they stay one element; otherwise each is its own, so an edit to one
+  // stylesheet can replace just that one while the page is open.
+  const styles = tailwindVersion === 4
+    ? `<style type="text/tailwindcss">${style(css)}</style>`
+    : graph.css.map((c) => `<style data-motif-css="${attr(c.path)}">${style(c.text)}</style>`).join("\n");
   const data = { entry: graph.entry, modules: graph.modules, externals, initial: initial ?? null };
   const runtime = runtimeSource !== undefined
     ? `<script nonce="${nonce}">${runtimeSource.replace(/<\/script/gi, "<\\/script")}</script>`
@@ -81,7 +86,7 @@ export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtime
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script type="importmap" nonce="${nonce}">${json(importMap)}</script>
 ${tailwindVersion === 4 ? `<script nonce="${nonce}" src="${TAILWIND_BROWSER}@4"></script>` : ""}
-<style${tailwindVersion === 4 ? ' type="text/tailwindcss"' : ""}>${style(css)}</style>
+${styles}
 <style id="motif-overrides"></style>
 </head>
 <body>

@@ -230,6 +230,22 @@
             registry = createRegistry(data, externals);
             renderLast();
           }).catch(fail);
+        } else if (message.type === 'css') {
+          // A stylesheet that is already on the page has its text replaced; a new one is added before the overrides.
+          var files = message.files || {};
+          Object.keys(files).forEach(function (path) {
+            var found = null;
+            document.querySelectorAll('style[data-motif-css]').forEach(function (el) {
+              if (el.getAttribute('data-motif-css') === path) found = el;
+            });
+            if (!found) {
+              found = document.createElement('style');
+              found.setAttribute('data-motif-css', path);
+              document.head.insertBefore(found, overrides);
+            }
+            found.textContent = files[path];
+          });
+          draw();
         } else if (message.type === 'canvas') {
           canvasOn = !!message.on;
         } else if (message.type === 'edit') {

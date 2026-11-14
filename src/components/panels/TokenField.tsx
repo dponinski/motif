@@ -209,9 +209,11 @@ export function ColorField({
 // A list for a group whose values are steps or names: the repository's tokens first, each with what it is worth,
 // then what Tailwind ships with.
 export function ChoiceField({
-  group, label, value, inherited, index, theme, onChange,
+  group, label, value, inherited, index, theme, onChange, scaleLabel = "Tailwind",
 }: {
   group: ClassGroup;
+  // What the list calls the values that aren't the repository's tokens.
+  scaleLabel?: string;
   label: string;
   value: string | null;
   inherited: string | null;
@@ -230,7 +232,7 @@ export function ChoiceField({
       {tokens.length > 0 ? (
         <>
           <optgroup label="Tokens">{tokens.map(option)}</optgroup>
-          {scale.length > 0 && <optgroup label="Tailwind">{scale.map(option)}</optgroup>}
+          {scale.length > 0 && <optgroup label={scaleLabel}>{scale.map(option)}</optgroup>}
         </>
       ) : scale.map(option)}
     </select>

@@ -7,13 +7,16 @@ import { gitBlobSha } from "@/lib/github";
 import { BREAKPOINT_WIDTH, GROUPS, MODIFIERS, SECTIONS, readGroup, type ClassGroup } from "@/lib/edit/classes";
 import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlotClasses, setText, slotText, type EditResult, type ElementInfo } from "@/lib/edit/element";
 import { HOST_TAGS, changeTag, insertElement, unwrapElement, wrapElement, type InsertPosition } from "@/lib/edit/insert";
-import { SNIPPETS, WRAPPERS, componentSnippet } from "@/lib/edit/snippets";
+import { SNIPPETS, WRAPPERS, componentSnippet, plain } from "@/lib/edit/snippets";
+import { readDeclarations } from "@/lib/edit/css";
+import { CSS_GROUPS, cssNames, readCssGroup, type CssGroup } from "@/lib/edit/css-groups";
+import { setCssGroup, stylesheetOf, viewOf } from "@/lib/edit/css-element";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { activeTheme } from "@/lib/edit/tokens";
 import { useTokenIndex } from "@/components/stage/preview-core";
 import { readerFor } from "@/components/stage/reader";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
-import { useEditStore, currentText } from "@/store/edit";
+import { NEW_FILE, useEditStore, currentText, type Base } from "@/store/edit";
 import type { GitConnection } from "@/store/git";
 import { useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
@@ -29,6 +32,8 @@ const SHOWN: Record<string, string[]> = {
 };
 
 const starting = (g: ClassGroup): string => {
+  // A stylesheet's groups say what they start as.
+  if ("start" in g) return (g as CssGroup).start;
   if (g.control === "color") return "transparent";
   if (/^(p|m)[xytrbl]?$|^gap/.test(g.id)) return g.id.startsWith("m") ? "0" : "4";
   if (g.id === "w" || g.id === "h") return "full";
@@ -102,6 +107,8 @@ export default function ElementInspector({ component, source, connection }: { co
   const theme = activeTheme(index, dark);
 
   const [info, setInfo] = useState<ElementInfo | null>(null);
+  // For a component whose styles are in a stylesheet: that file, as it is now, and the component's own text.
+  const [sheet, setSheet] = useState<{ path: string; text: string; exists: boolean; code: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Which state the controls edit: the plain classes, or the ones that apply on hover, in dark mode, at md and up.
   const [modifier, setModifier] = useState("");
@@ -128,12 +135,19 @@ export default function ElementInspector({ component, source, connection }: { co
   useEffect(() => {
     let stale = false;
     setError(null);
-    if (!selection) { setInfo(null); return; }
+    if (!selection) { setInfo(null); setSheet(null); return; }
     (async () => {
       try {
         const code = await read(selection.path);
         const next = code === null ? null : await analyze(selection.path, code, selection.start, values);
-        if (!stale) setInfo(next);
+        // Styles that are in a stylesheet next to the component are edited there. (With Tailwind v4 the classes are.)
+        let nextSheet: typeof sheet = null;
+        const sheetPath = code !== null && source.tailwindVersion !== 4 ? stylesheetOf(selection.path, code) : null;
+        if (code !== null && sheetPath) {
+          const text = await read(sheetPath);
+          nextSheet = { path: sheetPath, text: text ?? "", exists: text !== null, code };
+        }
+        if (!stale) { setInfo(next); setSheet(nextSheet); }
       } catch (err) {
         if (!stale) { setInfo(null); setError(errorMessage(err)); }
       }
@@ -172,15 +186,48 @@ export default function ElementInspector({ component, source, connection }: { co
 
   const editable = info.className !== "dynamic";
   const classes = info.classes;
-  const groupsFor = (section: string) => {
-    const set = GROUPS.filter((g) => g.section === section && readGroup(classes, g, modifier, names) !== null).map((g) => g.id);
-    const shown = [...new Set([...SHOWN[section], ...set])];
-    const ordered = GROUPS.filter((g) => g.section === section && shown.includes(g.id));
-    return { ordered, rest: GROUPS.filter((g) => g.section === section && !shown.includes(g.id)) };
+  // The groups the controls show, and where their values are: the element's classes, or the rule for its class in the stylesheet.
+  const css = sheet !== null;
+  const groups: ClassGroup[] = css ? CSS_GROUPS : GROUPS;
+  const cssTokens = css ? cssNames(index) : null;
+  const view = sheet ? viewOf(info, sheet.code, sheet.text) : null;
+  const valueOf = (g: ClassGroup, m: string): string | null => {
+    if (!sheet) return readGroup(classes, g, m, names);
+    if (!view?.cls) return null;
+    try {
+      return readCssGroup(readDeclarations(sheet.text, view.cls, m), g as CssGroup, cssTokens!);
+    } catch {
+      return null;
+    }
   };
-  const change = (g: ClassGroup, value: string | null) => run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier, names));
+  const groupsFor = (section: string) => {
+    const set = groups.filter((g) => g.section === section && valueOf(g, modifier) !== null).map((g) => g.id);
+    const shown = [...new Set([...SHOWN[section], ...set])];
+    const ordered = groups.filter((g) => g.section === section && shown.includes(g.id));
+    return { ordered, rest: groups.filter((g) => g.section === section && !shown.includes(g.id)) };
+  };
+  // A change to the stylesheet, and to the component when the element gets a class of its own, as one step.
+  const runCss = async (g: ClassGroup, value: string | null) => {
+    if (!sheet) return;
+    setError(null);
+    try {
+      const result = await setCssGroup({ path: selection.path, code: sheet.code, start: selection.start, stylesheet: sheet.path, css: sheet.text, groupId: g.id, value, modifier, index });
+      if (!result || Object.keys(result.texts).length === 0) return;
+      const store = useEditStore.getState();
+      const bases: Record<string, Base> = {};
+      for (const path of Object.keys(result.texts)) {
+        if (store.bases[path]) continue;
+        const text = path === sheet.path ? (sheet.exists ? sheet.text : null) : sheet.code;
+        bases[path] = text === null ? NEW_FILE : { text, sha: await gitBlobSha(text) };
+      }
+      store.changeMany(result.texts, { path: selection.path, start: result.selection }, result.summary, bases);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+  const change = (g: ClassGroup, value: string | null) => (css ? runCss(g, value) : run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier, names)));
   // Values of the state being edited that are written out where the repository has a token, or the scale a step.
-  const flagged = GROUPS.filter((g) => fieldStatus(g, readGroup(classes, g, modifier, names), index) === "flag").length;
+  const flagged = groups.filter((g) => fieldStatus(g, valueOf(g, modifier), index) === "flag").length;
   const state = MODIFIERS.find((m) => m.id === modifier);
   const line = source ? `${selection.path}` : "";
 
@@ -204,6 +251,13 @@ export default function ElementInspector({ component, source, connection }: { co
       </div>
 
       {error && <p className="mx-3 mb-2 break-words rounded border border-red-400/30 bg-red-400/10 px-2 py-1.5 text-2xs text-red-400">{error}</p>}
+      {sheet && editable && (
+        <p className="mx-3 mb-2 text-2xs leading-relaxed text-text-tertiary" data-styles-in>
+          Styles in <span className="font-mono">{sheet.path.slice(sheet.path.lastIndexOf("/") + 1)}</span>
+          {view?.cls ? <> as <span className="font-mono">.{view.cls}</span></> : " (this element gets a class of its own when you style it)"}
+          {view && view.sharedWith > 0 && <span className="text-amber-500"> · also used by {view.sharedWith} other element{view.sharedWith === 1 ? "" : "s"}, which change with it</span>}
+        </p>
+      )}
 
       <div className="border-t border-surface-border px-3 py-2.5">
         <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Structure</p>
@@ -230,7 +284,7 @@ export default function ElementInspector({ component, source, connection }: { co
                     void run((c, s) => insertElement(selection.path, c, s, position, jsx, imp));
                   } else {
                     const snippet = SNIPPETS.find((x) => x.id === id);
-                    if (snippet) void run((c, s) => insertElement(selection.path, c, s, position, snippet.jsx));
+                    if (snippet) void run((c, s) => insertElement(selection.path, c, s, position, css ? plain(snippet.jsx) : snippet.jsx));
                   }
                 }}
               >
@@ -255,7 +309,7 @@ export default function ElementInspector({ component, source, connection }: { co
                   void run((c, s) => wrapElement(selection.path, c, s, component.name, null, imp));
                 } else {
                   const wrapper = WRAPPERS.find((x) => x.id === id);
-                  if (wrapper) void run((c, s) => wrapElement(selection.path, c, s, wrapper.tag, wrapper.classes));
+                  if (wrapper) void run((c, s) => wrapElement(selection.path, c, s, wrapper.tag, css ? null : wrapper.classes));
                 }
               }}
             >
@@ -320,14 +374,15 @@ export default function ElementInspector({ component, source, connection }: { co
                 <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">{section.label}</p>
                 <div className="flex flex-col gap-1.5">
                   {ordered.map((g) => {
-                    const value = readGroup(classes, g, modifier, names);
+                    const value = valueOf(g, modifier);
                     // Under a state, what the plain class gives is what applies until the state sets its own.
-                    const inherited = modifier ? readGroup(classes, g, "", names) : null;
-                    const Control = g.control === "color" ? ColorField : ChoiceField;
+                    const inherited = modifier ? valueOf(g, "") : null;
                     return (
                       <div key={g.id} className="flex flex-col gap-1">
                         <Field label={g.label} status={fieldStatus(g, value, index)} onRemove={value !== null ? () => change(g, null) : undefined}>
-                          <Control group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} onChange={(v) => change(g, v)} />
+                          {g.control === "color"
+                            ? <ColorField group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} onChange={(v) => change(g, v)} />
+                            : <ChoiceField group={g} label={g.label} value={value} inherited={inherited} index={index} theme={theme} scaleLabel={css ? "Values" : undefined} onChange={(v) => change(g, v)} />}
                         </Field>
                         <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} />
                       </div>
@@ -338,7 +393,7 @@ export default function ElementInspector({ component, source, connection }: { co
                       className="input-sm w-full text-text-tertiary"
                       aria-label={`Add ${section.label.toLowerCase()} property`}
                       value=""
-                      onChange={(e) => { const g = GROUPS.find((x) => x.id === e.target.value); if (g) change(g, starting(g)); }}
+                      onChange={(e) => { const g = groups.find((x) => x.id === e.target.value); if (g) change(g, starting(g)); }}
                     >
                       <option value="">Add…</option>
                       {rest.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
