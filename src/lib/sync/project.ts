@@ -45,7 +45,8 @@ export function applyPayload(project: Project, payload: ProjectPayload, info: Se
     repo: {
       connection: next ? { ...next, token: sameRepo ? was!.token : "" } : null,
       analysis: sameRepo || (!was && !next) ? project.repo.analysis : null,
-      tokenLink: payload.tokenLink as unknown as Project["repo"]["tokenLink"],
+      // The server's link, with what this browser has staged in it (which isn't synced) kept while it is the same link.
+      tokenLink: keepStaged(payload.tokenLink, project.repo.tokenLink),
       // Where this device has got to with its pull request is its own, and goes with its unsent changes.
       work: sameRepo ? project.repo.work ?? null : null,
     },
@@ -53,6 +54,12 @@ export function applyPayload(project: Project, payload: ProjectPayload, info: Se
     tokens: { ...emptyTokenData(), ...(payload.tokens as unknown as Partial<TokenData>) },
     docs: payload.docs as Project["docs"],
   };
+}
+
+function keepStaged(server: ProjectPayload["tokenLink"], mine: Project["repo"]["tokenLink"]): Project["repo"]["tokenLink"] {
+  if (!server) return null;
+  const staged = mine && mine.setId === server.setId ? mine.staged : undefined;
+  return (staged ? { ...server, staged } : server) as unknown as Project["repo"]["tokenLink"];
 }
 
 export const newProjectId = () => nanoid(8);

@@ -15,6 +15,14 @@ export interface ProjectPayload {
   docs: unknown[];
 }
 
+// What one browser has put among its unsent changes (`staged`: which token files were written from which tokens) means
+// nothing to anyone else, and would make two people's links differ for no reason: it isn't synced.
+export function withoutStaged(link: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!link || !("staged" in link)) return link;
+  const { staged: _staged, ...rest } = link;
+  return rest;
+}
+
 export const SECTIONS = ["name", "connection", "tokenLink", "tokens", "docs"] as const;
 export type Section = (typeof SECTIONS)[number];
 
@@ -80,7 +88,7 @@ export function readPayload(input: unknown): { ok: true; payload: ProjectPayload
   if (!isObject(input.tokens)) return { ok: false, error: "The tokens aren't valid" };
   if (!Array.isArray(input.docs)) return { ok: false, error: "The documentation isn't valid" };
 
-  const payload: ProjectPayload = { name, connection, tokenLink: (input.tokenLink as Record<string, unknown> | null | undefined) ?? null, tokens: input.tokens, docs: input.docs };
+  const payload: ProjectPayload = { name, connection, tokenLink: withoutStaged((input.tokenLink as Record<string, unknown> | null | undefined) ?? null), tokens: input.tokens, docs: input.docs };
   const text = JSON.stringify(payload);
   if (text.length > MAX_PAYLOAD_CHARS) return { ok: false, error: "This project is too large to save to your account" };
   if (TOKEN_PATTERN.test(text)) return { ok: false, error: "This project contains what looks like an access token, which can't be saved to your account" };
@@ -98,7 +106,7 @@ export function toPayload(project: {
   return {
     name: project.name.trim() || c?.repo || "Untitled",
     connection: c ? { owner: c.owner, repo: c.repo, defaultBranch: c.defaultBranch } : null,
-    tokenLink: (project.repo.tokenLink as Record<string, unknown> | null) ?? null,
+    tokenLink: withoutStaged((project.repo.tokenLink as Record<string, unknown> | null) ?? null),
     tokens: project.tokens as Record<string, unknown>,
     docs: project.docs,
   };

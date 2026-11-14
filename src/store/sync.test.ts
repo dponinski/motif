@@ -107,6 +107,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 const sync = () => useSync.getState().sync();
 const doc = (title: string) => ({ id: `d-${title}`, title, blocks: [] });
+// The same page (same id) with different content, as two people editing it would make.
+const page = (id: string, title: string) => ({ id, title, blocks: [] });
 
 describe("a first sync", () => {
   it("saves the projects that are only in this browser, and says so", async () => {
@@ -211,37 +213,88 @@ describe("changes made elsewhere", () => {
     expect(useSync.getState().conflicts).toEqual({});
   });
 
-  it("in the same part as mine wait for a decision, and nothing is sent or lost", async () => {
-    edit("a", (p) => ({ ...p, docs: [doc("Mine")] }));
-    server.put("a", payloadOf(project("a"), { docs: [doc("Theirs")] }));
+  it("in the same item as mine wait for a decision, and nothing is sent or lost", async () => {
+    edit("a", (p) => ({ ...p, docs: [page("d1", "Mine")] }));
+    server.put("a", payloadOf(project("a"), { docs: [page("d1", "Theirs")] }));
     await sync();
-    expect(useSync.getState().conflicts.a).toMatchObject({ deleted: false, version: 2, sections: ["docs"] });
+    expect(useSync.getState().conflicts.a).toMatchObject({ deleted: false, version: 2, sections: [], items: [{ section: "docs", key: "d1", name: "Mine" }] });
     expect(server.writes()).toHaveLength(0);
-    expect(local("a")!.docs).toEqual([doc("Mine")]);
+    expect(local("a")!.docs).toEqual([page("d1", "Mine")]);
     // Asking again doesn't change that or ask twice
     await sync();
     expect(Object.keys(useSync.getState().conflicts)).toEqual(["a"]);
     expect(server.writes()).toHaveLength(0);
   });
 
-  it("can be chosen over mine", async () => {
+  it("in different items of the same part are both kept, with nothing to ask", async () => {
     edit("a", (p) => ({ ...p, docs: [doc("Mine")] }));
     server.put("a", payloadOf(project("a"), { docs: [doc("Theirs")] }));
     await sync();
-    await useSync.getState().resolve("a", "server");
-    expect(local("a")!.docs).toEqual([doc("Theirs")]);
     expect(useSync.getState().conflicts).toEqual({});
-    expect(server.rows.get("a")!.data!.docs).toEqual([doc("Theirs")]);
+    expect(local("a")!.docs.map((d) => d.title).sort()).toEqual(["Mine", "Theirs"]);
+    expect(server.rows.get("a")!.data!.docs.map((d) => (d as { title: string }).title).sort()).toEqual(["Mine", "Theirs"]);
+    expect(server.rows.get("a")!.version).toBe(3);
+  });
+
+  it("two people editing different tokens at once both keep their edits", async () => {
+    const withColors = (a: string, b: string) => ({ ...emptyTokenData(), colors: [{ id: "c1", name: "primary", value: a }, { id: "c2", name: "surface", value: b }] }) as never;
+    useProjectsStore.setState({ projects: [] });
+    useProjectsStore.getState().put(project("a", { tokens: withColors("#111111", "#222222") }));
+    await sync();
+    server.calls = [];
+    // This person edits the first color; a teammate edits the second, on the server.
+    edit("a", (p) => ({ ...p, tokens: withColors("#AAAAAA", "#222222") }));
+    server.put("a", payloadOf(project("a"), { tokens: withColors("#111111", "#BBBBBB") as never }));
+    await sync();
+    expect(useSync.getState().conflicts).toEqual({});
+    const merged = (server.rows.get("a")!.data!.tokens as unknown as { colors: { value: string }[] }).colors.map((c) => c.value);
+    expect(merged).toEqual(["#AAAAAA", "#BBBBBB"]);
+    expect(local("a")!.tokens.colors.map((c) => c.value)).toEqual(["#AAAAAA", "#BBBBBB"]);
+  });
+
+  it("a page deleted by one and edited by the other is asked about, by name, and the rest is merged", async () => {
+    useProjectsStore.getState().put(project("a", { docs: [page("d1", "One"), page("d2", "Two")] }));
+    await sync();
+    server.calls = [];
+    edit("a", (p) => ({ ...p, docs: [page("d1", "One")] }));
+    server.put("a", payloadOf(project("a"), { docs: [page("d1", "One"), page("d2", "Two edited"), page("d3", "Added there")] }));
+    await sync();
+    const c = useSync.getState().conflicts.a;
+    expect(c.items!.map((i) => i.key)).toEqual(["d2"]);
+    await useSync.getState().resolve("a", "server");
+    expect(local("a")!.docs.map((d) => d.title)).toEqual(["One", "Two edited", "Added there"]);
+  });
+
+  it("can be chosen over mine", async () => {
+    edit("a", (p) => ({ ...p, docs: [page("d1", "Mine")] }));
+    server.put("a", payloadOf(project("a"), { docs: [page("d1", "Theirs")] }));
+    await sync();
+    await useSync.getState().resolve("a", "server");
+    expect(local("a")!.docs).toEqual([page("d1", "Theirs")]);
+    expect(useSync.getState().conflicts).toEqual({});
+    expect(server.rows.get("a")!.data!.docs).toEqual([page("d1", "Theirs")]);
+  });
+
+  it("keeping mine keeps the other person's changes to everything else, here and on the server, from then on", async () => {
+    edit("a", (p) => ({ ...p, docs: [page("d1", "Mine")] }));
+    server.put("a", payloadOf(project("a"), { docs: [page("d1", "Theirs"), page("d3", "Added there")] }));
+    await sync();
+    await useSync.getState().resolve("a", "local");
+    await sync();
+    const titles = (docs: unknown[]) => docs.map((d) => (d as { title: string }).title);
+    expect(titles(server.rows.get("a")!.data!.docs)).toEqual(["Mine", "Added there"]);
+    expect(local("a")!.docs.map((d) => d.title)).toEqual(["Mine", "Added there"]);
+    expect(useSync.getState().conflicts).toEqual({});
   });
 
   it("or mine can be chosen over them", async () => {
-    edit("a", (p) => ({ ...p, docs: [doc("Mine")] }));
-    server.put("a", payloadOf(project("a"), { docs: [doc("Theirs")] }));
+    edit("a", (p) => ({ ...p, docs: [page("d1", "Mine")] }));
+    server.put("a", payloadOf(project("a"), { docs: [page("d1", "Theirs")] }));
     await sync();
     await useSync.getState().resolve("a", "local");
-    expect(server.rows.get("a")!.data!.docs).toEqual([doc("Mine")]);
+    expect(server.rows.get("a")!.data!.docs).toEqual([page("d1", "Mine")]);
     expect(server.rows.get("a")!.version).toBe(3);
-    expect(local("a")!.docs).toEqual([doc("Mine")]);
+    expect(local("a")!.docs).toEqual([page("d1", "Mine")]);
     expect(useSync.getState().conflicts).toEqual({});
   });
 
