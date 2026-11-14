@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { safeStorage } from "../lib/safe-storage";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { persist } from "zustand/middleware";
+import { debouncedStorage } from "../lib/debounced-storage";
+import { storageProblem } from "./storage-problem";
 
 // Changes made to a repository's source in the component stage, kept until they are sent as a pull request.
 // They are saved in this browser, for the repository and branch they were made on, so a reload doesn't lose them.
@@ -57,6 +58,99 @@ interface EditStore {
 }
 
 const START: Entry = { texts: {}, selection: null, summary: "" };
+
+// What is kept in the browser. Each step keeps only the files it changed, not the text of every changed file again
+// (60 steps of a large stylesheet would be megabytes, and past what the browser lets a page keep).
+interface Saved {
+  scope: string | null;
+  bases: Record<string, Base>;
+  // The files as the first step has them, then what each later step set.
+  start: Record<string, string>;
+  steps: { summary: string; set: Record<string, Patch> }[];
+  index: number;
+}
+
+// A file's new text as a change to its old one: how much they share at the start and at the end, and what lies between
+// in the new one. An edit touches a few characters of a file, so this is a few characters. A file with no earlier text is
+// kept whole (a plain string).
+export type Patch = string | [prefix: number, suffix: number, middle: string];
+
+export function patchOf(before: string | undefined, after: string): Patch {
+  if (before === undefined) return after;
+  const max = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < max && before.charCodeAt(prefix) === after.charCodeAt(prefix)) prefix++;
+  let suffix = 0;
+  while (suffix < max - prefix && before.charCodeAt(before.length - 1 - suffix) === after.charCodeAt(after.length - 1 - suffix)) suffix++;
+  const patch: Patch = [prefix, suffix, after.slice(prefix, after.length - suffix)];
+  // Where little is shared, the whole text is no more.
+  return patch[2].length + 16 >= after.length ? after : patch;
+}
+
+export function applyPatch(before: string | undefined, patch: Patch): string | null {
+  if (typeof patch === "string") return patch;
+  if (!Array.isArray(patch) || before === undefined || typeof patch[0] !== "number" || typeof patch[1] !== "number" || typeof patch[2] !== "string") return null;
+  if (patch[0] + patch[1] > before.length) return null;
+  return before.slice(0, patch[0]) + patch[2] + before.slice(before.length - patch[1]);
+}
+
+// Each entry's changes against the one before it, worked out once: entries don't change.
+// A file's first change is a change to the text it had in the repository (its base).
+const deltas = new WeakMap<Entry, { prev: Entry; bases: Record<string, Base>; set: Record<string, Patch> }>();
+
+function deltaOf(prev: Entry, entry: Entry, bases: Record<string, Base>): Record<string, Patch> {
+  const known = deltas.get(entry);
+  if (known && known.prev === prev && known.bases === bases) return known.set;
+  const set: Record<string, Patch> = {};
+  for (const [path, text] of Object.entries(entry.texts)) if (prev.texts[path] !== text) set[path] = patchOf(prev.texts[path] ?? bases[path]?.text, text);
+  deltas.set(entry, { prev, bases, set });
+  return set;
+}
+
+export function encodeEdits(s: Pick<EditStore, "scope" | "bases" | "history" | "index">): Saved {
+  const [first, ...rest] = s.history;
+  return {
+    scope: s.scope,
+    bases: s.bases,
+    start: first.texts,
+    steps: rest.map((entry, i) => ({ summary: entry.summary, set: deltaOf(s.history[i], entry, s.bases) })),
+    index: s.index,
+  };
+}
+
+// The history from what was saved, in either shape: the one with each step's changes only, or the earlier one with
+// every step's whole text. Null when it isn't well formed.
+export function decodeEdits(saved: unknown): Pick<EditStore, "scope" | "bases" | "history" | "index"> | null {
+  const p = saved as Record<string, unknown> | undefined;
+  if (!p || typeof p.index !== "number" || typeof p.bases !== "object" || p.bases === null) return null;
+  let history: Entry[] | null = null;
+  if (Array.isArray(p.history) && p.history.length > 0) {
+    history = (p.history as Entry[]).map((e) => ({ texts: e?.texts ?? {}, selection: null, summary: e?.summary ?? "" }));
+  } else if (typeof p.start === "object" && p.start !== null && Array.isArray(p.steps)) {
+    history = [{ texts: p.start as Record<string, string>, selection: null, summary: "" }];
+    for (const step of p.steps as { summary?: string; set?: Record<string, Patch> }[]) {
+      const prev = history[history.length - 1];
+      const texts = { ...prev.texts };
+      for (const [path, patch] of Object.entries(step?.set ?? {})) {
+        const text = applyPatch(prev.texts[path] ?? (p.bases as Record<string, Base>)[path]?.text, patch);
+        if (text === null) return null;
+        texts[path] = text;
+      }
+      history.push({ texts, selection: null, summary: step?.summary ?? "" });
+    }
+  }
+  if (!history || p.index < 0 || p.index >= history.length) return null;
+  return { scope: (p.scope as string | null) ?? null, bases: p.bases as Record<string, Base>, history, index: p.index };
+}
+
+// What is kept, worked out again only when something that is kept has changed.
+let kept: { history: Entry[]; bases: Record<string, Base>; index: number; scope: string | null; saved: Saved } | null = null;
+function keptState(s: EditStore): Saved {
+  if (kept && kept.history === s.history && kept.bases === s.bases && kept.index === s.index && kept.scope === s.scope) return kept.saved;
+  const saved = encodeEdits(s);
+  kept = { history: s.history, bases: s.bases, index: s.index, scope: s.scope, saved };
+  return saved;
+}
 
 export const useEditStore = create<EditStore>()(
   persist(
@@ -127,15 +221,18 @@ export const useEditStore = create<EditStore>()(
     }),
     {
       name: "motif-edits",
-      version: 1,
-      storage: createJSONStorage(() => safeStorage),
+      version: 2,
+      storage: debouncedStorage<Saved>({
+        onProblem: (failed) => storageProblem.getState().set("changes", failed ? "Your changes couldn't be saved in this browser (it is out of room, or blocks storage), so a reload would lose them. Sync sends them to the repository." : null),
+      }),
       // Which element was selected isn't kept: it is a position in a file, and picking again is one click.
-      partialize: (s) => ({ scope: s.scope, bases: s.bases, history: s.history.map((e) => ({ ...e, selection: null })), index: s.index }),
+      partialize: keptState as never,
+      // What was saved by the version before (every step's whole text) is read as it is.
+      migrate: (saved) => saved as never,
       // A store from an unknown version, or one that isn't well formed, is dropped rather than trusted.
       merge: (saved, current) => {
-        const p = saved as Partial<EditStore> | undefined;
-        const ok = p && Array.isArray(p.history) && p.history.length > 0 && typeof p.index === "number" && p.index >= 0 && p.index < p.history.length && typeof p.bases === "object" && p.bases !== null;
-        return ok ? { ...current, scope: p.scope ?? null, bases: p.bases!, history: p.history!, index: p.index! } : current;
+        const decoded = decodeEdits(saved);
+        return decoded ? { ...current, ...decoded } : current;
       },
     }
   )
@@ -159,12 +256,21 @@ export function createdTexts(s: Pick<EditStore, "history" | "index" | "bases">):
   return Object.fromEntries(Object.entries(texts).filter(([path]) => s.bases[path]?.sha === null));
 }
 
-// Files whose text differs from the repository's, which is what a pull request would contain.
+// Several parts of the page ask for this on every change (including a selection, which changes nothing here), and comparing
+// the texts of large files is not free: it is worked out once for a state of the files and their starting points.
+const changed = new WeakMap<Record<string, string>, { bases: Record<string, Base>; files: ChangedFile[] }>();
+
+// Files whose text differs from the repository's, which is what a pull request would contain. The list is shared between
+// callers, and is the same array for as long as nothing in it has changed: it is not to be changed.
 export function changedFiles(s: Pick<EditStore, "history" | "index" | "bases">): ChangedFile[] {
   const texts = s.history[s.index].texts;
-  return Object.entries(texts)
+  const known = changed.get(texts);
+  if (known && known.bases === s.bases) return known.files;
+  const files = Object.entries(texts)
     .filter(([path, text]) => s.bases[path] && text !== s.bases[path].text)
     .map(([path, after]) => ({ path, before: s.bases[path].text, after, sha: s.bases[path].sha, isNew: s.bases[path].sha === null }));
+  changed.set(texts, { bases: s.bases, files });
+  return files;
 }
 
 // What was done, one line per change, in order, for the pull request description.

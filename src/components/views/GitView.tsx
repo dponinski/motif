@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useState } from "react";
 import { Boxes, Loader2, Palette, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -149,7 +150,7 @@ function AddToken({ connection }: { connection: GitConnection }) {
 function Connected({ connection, onOpenReport }: { connection: GitConnection; onOpenReport: () => void }) {
   const host = useGitHost(connection);
   const canSend = useCanSend(connection);
-  const { status, login } = useAccount();
+  const { status, login } = useAccount(useShallow((s) => ({ status: s.status, login: s.login })));
 
   return (
     <div className="flex flex-col gap-4">

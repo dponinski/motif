@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Github, Loader2, Mail, X } from "lucide-react";
@@ -54,7 +55,7 @@ function EmailForm() {
 }
 
 export default function AuthDialog() {
-  const { dialog, closeDialog, providers, nobodyAllowed } = useAuth();
+  const { dialog, closeDialog, providers, nobodyAllowed } = useAuth(useShallow((s) => ({ dialog: s.dialog, closeDialog: s.closeDialog, providers: s.providers, nobodyAllowed: s.nobodyAllowed })));
   const go = (provider: "github" | "google" | "apple") => window.location.assign(signInUrl(provider, hereWithoutNotices()));
   const social = providers.github || providers.google || providers.apple;
   const none = !social && !providers.email;

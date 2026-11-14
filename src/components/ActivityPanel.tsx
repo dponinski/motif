@@ -1,9 +1,11 @@
 "use client";
 
 import { X } from "lucide-react";
-import ChatView from "./views/ChatView";
-import GitView from "./views/GitView";
-import SyncView from "./views/SyncView";
+import dynamic from "next/dynamic";
+
+const ChatView = dynamic(() => import("./views/ChatView"), { loading: () => null });
+const GitView = dynamic(() => import("./views/GitView"), { loading: () => null });
+const SyncView = dynamic(() => import("./views/SyncView"), { loading: () => null });
 
 export default function ActivityPanel({
   activeNav,

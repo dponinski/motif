@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GitBranch, Monitor, Moon, MoreHorizontal, Settings2, Sun } from "lucide-react";
@@ -31,7 +32,7 @@ function formatDate(ts: number): string {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void }) {
-  const { rename, remove } = useProjectsStore();
+  const { rename, remove } = useProjectsStore(useShallow((s) => ({ rename: s.rename, remove: s.remove })));
   const [menu, setMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -172,7 +173,7 @@ const GRID = "grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(240px,1f
 export default function Dashboard() {
   const router = useRouter();
   const projects = useProjectsStore((s) => s.projects);
-  const { mode: themeMode, setMode: setThemeMode } = useThemeStore();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeStore(useShallow((s) => ({ mode: s.mode, setMode: s.setMode })));
 
   // Design files, repository connections and token sets kept in this browser by earlier versions are not carried over.
   useEffect(() => clearLegacyStorage(), []);
@@ -185,6 +186,9 @@ export default function Dashboard() {
   ];
   const sorted = [...projects].sort((a, b) => b.updatedAt - a.updatedAt);
   const user = useAuth((s) => s.user);
+  // Who is in which team, and invitations, are looked at when the dashboard opens (sync asks only now and then).
+  const signedInAs = user?.id ?? null;
+  useEffect(() => { if (signedInAs) void useTeams.getState().refresh(); }, [signedInAs]);
   const teams = useTeams((s) => s.teams);
   const invites = useTeams((s) => s.invites);
   const accept = useTeams((s) => s.accept);

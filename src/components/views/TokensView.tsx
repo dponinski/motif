@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useState } from "react";
 import {
   Plus, Trash2, ChevronDown, ChevronRight, X, Pencil,
@@ -34,8 +35,9 @@ function SetsSidebar({
   activeSetId: string | null;
   onSelectSet: (id: string) => void;
 }) {
-  const { createSet, renameSet, deleteSet, addThemeToSet, deleteThemeFromSet, renameTheme, setActiveTheme } =
-    useDesignSystemStore();
+  const { createSet, renameSet, deleteSet, addThemeToSet, deleteThemeFromSet, renameTheme, setActiveTheme } = useDesignSystemStore(
+    useShallow((s) => ({ createSet: s.createSet, renameSet: s.renameSet, deleteSet: s.deleteSet, addThemeToSet: s.addThemeToSet, deleteThemeFromSet: s.deleteThemeFromSet, renameTheme: s.renameTheme, setActiveTheme: s.setActiveTheme }))
+  );
 
   const [addingSet, setAddingSet] = useState(false);
   const [newSetName, setNewSetName] = useState("");
@@ -230,7 +232,7 @@ function ColorGroup({
 }) {
   const [expanded, setExpanded] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const { updateColor, updateColorThemeValue, deleteColor, addColor } = useDesignSystemStore();
+  const { updateColor, updateColorThemeValue, deleteColor, addColor } = useDesignSystemStore(useShallow((s) => ({ updateColor: s.updateColor, updateColorThemeValue: s.updateColorThemeValue, deleteColor: s.deleteColor, addColor: s.addColor })));
 
   return (
     <div className="mb-1">
@@ -315,7 +317,7 @@ function ColorGroup({
 }
 
 function ColorsEditor({ setId, themes, activeThemeId }: { setId: string; themes: { id: string; name: string }[]; activeThemeId: string }) {
-  const { colors, addColor } = useDesignSystemStore();
+  const { colors, addColor } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, addColor: s.addColor })));
   const [addingGroup, setAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
@@ -368,7 +370,7 @@ function ColorsEditor({ setId, themes, activeThemeId }: { setId: string; themes:
 // ── Typography section ─────────────────────────────────────────────────────────
 
 function TypoEditor({ setId }: { setId: string }) {
-  const { typography, addTypography, updateTypography, deleteTypography } = useDesignSystemStore();
+  const { typography, addTypography, updateTypography, deleteTypography } = useDesignSystemStore(useShallow((s) => ({ typography: s.typography, addTypography: s.addTypography, updateTypography: s.updateTypography, deleteTypography: s.deleteTypography })));
   const [editingId, setEditingId] = useState<string | null>(null);
   const tokens = typography.filter((t) => t.setId === setId);
 
@@ -432,7 +434,7 @@ function TypoEditor({ setId }: { setId: string }) {
 // ── Spacing section ────────────────────────────────────────────────────────────
 
 function SpacingEditor({ setId }: { setId: string }) {
-  const { spacing, addSpacing, updateSpacing, deleteSpacing } = useDesignSystemStore();
+  const { spacing, addSpacing, updateSpacing, deleteSpacing } = useDesignSystemStore(useShallow((s) => ({ spacing: s.spacing, addSpacing: s.addSpacing, updateSpacing: s.updateSpacing, deleteSpacing: s.deleteSpacing })));
   const tokens = spacing.filter((sp) => sp.setId === setId);
 
   return (
@@ -458,7 +460,7 @@ function SpacingEditor({ setId }: { setId: string }) {
 // ── Radii section ──────────────────────────────────────────────────────────────
 
 function RadiiEditor({ setId }: { setId: string }) {
-  const { radii, addRadius, updateRadius, deleteRadius } = useDesignSystemStore();
+  const { radii, addRadius, updateRadius, deleteRadius } = useDesignSystemStore(useShallow((s) => ({ radii: s.radii, addRadius: s.addRadius, updateRadius: s.updateRadius, deleteRadius: s.deleteRadius })));
   const tokens = radii.filter((r) => r.setId === setId);
 
   return (
@@ -483,7 +485,7 @@ function RadiiEditor({ setId }: { setId: string }) {
 // ── Shadows section ────────────────────────────────────────────────────────────
 
 function ShadowsEditor({ setId }: { setId: string }) {
-  const { shadows, addShadow, updateShadow, deleteShadow } = useDesignSystemStore();
+  const { shadows, addShadow, updateShadow, deleteShadow } = useDesignSystemStore(useShallow((s) => ({ shadows: s.shadows, addShadow: s.addShadow, updateShadow: s.updateShadow, deleteShadow: s.deleteShadow })));
   const [editingId, setEditingId] = useState<string | null>(null);
   const tokens = shadows.filter((sh) => sh.setId === setId);
 
@@ -537,7 +539,7 @@ function ShadowsEditor({ setId }: { setId: string }) {
 // ── Import panel ───────────────────────────────────────────────────────────────
 
 function ImportPanel({ onClose }: { onClose: () => void }) {
-  const { importFromJSON } = useDesignSystemStore();
+  const { importFromJSON } = useDesignSystemStore(useShallow((s) => ({ importFromJSON: s.importFromJSON })));
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -576,7 +578,7 @@ function ImportPanel({ onClose }: { onClose: () => void }) {
 // ── Main TokensView (full-screen) ──────────────────────────────────────────────
 
 export default function TokensView({ onClose }: { onClose?: () => void }) {
-  const { sets, exportTokens, exportCSS, exportTailwind } = useDesignSystemStore();
+  const { sets, exportTokens, exportCSS, exportTailwind } = useDesignSystemStore(useShallow((s) => ({ sets: s.sets, exportTokens: s.exportTokens, exportCSS: s.exportCSS, exportTailwind: s.exportTailwind })));
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   const [activeTab, setActiveTab] = useState<TokenTab>("colors");
   const [showImport, setShowImport] = useState(false);

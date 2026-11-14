@@ -75,9 +75,16 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 let teardown: (() => void) | null = null;
 // The warning about a full account is shown once, not at every sync.
 let limitShown = false;
+// Rounds made since this page opened, to ask about teams every few.
+let cycles = 0;
 
 const PUSH_DELAY = 1500;
 const POLL_MS = 45_000;
+// Coming back to the tab fires `focus` and `visibilitychange` together, and `online` can follow: one round is enough.
+export const WAKE_GAP_MS = 1_000;
+// The teams change with the people in them, so they are asked about now and then, and at once when a project belongs to a
+// team this browser doesn't know yet.
+export const TEAMS_EVERY = 4;
 
 const localProject = (id: string) => useProjectsStore.getState().projects.find((p) => p.id === id);
 
@@ -264,8 +271,8 @@ export const useSync = create<SyncState>()(
             known.add(s.id);
             await reconcile(s);
           }
-          // The teams change with the people in them, so they are asked about each time.
-          await useTeams.getState().refresh();
+          const teams = useTeams.getState();
+          if (shouldRefreshTeams(cycles++, teams.loaded, teams.teams.map((t) => t.id), [...byId.values()].map((s) => s.teamId))) await teams.refresh();
 
           // Projects the server has never seen, or has forgotten.
           const migrated: string[] = [];
@@ -311,8 +318,11 @@ export const useSync = create<SyncState>()(
         }
       };
 
+      // Returning to the page, or the network coming back: not again so soon after a round that has just been made.
+      let lastRound = 0;
       const sync = (): Promise<void> => {
         if (!get().userId) return Promise.resolve();
+        lastRound = Date.now();
         if (running) { again = true; return running; }
         running = (async () => {
           do {
@@ -352,7 +362,7 @@ export const useSync = create<SyncState>()(
             if (!applying && s.projects !== prev.projects) schedule();
           });
           const poll = setInterval(() => { if (typeof document === "undefined" || document.visibilityState === "visible") void sync(); }, POLL_MS);
-          const wake = () => { if (document.visibilityState === "visible") void sync(); };
+          const wake = () => { if (document.visibilityState === "visible" && Date.now() - lastRound >= WAKE_GAP_MS) void sync(); };
           window.addEventListener("online", wake);
           window.addEventListener("focus", wake);
           document.addEventListener("visibilitychange", wake);
@@ -450,3 +460,10 @@ export const useSync = create<SyncState>()(
   )
 );
 
+
+// Whether the teams are asked about in this round: the first, every few after, and when a project says it belongs to a
+// team that isn't known.
+export function shouldRefreshTeams(cycle: number, loaded: boolean, known: string[], projectTeams: (string | null | undefined)[]): boolean {
+  if (!loaded || cycle % TEAMS_EVERY === 0) return true;
+  return projectTeams.some((id) => id && !known.includes(id));
+}

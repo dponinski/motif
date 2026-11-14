@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, Palette, Pencil, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
-  const { dark, width, mode: wanted, motifTokens, setDark, setWidth, setMode, setMotifTokens } = usePreviewStore();
+  const { dark, width, mode: wanted, motifTokens, setDark, setWidth, setMode, setMotifTokens } = usePreviewStore(useShallow((s) => ({ dark: s.dark, width: s.width, mode: s.mode, motifTokens: s.motifTokens, setDark: s.setDark, setWidth: s.setWidth, setMode: s.setMode, setMotifTokens: s.setMotifTokens })));
   const mode = wanted === "examples" && !examples.list.length ? "playground" : wanted;
   const exampleDoc = useSrcdoc(mode === "examples", `examples:${component.id}`, source, host, (paths) =>
     buildGraph({

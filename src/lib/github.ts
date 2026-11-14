@@ -95,6 +95,31 @@ export interface TokenSource {
 }
 
 // Public repositories can be read without a token; an empty token (and no source) means that.
+// A commit's tree and a blob are named by what is in them, so what was read under a sha is the same for ever: kept for
+// the session, whichever client asks. (A branch name is not: it is looked up every time.)
+const trees = new Map<string, { paths: string[]; truncated: boolean }>();
+const blobs = new Map<string, string>();
+const remember = <V>(cache: Map<string, V>, key: string, value: V, max: number) => {
+  if (cache.size >= max) cache.delete(cache.keys().next().value!);
+  cache.set(key, value);
+};
+
+// A reader that keeps what it has read, for one piece of work that reads the same files more than once (planning a sync,
+// then planning it again with the editor's changes put over it). What it keeps is what the repository had when it was asked.
+export function memoReader<R extends RepoReader>(reader: R): R {
+  const texts = new Map<string, Promise<string | null>>();
+  const lists = new Map<string, ReturnType<RepoReader["listTree"]>>();
+  return {
+    ...reader,
+    listTree: (ref) => { if (!lists.has(ref)) lists.set(ref, reader.listTree(ref).catch((err) => { lists.delete(ref); throw err; })); return lists.get(ref)!; },
+    readText: (path, ref) => {
+      const key = `${ref}\0${path}`;
+      if (!texts.has(key)) texts.set(key, reader.readText(path, ref).catch((err) => { texts.delete(key); throw err; }));
+      return texts.get(key)!;
+    },
+  };
+}
+
 export function createGitHubClient(conn: { owner: string; repo: string; token: string; source?: TokenSource }): GitHost & RepoReader & PrHost {
   const root = `https://api.github.com/repos/${encodeURIComponent(conn.owner)}/${encodeURIComponent(conn.repo)}`;
   // A token that was typed in is used as it is; otherwise the signed-in account's, if there is one.
@@ -140,9 +165,15 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
     return res.json();
   }
 
+  const scope = `${conn.owner}/${conn.repo}`.toLowerCase();
   const getBlob = async (sha: string) => {
+    const known = blobs.get(`${scope}@${sha}`);
+    if (known !== undefined) return known;
     const blob = await request<{ content: string }>(`/git/blobs/${sha}`, { allow404: true });
-    return blob ? fromBase64(blob.content) : null;
+    if (!blob) return null;
+    const text = fromBase64(blob.content);
+    remember(blobs, `${scope}@${sha}`, text, 100);
+    return text;
   };
 
   return {
@@ -204,8 +235,12 @@ export function createGitHubClient(conn: { owner: string; repo: string; token: s
         sha = found.object.sha;
       }
       try {
+        const known = trees.get(`${scope}@${sha}`);
+        if (known) return known;
         const tree = await request<{ tree: { path: string; type: string }[]; truncated: boolean }>(`/git/trees/${sha}?recursive=1`);
-        return { paths: tree!.tree.filter((e) => e.type === "blob").map((e) => e.path), truncated: tree!.truncated };
+        const listed = { paths: tree!.tree.filter((e) => e.type === "blob").map((e) => e.path), truncated: tree!.truncated };
+        remember(trees, `${scope}@${sha}`, listed, 20);
+        return listed;
       } catch (err) {
         if (empty(err)) return none;
         throw err;

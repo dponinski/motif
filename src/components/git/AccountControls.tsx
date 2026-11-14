@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { useEffect } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { ExternalLink, Github, LogOut, X } from "lucide-react";
@@ -42,7 +43,7 @@ export function SignInButton({ returnTo, label, className }: { returnTo?: string
 
 // In the header: the sign-in button, or who is signed in with what they can do.
 export function AccountMenu() {
-  const { status, login, avatar, installUrl, signOut } = useAccount();
+  const { status, login, avatar, installUrl, signOut } = useAccount(useShallow((s) => ({ status: s.status, login: s.login, avatar: s.avatar, installUrl: s.installUrl, signOut: s.signOut })));
   if (status === "signed-out") return <SignInButton />;
   if (status !== "signed-in") return null;
   return (
@@ -77,7 +78,7 @@ export function AccountMenu() {
 // A notice at the top of the page for what happened to a sign-in: it was cancelled or refused on the way back, or
 // it ran out. Nothing is shown otherwise.
 export function AccountNotices() {
-  const { notice, ended, setNotice } = useAccount();
+  const { notice, ended, setNotice } = useAccount(useShallow((s) => ({ notice: s.notice, ended: s.ended, setNotice: s.setNotice })));
   const signIn = useAccount((s) => s.signIn);
   const auth = useAuth();
   if (!notice && ended !== "expired") return null;

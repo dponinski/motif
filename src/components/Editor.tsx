@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import AppNav, { type NavItem } from "./AppNav";
 import ActivityPanel from "./ActivityPanel";
-import TokensView from "./views/TokensView";
-import DocsView from "./views/DocsView";
-import RepoView from "./views/RepoView";
+// What is only shown when its tab is opened is loaded then, not with the editor.
+const TokensView = dynamic(() => import("./views/TokensView"), { loading: () => null });
+const DocsView = dynamic(() => import("./views/DocsView"), { loading: () => null });
+const RepoView = dynamic(() => import("./views/RepoView"), { loading: () => null });
 import ComponentStage from "./stage/ComponentStage";
 import ProjectOverview from "./stage/ProjectOverview";
 import { useAutoRead } from "./stage/useReadRepository";
@@ -27,6 +29,17 @@ export default function Editor({ projectId }: { projectId: string }) {
     setActiveNav(navRequest);
     useNavRequest.getState().clear();
   }, [navRequest]);
+  // The libraries that read and compile components, and the inspector, are fetched while the repository is being read, so
+  // the first preview and the first click don't wait for them.
+  useEffect(() => {
+    const load = () => { void import("sucrase"); void import("@babel/parser"); void import("./panels/ElementInspector"); };
+    // Not at once: the editor's own scripts and the repository's files come first.
+    const timer = setTimeout(() => {
+      const idle = (window as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+      if (idle) idle(load); else load();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
   // A project that hasn't been read yet reads its repository now.
   useAutoRead();
   // The pull request is checked now and then, and edited files that the repository has changed since are found.

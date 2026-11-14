@@ -1,5 +1,6 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { ExternalLink, Github, LogOut } from "lucide-react";
 import { AccountMenu } from "@/components/git/AccountControls";
@@ -12,9 +13,9 @@ const item = "flex cursor-pointer items-center gap-2 px-3 py-1.5 outline-none ho
 // In the header: how to sign in to Motif, or who is signed in with what they can do. On a server without accounts
 // it is the GitHub account menu, as it was.
 export default function UserMenu() {
-  const { status, user, signOut, openDialog } = useAuth();
-  const github = useAccount();
-  const sync = useSync();
+  const { status, user, signOut, openDialog } = useAuth(useShallow((s) => ({ status: s.status, user: s.user, signOut: s.signOut, openDialog: s.openDialog })));
+  const github = useAccount(useShallow((s) => ({ status: s.status, login: s.login, installUrl: s.installUrl, signIn: s.signIn })));
+  const syncStatus = useSync((s) => s.status);
   if (status === "unknown") return null;
   if (status === "unavailable") return <AccountMenu />;
 
@@ -41,11 +42,11 @@ export default function UserMenu() {
             <p className="truncate text-text-tertiary" data-account-email>{user.email}</p>
             {user.guest && <p className="mt-0.5 text-2xs text-text-tertiary" data-guest>Guest: you are here through a team, so the team&apos;s design systems are yours to work on.</p>}
           </div>
-          <div className="border-b border-surface-border px-3 py-1.5 text-2xs text-text-tertiary" data-sync-status={sync.status}>
-            {sync.status === "syncing" ? "Saving your projects…"
-              : sync.status === "offline" ? "Offline: your projects are saved here and will be sent when you're back online"
-              : sync.status === "error" ? "Some projects couldn't be saved to your account"
-              : sync.status === "idle" ? "Your projects are saved to your account"
+          <div className="border-b border-surface-border px-3 py-1.5 text-2xs text-text-tertiary" data-sync-status={syncStatus}>
+            {syncStatus === "syncing" ? "Saving your projects…"
+              : syncStatus === "offline" ? "Offline: your projects are saved here and will be sent when you're back online"
+              : syncStatus === "error" ? "Some projects couldn't be saved to your account"
+              : syncStatus === "idle" ? "Your projects are saved to your account"
               : "Projects aren't being saved to your account"}
           </div>
           {github.status === "signed-in" ? (

@@ -1,6 +1,6 @@
 import type { RepoReader } from "../github";
-import { Resolver } from "../repo-scan/model";
-import { isIgnoredPath, readerSource } from "../repo-scan/source";
+import { Resolver, type FileModel } from "../repo-scan/model";
+import { isIgnoredPath, mapLimit, readerSource } from "../repo-scan/source";
 import { instrument } from "../edit/instrument";
 import { isJson, isScript, transformModule } from "./transform";
 
@@ -50,6 +50,27 @@ const DEFAULT_LIMITS = { files: 150, bytes: 1_500_000 };
 const ASSET = /\.(svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf)$/i;
 const STYLESHEET = /\.(css|scss|sass|less)$/i;
 const NODE_BUILTINS = new Set(["fs", "path", "os", "crypto", "child_process", "http", "https", "net", "stream", "zlib", "util", "url", "assert", "buffer", "events", "tty", "vm", "worker_threads"]);
+
+// An edit builds the graph again, and all but one file in it are as they were: what was parsed and compiled is kept, by
+// the text it came from.
+const parsed = new Map<string, FileModel>();
+const compiled = new Map<string, string>();
+const COMPILED_MAX = 400;
+
+async function compile(path: string, code: string, marked: boolean): Promise<string> {
+  const key = `${marked ? 1 : 0}\0${path}\0${code}`;
+  const known = compiled.get(key);
+  if (known !== undefined) return known;
+  // An element that can't be marked is still shown; it just can't be picked.
+  const source = marked ? await instrument(path, code).catch(() => code) : code;
+  const out = await transformModule(path, source);
+  if (compiled.size >= COMPILED_MAX) compiled.delete(compiled.keys().next().value!);
+  compiled.set(key, out);
+  return out;
+}
+
+// How many files are read and compiled at once.
+const PARALLEL = 6;
 
 const isLocal = (spec: string) => spec.startsWith(".") || spec.startsWith("@/") || spec.startsWith("~/");
 
@@ -113,7 +134,7 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   const paths = [...input.paths.filter((p) => !isIgnoredPath(p)), ...Object.keys(overlay)];
   const pathSet = new Set(paths);
   const base = readerSource(reader, ref);
-  const resolver = new Resolver({ ...base, readText: async (p) => (p in overlay ? overlay[p] : base.readText(p)) }, pathSet, warnings);
+  const resolver = new Resolver({ ...base, readText: async (p) => (p in overlay ? overlay[p] : base.readText(p)) }, pathSet, warnings, parsed);
   // Files made or changed in the editor and not sent yet are read as they are now, stylesheets included.
   const read = (p: string) => (p in overlay ? Promise.resolve<string | null>(overlay[p]) : reader.readText(p, ref).catch(() => null));
 
@@ -131,56 +152,85 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   const seen = new Set<string>(starts);
   const enqueue = (p: string) => { if (!seen.has(p)) { seen.add(p); queue.push(p); } };
 
+  // What one file contributes to the graph. Files are read and compiled several at a time, a level of imports at a time, but
+  // what they contribute is added in the order they were found, so the graph is the same as when they were done one by one.
+  interface Visit {
+    path: string;
+    module?: GraphModule;
+    codeLength: number;
+    warnings: string[];
+    unsupported: string[];
+    bare: string[];
+    css: string[];
+    next: string[];
+    error?: Error;
+  }
+  const visit = async (path: string): Promise<Visit> => {
+    const out: Visit = { path, codeLength: 0, warnings: [], unsupported: [], bare: [], css: [], next: [] };
+    try {
+      if (ASSET.test(path)) {
+        out.module = { code: `module.exports = ${JSON.stringify(rawUrl(path))};`, imports: {} };
+        return out;
+      }
+      if (isJson(path)) {
+        const text = await read(path);
+        if (text === null) { out.warnings.push(`Couldn't read ${path}`); return out; }
+        out.module = { code: await transformModule(path, text), imports: {} };
+        return out;
+      }
+
+      const model = await resolver.model(path);
+      // A script the preview needs but can't read or parse can't be run around, so say why.
+      if (!model) throw new Error(warnings.find((w) => w.includes(path)) ?? `Couldn't read ${path}`);
+      out.codeLength = model.code.length;
+
+      const imports: Record<string, string | null> = {};
+      for (const spec of model.sources) {
+        if (!isLocal(spec)) {
+          if (NODE_BUILTINS.has(spec) || spec.startsWith("node:")) out.unsupported.push(`${path} uses Node's \`${spec}\`, which isn't available in a browser`);
+          else if (packageName(spec) === "next") out.unsupported.push(`${path} imports \`${spec}\`; Next.js modules can't be previewed yet`);
+          out.bare.push(spec);
+          continue;
+        }
+        const target = resolver.resolve(path, spec);
+        if (!target) {
+          // A stylesheet that doesn't resolve (the file name is the only clue) is a stylesheet, not a missing module.
+          if (STYLESHEET.test(spec)) imports[spec] = null;
+          else out.warnings.push(`Couldn't find ${spec} imported by ${path}`);
+          continue;
+        }
+        if (STYLESHEET.test(target)) {
+          imports[spec] = null;
+          if (/\.module\.[a-z]+$/i.test(target)) out.unsupported.push("CSS modules can't be previewed yet");
+          else if (!/\.css$/i.test(target)) out.unsupported.push(`${target.split(".").pop()?.toUpperCase()} stylesheets can't be previewed yet`);
+          else out.css.push(target);
+          continue;
+        }
+        imports[spec] = target;
+        out.next.push(target);
+      }
+      if (isScript(path)) out.module = { code: await compile(path, model.code, !!input.instrument), imports };
+    } catch (err) {
+      out.error = err instanceof Error ? err : new Error(String(err));
+    }
+    return out;
+  };
+
   while (queue.length) {
-    const path = queue.shift()!;
-    if (Object.keys(modules).length >= limits.files) throw new Error(`This component pulls in more than ${limits.files} files, which is more than a preview can run`);
-
-    if (ASSET.test(path)) {
-      modules[path] = { code: `module.exports = ${JSON.stringify(rawUrl(path))};`, imports: {} };
-      continue;
-    }
-    if (isJson(path)) {
-      const text = await read(path);
-      if (text === null) { warnings.push(`Couldn't read ${path}`); continue; }
-      modules[path] = { code: await transformModule(path, text), imports: {} };
-      continue;
-    }
-
-    const model = await resolver.model(path);
-    // A script the preview needs but can't read or parse can't be run around, so say why.
-    if (!model) throw new Error(warnings.find((w) => w.includes(path)) ?? `Couldn't read ${path}`);
-    bytes += model.code.length;
-    if (bytes > limits.bytes) throw new Error(`This component pulls in more than ${Math.round(limits.bytes / 1000)} KB of code, which is more than a preview can run`);
-
-    const imports: Record<string, string | null> = {};
-    for (const spec of model.sources) {
-      if (!isLocal(spec)) {
-        if (NODE_BUILTINS.has(spec) || spec.startsWith("node:")) unsupported.add(`${path} uses Node's \`${spec}\`, which isn't available in a browser`);
-        else if (packageName(spec) === "next") unsupported.add(`${path} imports \`${spec}\`; Next.js modules can't be previewed yet`);
-        bare.add(spec);
-        continue;
-      }
-      const target = resolver.resolve(path, spec);
-      if (!target) {
-        // A stylesheet that doesn't resolve (the file name is the only clue) is a stylesheet, not a missing module.
-        if (STYLESHEET.test(spec)) imports[spec] = null;
-        else warnings.push(`Couldn't find ${spec} imported by ${path}`);
-        continue;
-      }
-      if (STYLESHEET.test(target)) {
-        imports[spec] = null;
-        if (/\.module\.[a-z]+$/i.test(target)) unsupported.add("CSS modules can't be previewed yet");
-        else if (!/\.css$/i.test(target)) unsupported.add(`${target.split(".").pop()?.toUpperCase()} stylesheets can't be previewed yet`);
-        else if (!cssPaths.includes(target)) cssPaths.push(target);
-        continue;
-      }
-      imports[spec] = target;
-      enqueue(target);
-    }
-    if (isScript(path)) {
-      // An element that can't be marked is still shown; it just can't be picked.
-      const source = input.instrument ? await instrument(path, model.code).catch(() => model.code) : model.code;
-      modules[path] = { code: await transformModule(path, source), imports };
+    const level = queue.splice(0, queue.length);
+    // Reading and compiling the files of a level is what takes the time; the limits are checked as they are added.
+    const visits = await mapLimit(level, PARALLEL, visit);
+    for (const v of visits) {
+      if (Object.keys(modules).length >= limits.files) throw new Error(`This component pulls in more than ${limits.files} files, which is more than a preview can run`);
+      if (v.error) throw v.error;
+      bytes += v.codeLength;
+      if (bytes > limits.bytes) throw new Error(`This component pulls in more than ${Math.round(limits.bytes / 1000)} KB of code, which is more than a preview can run`);
+      warnings.push(...v.warnings);
+      for (const u of v.unsupported) unsupported.add(u);
+      for (const b of v.bare) bare.add(b);
+      for (const c of v.css) if (!cssPaths.includes(c)) cssPaths.push(c);
+      if (v.module) modules[v.path] = v.module;
+      for (const n of v.next) enqueue(n);
     }
   }
 

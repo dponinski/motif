@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readPayload, type ProjectPayload } from "../lib/sync/payload";
 import { emptyTokenData } from "./design-system";
 import { useProjectsStore, type Project } from "./projects";
-import { useSync } from "./sync";
+import { TEAMS_EVERY, shouldRefreshTeams, useSync } from "./sync";
 import { useTeams } from "./teams";
 
 // A small server that keeps projects the way the real one does (versions, deletions, refusing a device that is
@@ -596,5 +596,16 @@ describe("projects shared with a team", () => {
       vi.clearAllTimers();
       vi.useRealTimers();
     }
+  });
+});
+
+describe("how often sync asks about teams", () => {
+  it("asks in the first round, then every few, and in between only for a team it doesn't know", () => {
+    expect(shouldRefreshTeams(0, false, [], [])).toBe(true);
+    expect(shouldRefreshTeams(1, false, [], [])).toBe(true);
+    const asked = Array.from({ length: TEAMS_EVERY * 2 + 1 }, (_, i) => shouldRefreshTeams(i, true, ["t1"], ["t1", null, undefined]));
+    expect(asked.filter(Boolean)).toHaveLength(3);
+    expect(asked[0] && asked[TEAMS_EVERY] && asked[TEAMS_EVERY * 2]).toBe(true);
+    expect(shouldRefreshTeams(1, true, ["t1"], ["t1", "t2"])).toBe(true);
   });
 });

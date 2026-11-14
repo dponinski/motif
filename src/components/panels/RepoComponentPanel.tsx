@@ -1,6 +1,8 @@
 "use client";
 
+import { useShallow } from "zustand/react/shallow";
 import { RotateCcw } from "lucide-react";
+import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
 import { controlsFor, initialProps, type PropControl } from "@/lib/preview/props";
 import type { LibraryComponent } from "@/lib/preview/library";
@@ -8,8 +10,10 @@ import type { Support } from "@/lib/repo-scan/types";
 import { useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
-import ElementInspector from "./ElementInspector";
 import PropsEditor from "./PropsEditor";
+
+// The inspector brings the stylesheet editor (postcss) with it: loaded when an element is first looked at.
+const ElementInspector = dynamic(() => import("./ElementInspector"), { loading: () => null });
 
 const SUPPORT_STYLE: Record<Support, string> = {
   editable: "bg-emerald-500/15 text-emerald-500",
@@ -77,7 +81,7 @@ export function Row({ control, value, onChange }: { control: PropControl; value:
 
 export default function RepoComponentPanel({ component }: { component: LibraryComponent }) {
   const overrides = usePreviewStore((s) => s.values[component.id]);
-  const { setValue, resetValues } = usePreviewStore();
+  const { setValue, resetValues } = usePreviewStore(useShallow((s) => ({ setValue: s.setValue, resetValues: s.resetValues })));
   const controls = controlsFor(component);
   const current = { ...initialProps(component), ...(overrides ?? {}) };
   const editing = usePreviewStore((s) => s.mode === "edit");

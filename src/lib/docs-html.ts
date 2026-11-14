@@ -88,7 +88,7 @@ function repoBlockHtml(block: Extract<DocBlock, { type: "repo-preview" | "repo-p
   if (block.type === "repo-preview") {
     const page = ctx.repo?.previews?.[previewKey(block.ref, block.view)];
     if (!page) return `<div class="md-preview">${empty(`${component.name} runs here when the page is shown or exported from Motif with the repository connected.`)}</div>`;
-    return `<div class="md-preview md-live"><iframe data-md-live title="${esc(component.name)} preview" sandbox="allow-scripts" srcdoc="${esc(page)}" style="height:120px"></iframe></div>`;
+    return `<div class="md-preview md-live"><iframe data-md-live loading="lazy" title="${esc(component.name)} preview" sandbox="allow-scripts" srcdoc="${esc(page)}" style="height:120px"></iframe></div>`;
   }
 
   if (block.type === "repo-code") {
