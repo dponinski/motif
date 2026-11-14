@@ -1,4 +1,4 @@
-import type { RepoToken } from "../repo-scan/types";
+import type { RepoToken, RepoTokenKind } from "../repo-scan/types";
 import { parseColor, rgbToOklab, toHex, type Rgba } from "../token-sync/color";
 import { normalizeShadow, parseLengthPx } from "../token-sync/values";
 import { PALETTE_COLOR, SCALE, type ClassGroup, type TokenNames, type TokenRole } from "./classes";
@@ -30,6 +30,9 @@ export interface TokenIndex {
   spacingStep: number;
   tailwind: 3 | 4 | null;
   names: TokenNames;
+  // The repository styles with plain CSS: every variable it has is a token, offered by its CSS name, and a length or
+  // color written out is a value that could be one.
+  css?: boolean;
 }
 
 const ROLES: [RegExp, TokenRole][] = [
@@ -52,6 +55,8 @@ export const EMPTY_INDEX: TokenIndex = {
   names: { color: new Set(), text: new Set(), shadow: new Set(), font: new Set() },
 };
 
+const KIND_ROLE: Partial<Record<RepoTokenKind, TokenRole>> = { color: "color", spacing: "spacing", radius: "radius", shadow: "shadow", font: "font" };
+
 const VAR = /var\(\s*--([\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*\))*))?\)/g;
 
 // `overrides` are values that replace the repository's, by token name and theme: what Motif has changed and not
@@ -60,7 +65,8 @@ export function buildTokenIndex(
   tokens: RepoToken[],
   themes: string[],
   tailwind: 3 | 4 | null,
-  overrides: Record<string, Record<string, string>> = {}
+  overrides: Record<string, Record<string, string>> = {},
+  css = false
 ): TokenIndex {
   const base = themes[0] ?? "default";
   const byName = new Map(tokens.map((t) => [t.name, t]));
@@ -79,6 +85,13 @@ export function buildTokenIndex(
   const all = themes.length ? themes : [base];
 
   for (const token of tokens) {
+    if (css) {
+      // Without Tailwind there is no utility to name a token by: it is its variable, `var(--primary)`.
+      const role = KIND_ROLE[token.kind];
+      if (!role || byRole[role].some((c) => c.value === token.name)) continue;
+      byRole[role].push({ value: token.name, name: token.name, values: Object.fromEntries(all.map((theme) => [theme, resolve(raw(token, theme) ?? "", theme)])), file: token.file, line: token.line });
+      continue;
+    }
     if (!token.tailwind) continue;
     if (token.tailwind === "spacing") {
       spacingStep = lengthPx(resolve(raw(token, base) ?? "", base)) ?? spacingStep;
@@ -103,7 +116,7 @@ export function buildTokenIndex(
   }
 
   const names = (role: TokenRole) => new Set(byRole[role].map((c) => c.value));
-  return { themes: all, byRole, reset, spacingStep, tailwind, names: { color: names("color"), text: names("text"), shadow: names("shadow"), font: names("font") } };
+  return { themes: all, byRole, reset, spacingStep, tailwind, names: { color: names("color"), text: names("text"), shadow: names("shadow"), font: names("font") }, ...(css ? { css: true } : {}) };
 }
 
 // ── Values ────────────────────────────────────────────────────────────────────
@@ -157,6 +170,8 @@ const RADIUS_V3: Record<string, number> = { none: 0, sm: 2, DEFAULT: 4, md: 6, l
 const TEXT_PX: Record<string, number> = { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, "2xl": 24, "3xl": 30, "4xl": 36, "5xl": 48, "6xl": 60, "7xl": 72, "8xl": 96, "9xl": 128 };
 
 const defaultPx = (role: TokenRole, value: string, index: TokenIndex): number | null => {
+  // A length written in px, as the options of a stylesheet's groups are.
+  if (/^\d+(\.\d+)?px$/.test(value)) return parseFloat(value);
   if (role === "radius") return (index.tailwind === 3 ? RADIUS_V3 : RADIUS_V4)[value] ?? null;
   if (role === "text") return TEXT_PX[value] ?? null;
   if (role === "spacing") {
@@ -234,9 +249,14 @@ export function splitOpacity(value: string): { color: string; opacity: string | 
   return cut === -1 ? { color: value, opacity: null } : { color: value.slice(0, cut), opacity: value.slice(cut + 1) };
 }
 
+const CSS_LENGTH = /^-?\d*\.?\d+(px|rem|em|%|vh|vw)$/;
+const CSS_COLOR = /^(#|rgb|hsl|oklch|oklab|lab|lch|color\()/i;
+
 export function statusOf(role: TokenRole, value: string, index: TokenIndex): ValueStatus {
   const base = role === "color" ? splitOpacity(value).color : value;
   if (index.byRole[role].some((c) => c.value === base)) return "token";
+  // In a stylesheet, a length or a color that is written out is a raw value, whether or not it is on offer in the list.
+  if (index.css) return isArbitrary(base) || (role === "color" ? CSS_COLOR.test(base) : CSS_LENGTH.test(value)) ? "raw" : "scale";
   if (isArbitrary(value)) return "raw";
   if (role === "color") return KEYWORDS.test(value) ? "scale" : PALETTE_COLOR.test(value) ? "palette" : "scale";
   return "scale";
@@ -249,6 +269,7 @@ export const isFlagged = (role: TokenRole, value: string, index: TokenIndex): bo
   const status = statusOf(role, value, index);
   if (status === "palette") return index.byRole.color.length > 0;
   if (status !== "raw") return false;
+  if (index.css) return index.byRole[role].length > 0;
   return role === "spacing" || role === "radius" || role === "text" || index.byRole[role].length > 0;
 };
 
@@ -304,7 +325,7 @@ function nearestLength(role: "radius" | "text", target: number, group: ClassGrou
   const { tokens, scale } = choicesFor(group, index, base);
   let best: { choice: Choice; d: number } | null = null;
   // Tokens come first, so a token wins a tie with a Tailwind default.
-  for (const choice of [...tokens, ...scale]) {
+  for (const choice of index.css ? tokens : [...tokens, ...scale]) {
     const n = choice.token
       ? lengthPx(valueIn(index.byRole[role].find((c) => c.value === choice.value)!, base))
       : defaultPx(role, choice.value, index);
@@ -320,7 +341,7 @@ function suggestSpacing(target: number, index: TokenIndex): Suggestion | null {
   const base = index.themes[0] ?? "default";
   const named = index.byRole.spacing.find((c) => { const n = lengthPx(valueIn(c, base)); return n !== null && Math.abs(n - target) < 0.01; });
   if (named) return { value: named.value, exact: true, hint: px(target), swatch: null, token: true };
-  if (target < 0 || index.spacingStep <= 0) return null;
+  if (index.css || target < 0 || index.spacingStep <= 0) return null;
   const steps = target / index.spacingStep;
   // Tailwind 4 takes any multiple of a quarter step; Tailwind 3 only has the steps of its scale.
   if (index.tailwind !== 3) {
@@ -341,9 +362,11 @@ function suggestSpacing(target: number, index: TokenIndex): Suggestion | null {
 
 // For a value that is written out, the token (or step of the scale) that says the same, or nearly. Null when
 // there is nothing close enough to offer, or the value is not one that can be compared.
-export function suggest(group: ClassGroup, value: string, index: TokenIndex): Suggestion | null {
+export function suggest(group: ClassGroup, written: string, index: TokenIndex): Suggestion | null {
   const role = group.role;
-  if (!role || statusOf(role, value, index) !== "raw") return null;
+  if (!role || statusOf(role, written, index) !== "raw") return null;
+  // A stylesheet's values are plain (`16px`); they are compared as the written-out values they are.
+  const value = index.css && !isArbitrary(written) ? `[${written}]` : written;
   if (role === "color") return suggestColor(value, index);
   const parts = unwrapArbitrary(value);
   if (!parts || parts.rest) return null;

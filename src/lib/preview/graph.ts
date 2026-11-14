@@ -114,7 +114,8 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   const pathSet = new Set(paths);
   const base = readerSource(reader, ref);
   const resolver = new Resolver({ ...base, readText: async (p) => (p in overlay ? overlay[p] : base.readText(p)) }, pathSet, warnings);
-  const read = (p: string) => reader.readText(p, ref).catch(() => null);
+  // Files made or changed in the editor and not sent yet are read as they are now, stylesheets included.
+  const read = (p: string) => (p in overlay ? Promise.resolve<string | null>(overlay[p]) : reader.readText(p, ref).catch(() => null));
 
   const versions = await readVersions(reader, ref, entry);
   const modules: Record<string, GraphModule> = {};

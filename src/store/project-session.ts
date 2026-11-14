@@ -21,10 +21,10 @@ export function loadProject(project: Project) {
 
 export function snapshotProject(): ProjectData {
   const { connection, analysis, tokenLink } = useGitStore.getState();
-  const { source, components } = useLibraryStore.getState();
+  const { source, components, drafts } = useLibraryStore.getState();
   return {
     repo: { connection, analysis, tokenLink },
-    library: { source, components },
+    library: { source, components, drafts },
     tokens: snapshotTokens(useDesignSystemStore.getState()),
     docs: useDocsStore.getState().pages,
   };
@@ -79,7 +79,7 @@ export function useProjectSession(projectId: string): "loading" | "ready" | "mis
       useDesignSystemStore.subscribe(schedule),
       useDocsStore.subscribe(schedule),
       useLibraryStore.subscribe((s, prev) => {
-        if (s.source !== prev.source || s.components !== prev.components) schedule();
+        if (s.source !== prev.source || s.components !== prev.components || s.drafts !== prev.drafts) schedule();
       }),
     ];
     window.addEventListener("pagehide", flush);

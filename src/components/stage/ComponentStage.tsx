@@ -13,7 +13,7 @@ import { isFromPreview, type RenderItem, type ToPreview } from "@/lib/preview/pr
 import { esmUrl } from "@/lib/preview/srcdoc";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
-import { changedFiles, useEditStore } from "@/store/edit";
+import { changedFiles, createdTexts, useEditStore } from "@/store/edit";
 import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
@@ -75,7 +75,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const reader = useMemo(() => readerFor(source, host), [source, host]);
   const graphInput = { repo: source.repo, ref: source.branch, tailwindEntry: source.tailwindEntry, tailwindVersion: source.tailwindVersion, styleFiles: source.styleFiles };
   // Elements are marked with where they are in the source, so one can be picked in edit mode.
-  const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader, entry: component.file, paths, instrument: true, ...graphInput }));
+  const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader, entry: component.file, paths, instrument: true, overlay: createdTexts(useEditStore.getState()), ...graphInput }));
   useEffect(() => { useEditStore.getState().adopt(`${source.repo}@${source.branch}`); }, [source]);
 
   const examples = useExamples(component, source, host);
@@ -155,7 +155,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
       const out: string[] = [];
       for (const f of changedFiles(useEditStore.getState())) {
         const text = await reader.readText(f.path, source.branch).catch(() => null);
-        if (text === null || (await gitBlobSha(text)) !== f.sha) out.push(f.path);
+        // A file made here is stale once the repository has one of the same name; another, once it differs.
+        if (f.sha === null ? text !== null : text === null || (await gitBlobSha(text)) !== f.sha) out.push(f.path);
       }
       if (alive) setStale(out);
     })();
@@ -197,10 +198,12 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   // An edit changes the source of some modules; the preview runs the new code without loading again.
   const sent = useRef<Record<string, string>>({});
+  const sentCss = useRef<Record<string, string>>({});
   const loaded = useRef(new Set<string>());
   const patched = useRef(false);
   useEffect(() => {
     sent.current = Object.fromEntries(Object.entries(main.graph?.modules ?? {}).map(([p, m]) => [p, m.code]));
+    sentCss.current = Object.fromEntries((main.graph?.css ?? []).map((c) => [c.path, c.text]));
     loaded.current = new Set(["react", "react/jsx-runtime", "react-dom", "react-dom/client", ...(main.graph?.bare ?? [])]);
     patched.current = false;
   }, [main.graph]);
@@ -215,7 +218,14 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         const graph = await buildGraph({ reader, entry: component.file, paths, instrument: true, overlay: texts, ...graphInput });
         if (stale) return;
         const modules = Object.fromEntries(Object.entries(graph.modules).filter(([p, m]) => sent.current[p] !== m.code));
+        // Stylesheets that changed, or that a new module brought along, are replaced on the page before it renders again.
+        const styles = Object.fromEntries(graph.css.filter((c) => sentCss.current[c.path] !== c.text).map((c) => [c.path, c.text]));
         setEditError(null);
+        if (Object.keys(styles).length > 0) {
+          patched.current = true;
+          Object.assign(sentCss.current, styles);
+          post({ type: "css", files: styles });
+        }
         if (Object.keys(modules).length === 0) return;
         patched.current = true;
         for (const [p, m] of Object.entries(modules)) sent.current[p] = m.code;
@@ -316,7 +326,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} A pull request can't be made for them as they are.
           </span>
           <button
-            onClick={() => useEditStore.getState().discard(stale)}
+            onClick={() => { useEditStore.getState().discard(stale); useLibraryStore.getState().dropDrafts(stale); }}
             className="flex-shrink-0 rounded border border-amber-500/40 px-2 py-0.5 hover:bg-amber-500/15"
             aria-label="Discard edits to changed files"
           >

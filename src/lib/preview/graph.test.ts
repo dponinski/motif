@@ -168,3 +168,33 @@ describe("graphs for editing", () => {
     expect(reads).toBe(first);
   });
 });
+
+describe("graphs for components made in the editor", () => {
+  const made = {
+    "src/components/Badge.tsx": `import "./Badge.css";\nexport function Badge() { return <span className="badge">New</span>; }\n`,
+    "src/components/Badge.css": `.badge { padding: 4px; }\n`,
+  };
+  const repo = { "package.json": pkg(), "README.md": "x" };
+
+  it("run files the repository doesn't have yet, with their stylesheet", async () => {
+    const graph = await graphOf(repo, "src/components/Badge.tsx", { overlay: made });
+    expect(Object.keys(graph.modules)).toEqual(["src/components/Badge.tsx"]);
+    expect(graph.css).toEqual([{ path: "src/components/Badge.css", text: `.badge { padding: 4px; }\n` }]);
+    expect(graph.unsupported).toEqual([]);
+  });
+
+  it("read a stylesheet that was edited, not the repository's", async () => {
+    const files = { ...repo, ...made };
+    const edited = await graphOf(files, "src/components/Badge.tsx", { overlay: { "src/components/Badge.css": `.badge { padding: 40px; }\n` } });
+    expect(edited.css[0].text).toBe(`.badge { padding: 40px; }\n`);
+    const plain = await graphOf(files, "src/components/Badge.tsx");
+    expect(plain.css[0].text).toBe(`.badge { padding: 4px; }\n`);
+  });
+
+  it("read an edited stylesheet's own imports too", async () => {
+    const files = { ...repo, ...made, "src/components/base.css": `.base { color: red; }\n` };
+    const graph = await graphOf(files, "src/components/Badge.tsx", { overlay: { "src/components/Badge.css": `@import "./base.css";\n.badge { padding: 1px; }\n` } });
+    expect(graph.css[0].text).toContain(".base { color: red; }");
+    expect(graph.css[0].text).toContain(".badge { padding: 1px; }");
+  });
+});

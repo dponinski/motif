@@ -106,6 +106,7 @@ export function useTokenIndex(repo: string | null): TokenIndex {
   return useMemo(() => {
     if (!analysis || !repo || analysis.repo !== repo) return EMPTY_INDEX;
     const overrides = motifTokens && link && link.repo === repo ? changedValues(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base) : {};
-    return buildTokenIndex(analysis.tokens, analysis.themes, analysis.stack.tailwindVersion, overrides);
+    // Without Tailwind the tokens are the repository's CSS variables, and a stylesheet's controls offer them by name.
+    return buildTokenIndex(analysis.tokens, analysis.themes, analysis.stack.tailwindVersion, overrides, analysis.stack.tailwindVersion === null);
   }, [analysis, repo, link, motifTokens, colors, spacing, radii, shadows]);
 }

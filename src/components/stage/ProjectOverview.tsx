@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { GitBranch, Layers, Loader2, Palette } from "lucide-react";
+import { Boxes, GitBranch, Layers, Loader2, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Support } from "@/lib/repo-scan/types";
 import { SignInButton } from "@/components/git/AccountControls";
@@ -13,6 +13,7 @@ import { repoSlug, useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
 import { useReadStatus } from "@/store/read-status";
+import NewComponentDialog from "./NewComponentDialog";
 import { useReadRepository } from "./useReadRepository";
 
 const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
@@ -31,6 +32,7 @@ export default function ProjectOverview() {
   const host = useGitHost(connection ?? { owner: "", repo: "", token: "", defaultBranch: "main" });
   const [empty, setEmpty] = useState(false);
   const [frameworkOpen, setFrameworkOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const none = !!analysis && components.length === 0;
 
   // Whether there is a repository to build on at all: asked only when there is nothing to show.
@@ -77,13 +79,20 @@ export default function ProjectOverview() {
         <p className="mt-1 text-xs leading-relaxed text-text-secondary">
           {components.length > 0
             ? `${components.length} components and ${tokens} tokens. Open one to see it running, change it visually and send the change as a pull request.`
-            : "This repository has no components yet. Add your design tokens, and every change you make is sent to the repository as a pull request."}
+            : "This repository has no components yet. Build one, and add your design tokens; every change is sent to the repository as a pull request."}
         </p>
 
         {none && connection && empty && <FirstCommit connection={connection} onDone={() => setEmpty(false)} />}
 
         {none && (
           <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2" data-start>
+            <button
+              onClick={() => setCreating(true)}
+              className="flex flex-col gap-1 rounded-lg border border-surface-border bg-surface-raised px-3 py-3 text-left transition-colors hover:border-accent/50"
+            >
+              <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary"><Boxes size={13} /> New component</span>
+              <span className="text-2xs leading-relaxed text-text-tertiary">Build a React component on the canvas, and send it to the repository as a pull request.</span>
+            </button>
             <button
               onClick={() => useNavRequest.getState().ask("tokens")}
               className="flex flex-col gap-1 rounded-lg border border-surface-border bg-surface-raised px-3 py-3 text-left transition-colors hover:border-accent/50"
@@ -103,6 +112,7 @@ export default function ProjectOverview() {
           </div>
         )}
         <FrameworkDialog open={frameworkOpen} onOpenChange={setFrameworkOpen} />
+        <NewComponentDialog open={creating} onOpenChange={setCreating} />
 
         {components.length > 0 && (
           <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">

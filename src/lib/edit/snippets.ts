@@ -19,6 +19,9 @@ export const SNIPPETS: Snippet[] = [
   { id: "list", label: "List", jsx: '<ul className="flex flex-col gap-1">\n  <li>Item</li>\n  <li>Item</li>\n</ul>' },
 ];
 
+// A snippet without the Tailwind classes it carries, for a component whose styles are in a stylesheet.
+export const plain = (jsx: string) => jsx.replace(/ className="[^"]*"/g, "");
+
 export const WRAPPERS: { id: string; label: string; tag: string; classes: string | null }[] = [
   { id: "div", label: "Div", tag: "div", classes: null },
   { id: "row", label: "Row", tag: "div", classes: "flex items-center gap-2" },

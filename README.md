@@ -91,7 +91,20 @@ A project doesn't need a repository that already has components or tokens. Conne
 - **Tokens, from scratch.** On the Tokens screen, add colors, spacing, radii and shadows as you would anywhere. **Repo sync** sends them to the repository as a pull request that adds a stylesheet of plain CSS variables (`src/styles/tokens.css`, `:root { --primary: #3366ff; }`, with a selector per extra theme). It needs no framework and nothing to import it from: use the file wherever your application loads its styles. The preview applies your tokens as you edit them.
 - **Add a framework.** **Add a framework** (Tokens screen, and the build screen) adds a framework to the repository like a dependency, by pull request. **Tailwind CSS v4** is the first: it adds `tailwindcss` to `package.json` (a new one if there is none; an existing one is edited by text, so nothing else in it changes), a stylesheet `src/styles/tailwind.css` with `@import "tailwindcss"` (and an import of the tokens file, when Motif made one), and rewrites Motif's own tokens file so Tailwind reads the tokens as theme values (`@theme`). It refuses when the repository already has Tailwind v3 or v4. After the pull request is merged, **Read the repository again** and Motif edits styles with Tailwind's classes. What it does not do: set up the bundler of your application. It says so in the pull request, which lists what is left to do.
 
-Not here yet: building new components in Motif (the next part), other frameworks, and a single long-lived working branch for all changes.
+### Building a component from nothing
+
+**New component** (the build screen, or the **+** in the Components panel) makes a component to build on the canvas. Give it a name (`Button`, `PricingCard`) and Motif makes, as changes you can see and undo, and not yet in the repository:
+
+- `src/components/Name.tsx` (in the folder where the repository's components already are), a function component that starts as a single element;
+- `src/components/Name.css`, the stylesheet next to it, with the rule of its root class (`.name { padding: 16px; }`). In a repository that uses **Tailwind v4** there is no stylesheet: the component is made of utility classes, like the repository's others;
+- a line exporting it from the repository's entry file (`src/index.ts`, made if there is none), so it is part of what the design system exports;
+- a `package.json` that lists React, if the repository's doesn't (made if there is none): components are only read from a repository that depends on React, so without it a merged component wouldn't be found again.
+
+It opens in Edit mode, running, and is marked **new** in the list. Everything in the inspector works on it, with the styles written **into the stylesheet**: each element gets a class of its own the first time it is styled (named for the component and the tag, `button__h2`), and the rule for that class gets the declaration. Controls are the same as for classes (layout, spacing, size, type, fill and border), a token picker offers the repository's CSS variables by name (`var(--space-2)` for a token called `space-2`), and a value written out where a token could be is marked, with the token it matches one press away. **States** (hover, focus, active, disabled, dark) write the rule for the state (`.button:hover`, `.dark .button`); the breakpoints write `@media (min-width: …)` rules, narrower first. What Motif can't place (an element whose `className` is computed, a state it can't write in CSS) is refused with the reason. A rule that other elements share changes for all of them, and the inspector says so.
+
+The stylesheet edits show in the preview as you make them. Changes to several files (a new component and its stylesheet, an element and the rule that styles it) are one step to undo. **Create pull request** shows every file, new ones as all additions, and refuses to go on if a new file has appeared in the repository since. Sending the changes puts the new component away until the pull request is merged and the repository is read again (**Update from repository**), when it is an ordinary component.
+
+Not here yet: variants for components styled with a stylesheet (their props can be edited), CSS Modules and other frameworks, a single long-lived working branch for all changes, and teams.
 
 ## Documentation
 

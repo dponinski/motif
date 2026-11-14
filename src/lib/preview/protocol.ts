@@ -31,6 +31,12 @@ export interface ModulesMessage {
   externals?: Record<string, string>;
 }
 
+// Replaces the text of some stylesheets, so a style edit shows without loading the page again.
+export interface CssMessage {
+  type: "css";
+  files: Record<string, string>;
+}
+
 // Turns picking elements on or off, and says which element is selected (a `data-motif` key).
 export interface EditMessage {
   type: "edit";
@@ -45,7 +51,7 @@ export interface CanvasMessage {
   on: boolean;
 }
 
-export type ToPreview = RenderMessage | ModulesMessage | EditMessage | CanvasMessage;
+export type ToPreview = RenderMessage | ModulesMessage | CssMessage | EditMessage | CanvasMessage;
 
 export type FromPreview =
   | { type: "ready" }

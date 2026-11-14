@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Boxes, Loader2, RefreshCw } from "lucide-react";
+import { Boxes, Loader2, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeUpdate } from "@/lib/preview/library";
 import { readerSource } from "@/lib/repo-scan/source";
@@ -10,6 +10,7 @@ import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import { useNavRequest } from "@/store/nav";
+import NewComponentDialog from "@/components/stage/NewComponentDialog";
 
 const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
 const DOT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
@@ -90,13 +91,16 @@ function ImportPrompt() {
 export default function RepoComponentsSection() {
   const components = useLibraryStore((s) => s.components);
   const source = useLibraryStore((s) => s.source);
+  const drafts = useLibraryStore((s) => s.drafts);
   const activeId = useLibraryStore((s) => s.activeId);
   const setActive = useLibraryStore((s) => s.setActive);
   const connection = useGitStore((s) => s.connection);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  if (!source || components.length === 0) return <ImportPrompt />;
+  // Until the repository has been read there is nothing to show but how to read it.
+  if (!source) return <ImportPrompt />;
   const shown = components.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
@@ -104,8 +108,10 @@ export default function RepoComponentsSection() {
       <div className="flex h-9 flex-shrink-0 items-center gap-1.5 border-b border-surface-border px-3">
         <Boxes size={12} className="flex-shrink-0 text-text-tertiary" />
         <span className="flex-1 truncate text-xs font-medium text-text-secondary" title={`${source.repo} · ${source.branch}`}>Repository</span>
+        <button onClick={() => setCreating(true)} className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary" title="New component" aria-label="New component"><Plus size={12} /></button>
         {connection && repoSlug(connection) === source.repo && <UpdateButton connection={connection} onResult={(text, ok) => setStatus({ text, ok })} />}
       </div>
+      <NewComponentDialog open={creating} onOpenChange={setCreating} />
       {status && <p className={cn("flex-shrink-0 px-3 py-1 text-2xs", status.ok ? "text-text-tertiary" : "text-red-400")} role="status">{status.text}</p>}
       {components.length > 8 && (
         <div className="flex-shrink-0 px-2 pt-1.5">
@@ -123,11 +129,13 @@ export default function RepoComponentsSection() {
           >
             <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left">
               <span className="flex-1 truncate text-xs">{c.name}</span>
+              {drafts.some((d) => d.id === c.id) && <span className="rounded bg-emerald-500/15 px-1 text-2xs text-emerald-500" title="Made here, not in the repository yet">new</span>}
               <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", DOT[c.support.level])} title={DOT_LABEL[c.support.level]} />
             </button>
           </div>
         ))}
-        {shown.length === 0 && <p className="px-3 py-2 text-2xs text-text-tertiary">No match.</p>}
+        {components.length === 0 && <p className="px-3 py-2 text-2xs leading-relaxed text-text-tertiary">No components yet. Make one with the + above.</p>}
+        {components.length > 0 && shown.length === 0 && <p className="px-3 py-2 text-2xs text-text-tertiary">No match.</p>}
       </div>
     </div>
   );

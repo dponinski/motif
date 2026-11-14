@@ -13,6 +13,7 @@ import ProjectOverview from "./stage/ProjectOverview";
 import { useAutoRead } from "./stage/useReadRepository";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
+import { createdTexts, useEditStore } from "@/store/edit";
 
 export default function Editor({ projectId }: { projectId: string }) {
   const [activeNav, setActiveNav] = useState<NavItem | null>("components");
@@ -25,6 +26,13 @@ export default function Editor({ projectId }: { projectId: string }) {
   }, [navRequest]);
   // A project that hasn't been read yet reads its repository now.
   useAutoRead();
+  // A component made here is in the list while its files are among the changes: undoing its creation, or sending it as a
+  // pull request, puts it away until it is in the repository.
+  useEffect(() => {
+    const sync = () => useLibraryStore.getState().syncDrafts(createdTexts(useEditStore.getState()));
+    sync();
+    return useEditStore.subscribe(sync);
+  }, []);
   const stageActive = useLibraryStore((s) => s.activeId !== null && s.components.some((c) => c.id === s.activeId));
 
   // Ctrl/Cmd+K opens or closes the chat.

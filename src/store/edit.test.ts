@@ -47,7 +47,7 @@ describe("edit history", () => {
   it("lists as changed only files that differ from the repository's version", () => {
     store().change("f.tsx", "b", null, "one", base);
     store().change("g.tsx", "x", null, "two", { text: "x", sha: "s2" });
-    expect(changedFiles(store())).toEqual([{ path: "f.tsx", before: "a", after: "b", sha: "s1" }]);
+    expect(changedFiles(store())).toEqual([{ path: "f.tsx", before: "a", after: "b", sha: "s1", isNew: false }]);
     store().change("f.tsx", "a", null, "back");
     expect(changedFiles(store())).toEqual([]);
   });
@@ -91,7 +91,7 @@ describe("keeping changes across a reload", () => {
     await reload();
     expect(store().scope).toBe("acme/ds@main");
     expect(currentText(store(), "f.tsx")).toBe("c");
-    expect(changedFiles(store())).toEqual([{ path: "f.tsx", before: "a", after: "c", sha: "s1" }]);
+    expect(changedFiles(store())).toEqual([{ path: "f.tsx", before: "a", after: "c", sha: "s1", isNew: false }]);
     expect(editLog(store())).toEqual(["one", "two"]);
     store().undo();
     expect(currentText(store(), "f.tsx")).toBe("b");
