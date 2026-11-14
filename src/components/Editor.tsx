@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { TipProvider } from "./Tip";
 import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import AppNav, { type NavItem } from "./AppNav";
@@ -70,36 +71,38 @@ export default function Editor({ projectId }: { projectId: string }) {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-surface-base select-none">
-      {/* Far-left nav icon rail */}
-      <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
+    <TipProvider>
+      <div className="flex h-screen w-screen overflow-hidden bg-surface-base select-none">
+        {/* Far-left nav icon rail */}
+        <AppNav activeNav={activeNav} setActiveNav={setActiveNav} />
 
-      {activeNav === "tokens" ? (
-        /* Full-screen token editor */
-        <TokensView onClose={() => setActiveNav(null)} />
-      ) : activeNav === "docs" ? (
-        <DocsView projectId={projectId} onClose={() => setActiveNav(null)} />
-      ) : activeNav === "repo" ? (
-        <RepoView onClose={() => setActiveNav("git")} />
-      ) : (
-        <>
-          {/* Chat / Git activity panel */}
-          {(activeNav === "chat" || activeNav === "git" || activeNav === "sync") && (
-            <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
-          )}
+        {activeNav === "tokens" ? (
+          /* Full-screen token editor */
+          <TokensView onClose={() => setActiveNav(null)} />
+        ) : activeNav === "docs" ? (
+          <DocsView projectId={projectId} onClose={() => setActiveNav(null)} />
+        ) : activeNav === "repo" ? (
+          <RepoView onClose={() => setActiveNav("git")} />
+        ) : (
+          <>
+            {/* Chat / Git activity panel */}
+            {(activeNav === "chat" || activeNav === "git" || activeNav === "sync") && (
+              <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
+            )}
 
-          {/* Components + layers panel (shown when components nav is active) */}
-          {activeNav === "components" && <LeftPanel />}
+            {/* Components + layers panel (shown when components nav is active) */}
+            {activeNav === "components" && <LeftPanel />}
 
-          {/* The open component on a canvas, or the design system's components to open one from */}
-          <main className="flex-1 relative overflow-hidden">
-            {stageActive ? <ComponentStage /> : <ProjectOverview />}
-          </main>
+            {/* The open component on a canvas, or the design system's components to open one from */}
+            <main className="flex-1 relative overflow-hidden">
+              {stageActive ? <ComponentStage /> : <ProjectOverview />}
+            </main>
 
-          {/* Right properties panel */}
-          <RightPanel />
-        </>
-      )}
-    </div>
+            {/* Right properties panel */}
+            <RightPanel />
+          </>
+        )}
+      </div>
+    </TipProvider>
   );
 }

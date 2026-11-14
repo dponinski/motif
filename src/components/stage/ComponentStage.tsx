@@ -1,7 +1,7 @@
 "use client";
 
 import { useShallow } from "zustand/react/shallow";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, MousePointer2, Palette, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildGraph } from "@/lib/preview/graph";
@@ -22,7 +22,11 @@ import { useTokenChanges } from "@/components/work/useWork";
 import { plan, waitingCount } from "@/lib/work/sync";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import StageCanvas from "./StageCanvas";
-import { BreakpointBar, FrameLabel, WidthHandle } from "./Frame";
+import { BreakpointBar, FrameLabel, WidthHandle, ZoomSync } from "./Frame";
+import ElementMenu from "./ElementMenu";
+import { useCanvasActions } from "./useCanvasActions";
+import { useElementEdit } from "@/components/panels/useElementEdit";
+import Tip, { MOD } from "@/components/Tip";
 import { loadTree, useSrcdoc, useTokenOverrides, type Host } from "./preview-core";
 import { readerFor, versionOf } from "./reader";
 
@@ -72,6 +76,13 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const main = useSrcdoc(true, component.file, source, host, (paths) => buildGraph({ reader, entry: component.file, paths, instrument: true, overlay: createdTexts(useEditStore.getState()), ...graphInput }));
   useEffect(() => { useEditStore.getState().adopt(`${source.repo}@${source.branch}`); }, [source]);
 
+  // What can be done to the picked element, by the inspector or on the canvas (handles, keys, the right-click menu).
+  const edit = useElementEdit(component, source, connection);
+  const actions = useCanvasActions(component, source, edit);
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
   const { dark, width, mode: wanted, motifTokens, setDark, setWidth, setMode, setMotifTokens } = usePreviewStore(useShallow((s) => ({ dark: s.dark, width: s.width, mode: s.mode, motifTokens: s.motifTokens, setDark: s.setDark, setWidth: s.setWidth, setMode: s.setMode, setMotifTokens: s.setMotifTokens })));
@@ -106,8 +117,27 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
       else if (data.type === "rendered") { setRendered(true); setHeight(data.height); }
       else if (data.type === "select") {
         const picked = parseMotifKey(data.key);
+        // Clicking the canvas takes the keyboard from whatever had it (a list button would otherwise get the Enter and arrows).
+        if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
         if (picked) useEditStore.getState().select(picked);
       } else if (data.type === "error") setRuntimeError(data.message);
+      else if (data.type === "dragging") setResizing(data.on);
+      else if (data.type === "gesture") {
+        // A handle was let go: what it asks for is made an edit, and the page is told whether the source changed.
+        const tell = (changed: boolean) => iframeRef.current?.contentWindow?.postMessage({ type: "gestureEnd", changed } satisfies ToPreview, "*");
+        void actionsRef.current.applyGesture(data.key, data.edits).then(tell, () => tell(false));
+      } else if (data.type === "key") void actionsRef.current.onKey(data);
+      else if (data.type === "menu") {
+        const picked = parseMotifKey(data.key);
+        const frame = iframeRef.current;
+        if (!picked || !frame) return;
+        useEditStore.getState().select(picked);
+        if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
+        // The page's own pixels, on a canvas that may be zoomed.
+        const box = frame.getBoundingClientRect();
+        const scale = frame.offsetWidth ? box.width / frame.offsetWidth : 1;
+        setMenu({ x: box.left + data.clientX * scale, y: box.top + data.clientY * scale });
+      }
       // Wheel and Space are for the canvas around the preview, which listens for them itself.
     };
     window.addEventListener("message", onMessage);
@@ -169,6 +199,14 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision, component.id, component.file]);
   const post = (message: ToPreview) => iframeRef.current?.contentWindow?.postMessage(message, "*");
+
+  // How far the canvas is zoomed, for the page to draw its handles by.
+  const zoomRef = useRef(1);
+  const onZoom = useCallback((zoom: number) => {
+    zoomRef.current = zoom;
+    iframeRef.current?.contentWindow?.postMessage({ type: "zoom", zoom } satisfies ToPreview, "*");
+  }, []);
+  useEffect(() => { if (ready) post({ type: "zoom", zoom: zoomRef.current }); }, [ready]);
 
   // The preview is on a canvas: scrolling, pinching and Space over it move the canvas, not the page inside.
   useEffect(() => {
@@ -244,6 +282,22 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   // The width of the frame: the one chosen, or the one the view calls for.
   const frameWidth = width ?? (mode === "variants" || mode === "examples" ? 960 : 640);
 
+  // The keys of editing, when nothing has the focus (with the focus in the page they come from it as messages instead). A key that
+  // belongs to a field, a list or a menu is left to it.
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target !== document.body || !useEditStore.getState().selection) return;
+      const mod = e.metaKey || e.ctrlKey;
+      const keys = ["Delete", "Backspace", "Escape", "Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+      if (!(keys.includes(e.key) || (mod && /^[dcxv]$/i.test(e.key)))) return;
+      e.preventDefault();
+      void actionsRef.current.onKey(e);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editing]);
+
   const githubUrl = `https://github.com/${source.repo}/blob/${source.branch}/${component.file}#L${component.line}`;
 
   return (
@@ -272,8 +326,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
         {(editing || canUndo || canRedo) && (
           <div className="flex items-center gap-0.5">
-            <button onClick={() => useEditStore.getState().undo()} disabled={!canUndo} aria-label="Undo" title="Undo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Undo2 size={13} /></button>
-            <button onClick={() => useEditStore.getState().redo()} disabled={!canRedo} aria-label="Redo" title="Redo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Redo2 size={13} /></button>
+            <Tip label="Undo" shortcut={`${MOD}Z`}><button onClick={() => useEditStore.getState().undo()} disabled={!canUndo} aria-label="Undo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Undo2 size={13} /></button></Tip>
+            <Tip label="Redo" shortcut={`⇧${MOD}Z`}><button onClick={() => useEditStore.getState().redo()} disabled={!canRedo} aria-label="Redo" className="tool-btn !h-7 !w-7 disabled:opacity-30"><Redo2 size={13} /></button></Tip>
           </div>
         )}
         {(changed > 0 || work || tokenChanges > 0) && (
@@ -369,6 +423,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           >
             {srcdoc && (
               <div data-frame className="flex flex-col gap-1.5">
+                <ZoomSync onZoom={onZoom} />
                 <FrameLabel name={component.name} width={frameWidth} height={Math.max(height, 80)} dark={dark} />
                 <div className="relative">
                   <iframe
@@ -388,6 +443,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           </StageCanvas>
         )}
       </div>
+      {menu && <ElementMenu point={menu} info={edit.info} canPaste={actions.canPaste()} actions={actions.act} onClose={() => setMenu(null)} />}
     </div>
   );
 }

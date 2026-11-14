@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, MousePointer2, Trash2, X } from "lucide-react";
 import { describeTag } from "@/lib/edit/names";
 import ElementIcon from "./ElementIcon";
+import Tip, { MOD } from "@/components/Tip";
 import { IconChoice, SizeShortcuts, hasIcons } from "./controls";
 import { SCOPE_IDS, STATE_IDS, useElementEdit } from "./useElementEdit";
 import { cn } from "@/lib/utils";
@@ -242,14 +243,16 @@ export default function ElementInspector({ component, source, connection, part =
           <p className="truncate font-mono text-2xs text-text-tertiary" title={line}>{line}</p>
         </div>
         {([
-          ["Move up", ArrowUp, info.canMoveUp, () => run((c, s) => moveElement(selection.path, c, s, -1))],
-          ["Move down", ArrowDown, info.canMoveDown, () => run((c, s) => moveElement(selection.path, c, s, 1))],
-          ["Duplicate element", Copy, info.canDelete, () => run((c, s) => duplicateElement(selection.path, c, s))],
-          ["Delete element", Trash2, info.canDelete, () => run((c, s) => deleteElement(selection.path, c, s))],
-        ] as const).map(([label, Icon, enabled, action]) => (
-          <button key={label} onClick={action} disabled={!enabled} aria-label={label} title={label} className="tool-btn !h-7 !w-7 disabled:opacity-30">
-            <Icon size={13} />
-          </button>
+          ["Move up", "Alt+↑", ArrowUp, info.canMoveUp, () => run((c, s) => moveElement(selection.path, c, s, -1))],
+          ["Move down", "Alt+↓", ArrowDown, info.canMoveDown, () => run((c, s) => moveElement(selection.path, c, s, 1))],
+          ["Duplicate element", `${MOD}D`, Copy, info.canDelete, () => run((c, s) => duplicateElement(selection.path, c, s))],
+          ["Delete element", "Del", Trash2, info.canDelete, () => run((c, s) => deleteElement(selection.path, c, s))],
+        ] as const).map(([label, shortcut, Icon, enabled, action]) => (
+          <Tip key={label} label={label} shortcut={shortcut}>
+            <button onClick={action} disabled={!enabled} aria-label={label} className="tool-btn !h-7 !w-7 disabled:opacity-30">
+              <Icon size={13} />
+            </button>
+          </Tip>
         ))}
       </div>
 

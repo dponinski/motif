@@ -161,7 +161,27 @@ export function useElementEdit(component: LibraryComponent, source: LibrarySourc
       }
     };
     const change = (g: ClassGroup, value: string | null) => (css ? runCss(g, value) : run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier, names)));
-    return { editable, classes, css, groups, cssTokens, view, valueOf, groupsFor, change };
+    // Several groups at once (a corner dragged is a width and a height): one step to undo for classes. A stylesheet's rule and
+    // the component are written together by each `runCss`, so those go one after another.
+    const changeMany = async (list: { group: ClassGroup; value: string | null }[]) => {
+      if (list.length === 0) return;
+      if (list.length === 1) return change(list[0].group, list[0].value);
+      if (css) { for (const { group, value } of list) await runCss(group, value); return; }
+      await run(async (code, start) => {
+        let text = code, at = start, last: EditResult | null = null;
+        const summaries: string[] = [];
+        for (const { group, value } of list) {
+          const result = await setGroup(selection.path, text, at, group.id, value, values, modifier, names);
+          if (!result) continue;
+          text = result.code;
+          at = result.selection ?? at;
+          last = result;
+          summaries.push(result.summary);
+        }
+        return last ? { ...last, code: text, summary: summaries.join(", ") } : null;
+      });
+    };
+    return { editable, classes, css, groups, cssTokens, view, valueOf, groupsFor, change, changeMany };
   })() : null;
 
   return { selection, info, sheet, error, modifier, chooseState, stateValue, scopeValue, chooseStateOnly, chooseScope, values, names, index, theme, reader, run, derived };

@@ -51,7 +51,20 @@ export interface CanvasMessage {
   on: boolean;
 }
 
-export type ToPreview = RenderMessage | ModulesMessage | CssMessage | EditMessage | CanvasMessage;
+// How far the canvas is zoomed, so what the page draws over the component (outlines, handles) stays the same size on screen.
+export interface ZoomMessage {
+  type: "zoom";
+  zoom: number;
+}
+
+// A handle was let go and the edit it asked for has been dealt with: `changed` says whether the source changed. If it did, the
+// page keeps showing what was dragged until the new code arrives; if not, it puts things back.
+export interface GestureEndMessage {
+  type: "gestureEnd";
+  changed: boolean;
+}
+
+export type ToPreview = RenderMessage | ModulesMessage | CssMessage | EditMessage | CanvasMessage | ZoomMessage | GestureEndMessage;
 
 export type FromPreview =
   | { type: "ready" }
@@ -60,7 +73,15 @@ export type FromPreview =
   | { type: "error"; message: string }
   // Only sent while the canvas asked for it (see CanvasMessage). Positions are in the preview's own pixels.
   | { type: "wheel"; deltaX: number; deltaY: number; deltaMode: number; ctrlKey: boolean; metaKey: boolean; clientX: number; clientY: number }
-  | { type: "space"; down: boolean };
+  | { type: "space"; down: boolean }
+  // A handle on the selected element was dragged and let go: what it asks for, in px (see lib/edit/gesture).
+  | { type: "gesture"; key: string; edits: { group: string; px: number }[] }
+  // A handle is being dragged (or has been let go): the canvas keeps still meanwhile, so the page under the pointer doesn't move.
+  | { type: "dragging"; on: boolean }
+  // A key the page has focus for, while editing: the editor deals with it (delete, duplicate, move to the parent...).
+  | { type: "key"; key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }
+  // A right click on an element, while editing: where, in the page's own pixels.
+  | { type: "menu"; key: string; clientX: number; clientY: number };
 
 export const isFromPreview = (data: unknown): data is FromPreview =>
-  typeof data === "object" && data !== null && ["ready", "rendered", "select", "error", "wheel", "space"].includes((data as { type?: unknown }).type as string);
+  typeof data === "object" && data !== null && ["ready", "rendered", "select", "error", "wheel", "space", "gesture", "dragging", "key", "menu"].includes((data as { type?: unknown }).type as string);

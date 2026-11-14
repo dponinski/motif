@@ -144,31 +144,224 @@
       var sizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reportHeight) : null;
       if (sizeObserver) sizeObserver.observe(rootElement);
 
-      // Outlines for the element under the pointer and the selected one, drawn over the page, never part of it.
+      // What is drawn over the page while editing: outlines, and for the selected element its size, its padding, margin and gap, and
+      // handles to change them. It is a layer of its own, never part of the page, and drawn at the size the canvas's zoom calls for,
+      // so lines stay thin and handles easy to hit at any zoom.
+      var zoom = 1;
       var layer = document.createElement('div');
       layer.setAttribute('aria-hidden', 'true');
       layer.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483647';
       document.body.appendChild(layer);
-      var boxes = [];
-      function box(index, rect, selected) {
-        var el = boxes[index];
-        if (!el) { el = document.createElement('div'); layer.appendChild(el); boxes[index] = el; }
-        el.style.cssText = 'position:fixed;pointer-events:none;box-sizing:border-box;border-radius:2px;left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px;' +
-          (selected ? 'border:2px solid #6366f1;background:rgba(99,102,241,0.08)' : 'border:1px dashed #6366f1');
+      var pool = [];
+      // A box in the layer, from a pool so that drawing again doesn't make new elements. `width` null is as wide as its text.
+      function shape(index, left, top, width, height, css, handle) {
+        var el = pool[index];
+        if (!el) { el = document.createElement('div'); layer.appendChild(el); pool[index] = el; }
+        el.style.cssText = 'position:fixed;display:block;box-sizing:border-box;pointer-events:' + (handle ? 'auto' : 'none') + ';left:' + left + 'px;top:' + top + 'px;' +
+          'width:' + (width === null ? 'auto' : width + 'px') + ';height:' + (height === null ? 'auto' : height + 'px') + ';' + css;
+        if (handle) el.setAttribute('data-motif-handle', handle); else el.removeAttribute('data-motif-handle');
+        el.textContent = '';
+        return el;
       }
       function matching(key) {
         return Array.prototype.filter.call(document.querySelectorAll('[data-motif]'), function (el) { return el.getAttribute('data-motif') === key; });
       }
+      var num = function (v) { return parseFloat(v) || 0; };
+      function sides(cs, name, suffix) {
+        var s = suffix || '';
+        return { t: num(cs[name + 'Top' + s]), r: num(cs[name + 'Right' + s]), b: num(cs[name + 'Bottom' + s]), l: num(cs[name + 'Left' + s]) };
+      }
+      // The children that gaps are between: in flow, and shown.
+      function flowChildren(el) {
+        return Array.prototype.filter.call(el.children, function (c) {
+          var cs = getComputedStyle(c);
+          return cs.display !== 'none' && cs.position !== 'absolute' && cs.position !== 'fixed';
+        });
+      }
+      var MARGIN = 'background:rgba(251,146,60,0.30)';
+      var PADDING = 'background:rgba(34,197,94,0.30)';
+      var GAP = 'background:rgba(236,72,153,0.30)';
+      var gesture = null;
+      var transient = [];
+      var clearTimer = null;
+      var kept = false;
+
+      // The selected element's measurements and the handles on them. Returns how many boxes of the pool are in use.
+      function designOverlay(el, used) {
+        var cs = getComputedStyle(el);
+        var r = el.getBoundingClientRect();
+        var line = 1 / zoom;
+        var m = sides(cs, 'margin'), p = sides(cs, 'padding'), b = sides(cs, 'border', 'Width');
+        var band = function (left, top, w, h, css) { if (w > 0 && h > 0) shape(used++, left, top, w, h, css); };
+        band(r.left - m.l, r.top - m.t, r.width + m.l + m.r, m.t, MARGIN);
+        band(r.left - m.l, r.bottom, r.width + m.l + m.r, m.b, MARGIN);
+        band(r.left - m.l, r.top, m.l, r.height, MARGIN);
+        band(r.right, r.top, m.r, r.height, MARGIN);
+        var ix = r.left + b.l, iy = r.top + b.t, iw = r.width - b.l - b.r, ih = r.height - b.t - b.b;
+        band(ix, iy, iw, p.t, PADDING);
+        band(ix, iy + ih - p.b, iw, p.b, PADDING);
+        band(ix, iy + p.t, p.l, ih - p.t - p.b, PADDING);
+        band(ix + iw - p.r, iy + p.t, p.r, ih - p.t - p.b, PADDING);
+
+        var flex = /flex/.test(cs.display);
+        var row = /row/.test(cs.flexDirection);
+        var kids = flex ? flowChildren(el) : [];
+        for (var i = 0; i < kids.length - 1; i++) {
+          var a = kids[i].getBoundingClientRect(), c = kids[i + 1].getBoundingClientRect();
+          if (row) band(a.right, Math.min(a.top, c.top), c.left - a.right, Math.max(a.bottom, c.bottom) - Math.min(a.top, c.top), GAP);
+          else band(Math.min(a.left, c.left), a.bottom, Math.max(a.right, c.right) - Math.min(a.left, c.left), c.top - a.bottom, GAP);
+        }
+
+        // Its size, or what is being dragged.
+        var badge = shape(used++, r.left + r.width / 2, r.bottom + 8 * line, null, null,
+          'transform:translateX(-50%);white-space:nowrap;background:#6366f1;color:#fff;border-radius:' + 3 * line + 'px;padding:' + 2 * line + 'px ' + 6 * line + 'px;font:600 ' + 11 * line + 'px/1.3 ui-monospace,monospace');
+        badge.textContent = gesture && gesture.label ? gesture.label : Math.round(r.width) + ' × ' + Math.round(r.height);
+
+        var S = 9 * line;
+        var square = 'background:#fff;border:' + 1.5 * line + 'px solid #6366f1;border-radius:' + 2 * line + 'px';
+        shape(used++, r.right - S / 2, r.top + r.height / 2 - S / 2, S, S, square + ';cursor:ew-resize', 'right');
+        shape(used++, r.left + r.width / 2 - S / 2, r.bottom - S / 2, S, S, square + ';cursor:ns-resize', 'bottom');
+        shape(used++, r.right - S / 2, r.bottom - S / 2, S, S, square + ';cursor:nwse-resize', 'corner');
+
+        // Padding: a dot on each side, just inside the padding (and at least a little way in, so it isn't on the edge's own handle).
+        // Only on an element with room for them on screen: on a small one they would sit over it and be in the way of picking it.
+        var roomy = r.width * zoom >= 80 && r.height * zoom >= 56;
+        var D = 8 * line;
+        var dot = 'background:#22c55e;border:' + 1.5 * line + 'px solid #fff;border-radius:50%';
+        var inset = function (pad, border, length) { return Math.min(Math.max(pad + border, 16 * line), length / 2); };
+        if (roomy) {
+          shape(used++, r.left + r.width / 2 - D / 2, r.top + inset(p.t, b.t, r.height) - D / 2, D, D, dot + ';cursor:ns-resize', 'pad-top');
+          shape(used++, r.right - inset(p.r, b.r, r.width) - D / 2, r.top + r.height / 2 - D / 2, D, D, dot + ';cursor:ew-resize', 'pad-right');
+          shape(used++, r.left + r.width / 2 - D / 2, r.bottom - inset(p.b, b.b, r.height) - D / 2, D, D, dot + ';cursor:ns-resize', 'pad-bottom');
+          shape(used++, r.left + inset(p.l, b.l, r.width) - D / 2, r.top + r.height / 2 - D / 2, D, D, dot + ';cursor:ew-resize', 'pad-left');
+        }
+
+        // Gap: a pill between the first two children.
+        if (kids.length >= 2) {
+          var k0 = kids[0].getBoundingClientRect(), k1 = kids[1].getBoundingClientRect();
+          var pill = 'background:#ec4899;border:' + 1.5 * line + 'px solid #fff;border-radius:' + 4 * line + 'px';
+          if (row) shape(used++, (k0.right + k1.left) / 2 - 3 * line, k0.top + k0.height / 2 - 10 * line, 6 * line, 20 * line, pill + ';cursor:ew-resize', 'gap');
+          else shape(used++, k0.left + k0.width / 2 - 10 * line, (k0.bottom + k1.top) / 2 - 3 * line, 20 * line, 6 * line, pill + ';cursor:ns-resize', 'gap');
+        }
+        return used;
+      }
+
       function draw() {
         var used = 0;
+        var line = 1 / zoom;
         if (editOn) {
-          if (selectedKey) matching(selectedKey).forEach(function (el) { box(used++, el.getBoundingClientRect(), true); });
-          if (hovered && hovered.getAttribute('data-motif') !== selectedKey) box(used++, hovered.getBoundingClientRect(), false);
+          var els = selectedKey ? matching(selectedKey) : [];
+          els.forEach(function (el) {
+            var r = el.getBoundingClientRect();
+            shape(used++, r.left, r.top, r.width, r.height, 'border:' + 2 * line + 'px solid #6366f1;background:rgba(99,102,241,0.06);border-radius:' + 2 * line + 'px');
+          });
+          if (els.length) used = designOverlay(els[0], used);
+          if (hovered && hovered.getAttribute('data-motif') !== selectedKey) {
+            var hr = hovered.getBoundingClientRect();
+            shape(used++, hr.left, hr.top, hr.width, hr.height, 'border:' + line + 'px dashed #6366f1');
+          }
         }
-        for (var i = used; i < boxes.length; i++) boxes[i].style.display = 'none';
+        for (var i = used; i < pool.length; i++) pool[i].style.display = 'none';
       }
       window.addEventListener('scroll', draw, true);
       window.addEventListener('resize', draw);
+
+      // While a handle is dragged the page shows the new size straight away, as styles on the element (nothing is rebuilt); when it
+      // is let go, one message says what was asked, and the styles stay until the edited code has arrived (or the editor says
+      // nothing changed).
+      function setStyle(el, prop, value) {
+        if (!transient.some(function (t) { return t.el === el && t.prop === prop; })) {
+          transient.push({ el: el, prop: prop, old: el.style.getPropertyValue(prop), priority: el.style.getPropertyPriority(prop) });
+        }
+        el.style.setProperty(prop, value, 'important');
+      }
+      function clearTransient() {
+        transient.forEach(function (t) { if (t.old) t.el.style.setProperty(t.prop, t.old, t.priority); else t.el.style.removeProperty(t.prop); });
+        transient = [];
+        kept = false;
+        if (clearTimer) { clearTimeout(clearTimer); clearTimer = null; }
+        draw();
+      }
+      var handleOf = function (event) { return event.target && event.target.closest ? event.target.closest('[data-motif-handle]') : null; };
+      var PAD_PROP = { top: 'padding-top', right: 'padding-right', bottom: 'padding-bottom', left: 'padding-left' };
+      var OPPOSITE = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+      // These run before the ones that stop clicks reaching the component, so the handles get their pointer.
+      window.addEventListener('pointerdown', function (event) {
+        if (!editOn || event.button !== 0 || !selectedKey) return;
+        var h = handleOf(event);
+        var el = h && matching(selectedKey)[0];
+        if (!el) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        clearTransient();
+        var cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        var p = sides(cs, 'padding'), b = sides(cs, 'border', 'Width');
+        var row = /row/.test(cs.flexDirection);
+        gesture = {
+          kind: h.getAttribute('data-motif-handle'), key: selectedKey, id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, label: null, edits: null, row: row,
+          // The width and height that CSS `width` and `height` mean for this element.
+          width: cs.boxSizing === 'border-box' ? r.width : r.width - p.l - p.r - b.l - b.r,
+          height: cs.boxSizing === 'border-box' ? r.height : r.height - p.t - p.b - b.t - b.b,
+          pad: { top: p.t, right: p.r, bottom: p.b, left: p.l },
+          gap: row ? num(cs.columnGap) : num(cs.rowGap)
+        };
+        try { h.setPointerCapture(event.pointerId); } catch (e) { /* the drag still works while the pointer is over the page */ }
+        post({ type: 'dragging', on: true });
+      }, true);
+      window.addEventListener('pointermove', function (event) {
+        var g = gesture;
+        if (!g || event.pointerId !== g.id) return;
+        var dx = event.clientX - g.x, dy = event.clientY - g.y;
+        if (!g.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
+        g.moved = true;
+        event.preventDefault();
+        var els = matching(g.key), edits = [];
+        var all = function (prop, value) { els.forEach(function (el) { setStyle(el, prop, value + 'px'); }); };
+        g.label = null;
+        if (g.kind === 'right' || g.kind === 'corner') {
+          var w = Math.max(8, Math.round(g.width + dx));
+          all('width', w);
+          edits.push({ group: 'w', px: w });
+        }
+        if (g.kind === 'bottom' || g.kind === 'corner') {
+          var hh = Math.max(8, Math.round(g.height + dy));
+          all('height', hh);
+          edits.push({ group: 'h', px: hh });
+        }
+        if (g.kind.indexOf('pad-') === 0) {
+          var side = g.kind.slice(4);
+          // The dot sits at the inner edge: moving it inward makes the padding bigger.
+          var delta = side === 'top' ? dy : side === 'bottom' ? -dy : side === 'left' ? dx : -dx;
+          var v = Math.max(0, Math.round(g.pad[side] + delta));
+          all(PAD_PROP[side], v);
+          if (event.altKey) {
+            // Alt: the opposite side with it.
+            all(PAD_PROP[OPPOSITE[side]], v);
+            edits.push({ group: side === 'left' || side === 'right' ? 'px' : 'py', px: v });
+          } else edits.push({ group: 'p' + side.charAt(0), px: v });
+          g.label = 'Padding ' + v;
+        }
+        if (g.kind === 'gap') {
+          var gv = Math.max(0, Math.round(g.gap + (g.row ? dx : dy)));
+          all('gap', gv);
+          edits.push({ group: 'gap', px: gv });
+          g.label = 'Gap ' + gv;
+        }
+        g.edits = edits;
+        draw();
+      }, true);
+      function endGesture(event, cancel) {
+        var g = gesture;
+        if (!g || (event && event.pointerId !== g.id)) return;
+        gesture = null;
+        post({ type: 'dragging', on: false });
+        if (cancel || !g.moved || !g.edits || g.edits.length === 0) { clearTransient(); return; }
+        kept = true;
+        clearTimer = setTimeout(clearTransient, 2500);
+        post({ type: 'gesture', key: g.key, edits: g.edits });
+      }
+      window.addEventListener('pointerup', function (event) { endGesture(event, false); }, true);
+      window.addEventListener('pointercancel', function (event) { endGesture(event, true); }, true);
 
       var pick = function (event) { return event.target && event.target.closest ? event.target.closest('[data-motif]') : null; };
       // While editing, the page is for picking: nothing the component does on click or submit should happen.
@@ -189,6 +382,21 @@
       }, true);
       document.addEventListener('mouseleave', function () { hovered = null; draw(); });
 
+      // A right click on an element, and the keys of editing, go to the editor, which knows what an element can do.
+      window.addEventListener('contextmenu', function (event) {
+        if (!editOn) return;
+        var el = pick(event);
+        if (el) post({ type: 'menu', key: el.getAttribute('data-motif'), clientX: event.clientX, clientY: event.clientY });
+      }, true);
+      var EDIT_KEYS = { Delete: 1, Backspace: 1, Escape: 1, Enter: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1 };
+      window.addEventListener('keydown', function (event) {
+        if (!editOn || typing(event.target)) return;
+        var withModifier = event.metaKey || event.ctrlKey;
+        if (!(EDIT_KEYS[event.key] || (withModifier && /^[dczvx]$/i.test(event.key)))) return;
+        event.preventDefault();
+        post({ type: 'key', key: event.key, ctrlKey: event.ctrlKey, metaKey: event.metaKey, shiftKey: event.shiftKey, altKey: event.altKey });
+      }, true);
+
       function renderLast() {
         if (!lastRender) return;
         root.render(h(App, { items: lastRender.items, layout: lastRender.layout, fit: !!lastRender.fit }));
@@ -197,7 +405,8 @@
           requestAnimationFrame(function () {
             // The box around a fitted component changes size without the page changing size.
             if (sizeObserver && rootElement.firstElementChild) sizeObserver.observe(rootElement.firstElementChild);
-            draw();
+            // What a handle was dragged to is in the code now.
+            if (kept) clearTransient(); else draw();
           });
         });
       }
@@ -245,7 +454,12 @@
             }
             found.textContent = files[path];
           });
+          if (kept) clearTransient(); else draw();
+        } else if (message.type === 'zoom') {
+          zoom = message.zoom > 0 ? message.zoom : 1;
           draw();
+        } else if (message.type === 'gestureEnd') {
+          if (!message.changed) clearTransient();
         } else if (message.type === 'canvas') {
           canvasOn = !!message.on;
         } else if (message.type === 'edit') {
