@@ -29,7 +29,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "The assistant needs sign-in to be set up on this server (see DATABASE_URL in the README)." }, { status: 503 });
     }
 
-    const { messages, context } = await req.json();
+    let body: { messages?: unknown; context?: unknown };
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "The request wasn't understood." }, { status: 400 });
+    }
+    const { messages, context } = body;
     if (
       !Array.isArray(messages) || messages.length === 0 || messages.length > MAX_MESSAGES ||
       messages.some((m: { role?: unknown; content?: unknown }) => (m?.role !== "user" && m?.role !== "assistant") || typeof m.content !== "string" || m.content.length > MAX_MESSAGE_CHARS) ||
@@ -78,7 +84,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ text });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // What went wrong is kept in the server's log: the text of an error can carry things that aren't for the browser.
+    console.error("assistant request failed", err);
+    return NextResponse.json({ error: "The assistant couldn't answer. Try again in a moment." }, { status: 500 });
   }
 }

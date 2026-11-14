@@ -79,7 +79,6 @@ const keysFor = (uri: string) => {
   if (!set) { set = createRemoteJWKSet(new URL(uri)); jwksets.set(uri, set); }
   return set;
 };
-export const forgetKeys = () => jwksets.clear();
 
 // An ID token is believed only when it is signed with one of the provider's keys, is from the provider, is for this
 // app, hasn't expired, and carries the nonce this sign-in started with.

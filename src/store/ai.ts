@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ComponentBasis } from "../lib/ai/context";
+import { APP_HEADERS } from "../lib/sync/api";
 import { useAuth } from "./auth";
 
 export interface AIMessage {
@@ -95,7 +96,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
       const res = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-requested-with": "motif" },
+        headers: { "Content-Type": "application/json", ...APP_HEADERS },
         body: JSON.stringify({ messages: apiMessages, context }),
       });
 

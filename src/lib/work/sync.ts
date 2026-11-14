@@ -116,7 +116,7 @@ export async function syncWork(input: SyncInput): Promise<SyncResult> {
   if (waitingCount(p) === 0 && (!work || work.pr)) return { work, sent: [], restored: [], createdPr: false };
 
   // The branch: made on the first sync, and again if someone took it away.
-  let branch = work?.branch ?? branchName(now);
+  const branch = work?.branch ?? branchName(now);
   if (!work || (await host.getRef(branch)) === null) {
     if (work) { work = { ...work, pushed: {} }; p = plan(changed, work); }
     await host.createBranch(branch, base);

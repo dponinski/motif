@@ -1,5 +1,24 @@
 A new design tool built for design systems first
 
+## Getting started
+
+Needs Node 20 or newer.
+
+```bash
+npm install
+cp .env.local.example .env.local   # then fill in what you need; nothing in it is required to look around
+npm run dev                        # http://localhost:3000
+```
+
+| Command | What it does |
+| --- | --- |
+| `npm test` | The unit tests. Those that need a PostgreSQL database run when `TEST_DATABASE_URL` is set, and are skipped without it. |
+| `npm run typecheck` | TypeScript, without building. |
+| `npm run lint` | ESLint (Next 16 no longer has `next lint`). |
+| `npm run build` | The production build. |
+
+The same typecheck, lint and tests run on every pull request (`.github/workflows/ci.yml`).
+
 ## What Motif is
 
 A design system builder. It works on the React components and design tokens of a GitHub repository: it reads them, shows them running, lets a designer change them visually and assign tokens to them, documents them, and sends every change back as a pull request. The code in the repository is the source of truth; Motif keeps nothing that the repository doesn't have except documentation and unsent edits. It is not a prototyping tool: there are no shapes, frames or free-form layouts, only the components and tokens of the repository.
@@ -66,7 +85,7 @@ How it is kept safe: a session is a random value in an `HttpOnly` cookie of whic
 Create the project, then in **Connect** copy the **Session pooler** connection string (`postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`) into `DATABASE_URL`. Use the pooler, not the "Direct connection": direct connections are IPv6-only unless you add Supabase's IPv4 add-on, and most hosts (Hostinger included) are IPv4. The transaction pooler (port 6543) works too.
 
 - **The tables are made by the app** the first time it connects (and kept up to date when a new version needs more), so there is nothing to run by hand. They live in the `public` schema with **row level security on and no policies, and no rights for the `anon` and `authenticated` roles**: Supabase's public API (the one the publishable key opens) can't read or write any of them. Only the server, through `DATABASE_URL`, can. Don't add policies or grants to them: the sessions, sign-in links and saved projects are in there.
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are only for the Supabase client in `src/utils/supabase`, which nothing uses yet. The database for accounts and projects doesn't need them.
+- Motif talks to the database only from the server, with `pg` and `DATABASE_URL`. It doesn't use Supabase's client libraries or its API keys, so it needs no `NEXT_PUBLIC_SUPABASE_*` settings.
 - Keep the database password out of git: it goes in the host's environment variables (or `.env.local`), never in `NEXT_PUBLIC_` ones.
 
 ### Projects saved to your account

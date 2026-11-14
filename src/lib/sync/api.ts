@@ -1,5 +1,8 @@
 // Talking to this app's own server about accounts, projects and teams. Shared by the stores that do it.
 
+// What marks a request as coming from this app's own scripts (the server refuses state-changing requests without it).
+export const APP_HEADERS = { "x-requested-with": "motif" } as const;
+
 export class SignedOut extends Error {}
 export class Unreachable extends Error {}
 
@@ -10,7 +13,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   try {
     res = await fetch(path, {
       method,
-      headers: { "x-requested-with": "motif", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+      headers: { ...APP_HEADERS, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: "same-origin",
       cache: "no-store",

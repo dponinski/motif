@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Github, Loader2, Mail, X } from "lucide-react";
+import { APP_HEADERS } from "@/lib/sync/api";
 import { signInUrl, hereWithoutNotices, useAuth } from "@/store/auth";
 
 const providerButton = "flex h-9 w-full items-center justify-center gap-2 rounded-md border border-surface-border bg-surface-subtle text-sm font-medium text-text-primary transition-colors hover:bg-surface-overlay";
@@ -21,7 +22,7 @@ function EmailForm() {
     try {
       const res = await fetch("/api/auth/email/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-requested-with": "motif" },
+        headers: { "Content-Type": "application/json", ...APP_HEADERS },
         body: JSON.stringify({ email, returnTo: hereWithoutNotices() }),
       });
       const body = (await res.json().catch(() => null)) as { error?: string } | null;

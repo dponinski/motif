@@ -379,12 +379,12 @@ export async function findExamples(input: ExampleInput): Promise<ExampleIndex> {
       const path = `${dirname(file)}${dirname(file) ? "/" : ""}__motif_example_${counter++}${ext}`;
       const rootTag = tagOf(root) ?? "Example";
       const detail = describe(root);
-      const module = [
+      const source = [
         importLines.join("\n"),
         [...included.values()].join("\n\n"),
         `export default function MotifExample() {\n  return (\n    ${jsx}\n  );\n}\n`,
       ].filter(Boolean).join("\n\n");
-      return { id: `${file}:${line}`, title: detail ? `${rootTag} · ${detail}` : rootTag, file, line, path, code: module, notes: [...notes] };
+      return { id: `${file}:${line}`, title: detail ? `${rootTag} · ${detail}` : rootTag, file, line, path, code: source, notes: [...notes] };
     };
 
     for (const occ of occurrences) {

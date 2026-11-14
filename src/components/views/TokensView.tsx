@@ -11,10 +11,6 @@ import { cn } from "@/lib/utils";
 import {
   useDesignSystemStore,
   type ColorToken,
-  type TypographyToken,
-  type SpacingToken,
-  type RadiusToken,
-  type ShadowToken,
   type TokenSet,
 } from "@/store/design-system";
 

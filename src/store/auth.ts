@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { APP_HEADERS } from "../lib/sync/api";
 import { useAccount } from "./account";
 import { useSync } from "./sync";
 export { AUTH_NOTICES } from "./auth-notices";
@@ -32,7 +33,6 @@ interface Auth {
 }
 
 const NONE: Providers = { github: false, google: false, apple: false, email: false };
-const HEADERS = { "x-requested-with": "motif" };
 
 let pending: Promise<void> | null = null;
 
@@ -49,7 +49,7 @@ export const useAuth = create<Auth>()((set) => ({
     if (pending) return pending;
     const run = (async () => {
       try {
-        const res = await fetch("/api/auth/session", { headers: HEADERS, cache: "no-store", credentials: "same-origin" });
+        const res = await fetch("/api/auth/session", { headers: APP_HEADERS, cache: "no-store", credentials: "same-origin" });
         const body = (await res.json().catch(() => null)) as { configured?: boolean; providers?: Providers; nobodyAllowed?: boolean; user?: AuthUser | null } | null;
         if (!res.ok || !body?.configured) { set({ status: "unavailable", providers: NONE, user: null }); return; }
         set({ status: "ready", providers: body.providers ?? NONE, nobodyAllowed: !!body.nobodyAllowed, user: body.user ?? null });
@@ -67,7 +67,7 @@ export const useAuth = create<Auth>()((set) => ({
     // the next person who uses it.
     await useSync.getState().stop({ clear: true });
     try {
-      await fetch("/api/auth/logout", { method: "POST", headers: HEADERS, credentials: "same-origin" });
+      await fetch("/api/auth/logout", { method: "POST", headers: APP_HEADERS, credentials: "same-origin" });
     } catch { /* the page is signed out either way; the cookie goes with the next successful call */ }
     set({ user: null });
     // The GitHub sign-in goes with it (the server has cleared it and revoked its token).

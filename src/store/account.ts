@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { TokenSource } from "../lib/github";
 import { getViewer } from "../lib/github-app";
+import { APP_HEADERS } from "../lib/sync/api";
 import { AUTH_NOTICES } from "./auth-notices";
 
 // Who is signed in with the GitHub App, in this browser. Nothing here is kept: the sign-in itself is a cookie the
@@ -33,7 +34,6 @@ interface Account {
   setNotice: (notice: string | null) => void;
 }
 
-const HEADERS = { "x-requested-with": "motif" };
 
 export const NOTICES: Record<string, string> = {
   denied: "GitHub sign-in was cancelled.",
@@ -49,7 +49,7 @@ export const useAccount = create<Account>()((set, get) => {
   async function ask(renew: boolean) {
     let res: Response;
     try {
-      res = await fetch(`/api/github/session${renew ? "?force=1" : ""}`, { headers: HEADERS, cache: "no-store", credentials: "same-origin" });
+      res = await fetch(`/api/github/session${renew ? "?force=1" : ""}`, { headers: APP_HEADERS, cache: "no-store", credentials: "same-origin" });
     } catch {
       // No server to ask (a desktop build): there is no sign-in, and nothing to wait for.
       if (get().status === "unknown") set({ status: "unavailable" });
@@ -100,7 +100,7 @@ export const useAccount = create<Account>()((set, get) => {
 
     signOut: async () => {
       try {
-        await fetch("/api/github/logout", { method: "POST", headers: HEADERS, credentials: "same-origin" });
+        await fetch("/api/github/logout", { method: "POST", headers: APP_HEADERS, credentials: "same-origin" });
       } catch { /* the cookie goes with the next successful call; the page is signed out either way */ }
       set({ status: "signed-out", accessToken: null, expiresAt: null, login: null, avatar: null, ended: null });
     },

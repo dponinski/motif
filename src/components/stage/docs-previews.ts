@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { previewKey, repoKey } from "@/lib/docs";
+import { previewKey } from "@/lib/docs";
 import { previewPage, type PreviewView } from "@/lib/preview/docs-previews";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { RUNTIME_PATH } from "@/lib/preview/srcdoc";
@@ -62,4 +62,3 @@ export async function buildPreviews(wanted: { component: LibraryComponent; view:
   return out;
 }
 
-export const componentKey = repoKey;

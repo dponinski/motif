@@ -8,7 +8,7 @@ import { useTokenIndex } from "@/components/stage/preview-core";
 import { readerFor } from "@/components/stage/reader";
 import { useGitHost } from "@/components/git/hooks";
 import { currentText, useEditStore } from "@/store/edit";
-import { useGitStore } from "@/store/git";
+import { NO_CONNECTION, useGitStore } from "@/store/git";
 import { activeComponent, useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 
@@ -18,7 +18,7 @@ export function useChatSource() {
   const component = useLibraryStore(activeComponent);
   const source = useLibraryStore((s) => s.source);
   const connection = useGitStore((s) => s.connection);
-  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", defaultBranch: "" });
+  const host = useGitHost(connection ?? NO_CONNECTION);
   const reader = useMemo(() => (source ? readerFor(source, host) : null), [source, host]);
   const index = useTokenIndex(source?.repo ?? null);
   const dark = usePreviewStore((s) => s.dark);

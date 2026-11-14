@@ -38,7 +38,6 @@ const FRACTIONS = ["1/2", "1/3", "2/3", "1/4", "3/4", "1/5", "2/5", "3/5", "4/5"
 const SIZES = ["auto", "full", "screen", "fit", "min", "max", ...FRACTIONS];
 const TEXT_SIZES = ["xs", "sm", "base", "lg", "xl", "2xl", "3xl", "4xl", "5xl", "6xl", "7xl", "8xl", "9xl"];
 const TEXT_ALIGN = ["left", "center", "right", "justify", "start", "end"];
-const TEXT_OTHER = ["wrap", "nowrap", "balance", "pretty", "ellipsis", "clip", "inherit", "current", "transparent"];
 
 const FAMILIES = ["sans", "serif", "mono"];
 const ROUNDED_SIDE = /^(?:[trblse]|tl|tr|bl|br|ss|se|es|ee)(?:-|$)/;

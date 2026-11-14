@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Boxes, ChevronDown, ChevronRight, Loader2, RefreshCw, ScanSearch, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { readerSource } from "@/lib/repo-scan/source";
+import { scanBranch } from "@/lib/read-repository";
 import {
   STYLING_LABEL, isColorValue, stackLine, stylingLine, supportCounts,
 } from "@/lib/repo-scan/summary";
@@ -263,8 +263,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
     setBusy(true);
     setError(null);
     try {
-      const { scanRepository } = await import("@/lib/repo-scan");
-      setAnalysis(await scanRepository(readerSource(host, analysis.ref), { repo: analysis.repo, ref: analysis.ref }));
+      setAnalysis(await scanBranch(host, analysis.repo, analysis.ref));
     } catch (err) {
       setError(errorMessage(err));
     } finally {

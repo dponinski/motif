@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, MousePointer2, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { gitBlobSha } from "@/lib/github";
+import { recordChange } from "./useEditRunner";
 import { BREAKPOINT_WIDTH, GROUPS, MODIFIERS, SECTIONS, readGroup, type ClassGroup } from "@/lib/edit/classes";
 import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlotClasses, setText, slotText, type EditResult, type ElementInfo } from "@/lib/edit/element";
 import { HOST_TAGS, changeTag, insertElement, unwrapElement, wrapElement, type InsertPosition } from "@/lib/edit/insert";
@@ -164,9 +165,7 @@ export default function ElementInspector({ component, source, connection }: { co
       if (code === null) throw new Error(`Couldn't read ${selection.path}`);
       const result = await op(code, selection.start);
       if (!result || result.code === code) return;
-      const store = useEditStore.getState();
-      const base = store.bases[selection.path] ? undefined : { text: code, sha: await gitBlobSha(code) };
-      store.change(selection.path, result.code, result.selection === null ? null : { path: selection.path, start: result.selection }, result.summary, base);
+      await recordChange(selection.path, code, result.code, result.selection === null ? null : { path: selection.path, start: result.selection }, result.summary);
     } catch (err) {
       setError(errorMessage(err));
     }
