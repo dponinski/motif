@@ -166,11 +166,12 @@ const check = (name, ok, detail = "") => {
   check("the breakpoint bar starts on Auto", (await page.getByRole("button", { name: "Preview width: Auto" }).getAttribute("aria-pressed")) === "true" && (await widthInput.inputValue()) === "");
   await page.getByRole("button", { name: "Preview width: 768" }).click();
   check("a breakpoint sets the frame's width", await settle(async () => (await frameWidth()) === 768));
-  check("and is marked on the bar, with its width in the field", (await page.getByRole("button", { name: "Preview width: 768" }).getAttribute("aria-pressed")) === "true" && (await widthInput.inputValue()) === "768" && (await page.locator("[data-frame-size]").innerText()).startsWith("768 ×"));
+  // (The field follows a render after the frame, so it is waited for.)
+  check("and is marked on the bar, with its width in the field", await settle(async () => (await page.getByRole("button", { name: "Preview width: 768" }).getAttribute("aria-pressed")) === "true" && (await widthInput.inputValue()) === "768" && (await page.locator("[data-frame-size]").innerText()).startsWith("768 ×")));
   await widthInput.fill("500");
   await widthInput.press("Enter");
   check("a width can be typed", await settle(async () => (await frameWidth()) === 500));
-  check("and no breakpoint is marked for a width that isn't one", (await page.locator('[data-breakpoints] [aria-pressed="true"]').count()) === 0);
+  check("and no breakpoint is marked for a width that isn't one", await settle(async () => (await page.locator('[data-breakpoints] [aria-pressed="true"]').count()) === 0));
   await widthInput.fill("");
   await widthInput.press("Enter");
   check("emptying the field is Auto", await settle(async () => (await frameWidth()) === 640) && (await page.getByRole("button", { name: "Preview width: Auto" }).getAttribute("aria-pressed")) === "true");
@@ -185,7 +186,7 @@ const check = (name, ok, detail = "") => {
   const during = await frameWidth();
   await page.mouse.up();
   check("dragging the right edge changes the width, live", during < 640 && Math.abs(during - Math.round(640 - 100 / z)) <= 3, `${during} at zoom ${z}`);
-  check("and the field follows the frame", Number(await widthInput.inputValue()) === (await frameWidth()) || Math.abs(Number(await widthInput.inputValue()) - (await frameWidth())) <= 1);
+  check("and the field follows the frame", await settle(async () => Number(await widthInput.inputValue()) === (await frameWidth())));
   await page.getByRole("button", { name: "Preview width: Auto" }).click();
 
   // ── Design picks, Preview uses ───────────────────────────────────────────
