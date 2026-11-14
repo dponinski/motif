@@ -1,0 +1,15 @@
+{
+  "name": "motif-e2e-cdn",
+  "version": "1.0.0",
+  "description": "A local stand-in for esm.sh and jsDelivr, for the browser suites",
+  "private": true,
+  "dependencies": {
+    "@tailwindcss/browser": "^4.3.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "esbuild": "^0.28.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0"
+  }
+}
