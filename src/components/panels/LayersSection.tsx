@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { elementTree, pathTo, type TreeNode } from "@/lib/edit/tree";
 import { useEditStore } from "@/store/edit";
-import { useGitStore } from "@/store/git";
+import { NO_CONNECTION, useGitStore } from "@/store/git";
 import { activeComponent, useLibraryStore } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { useGitHost } from "@/components/git/hooks";
@@ -61,7 +61,7 @@ export default function LayersSection() {
   const component = useLibraryStore(activeComponent);
   const source = useLibraryStore((s) => s.source);
   const connection = useGitStore((s) => s.connection);
-  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", defaultBranch: "" });
+  const host = useGitHost(connection ?? NO_CONNECTION);
   const revision = useEditStore((s) => s.revision);
   const selection = useEditStore((s) => s.selection);
   const reader = useMemo(() => (source ? readerFor(source, host) : null), [source, host]);

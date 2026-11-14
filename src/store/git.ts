@@ -11,6 +11,10 @@ export interface GitConnection {
   defaultBranch: string;
 }
 
+// Stands in for a connection while there isn't one (a hook that has to be called either way takes this, and nothing is asked
+// of the host with it).
+export const NO_CONNECTION: GitConnection = { owner: "", repo: "", token: "", defaultBranch: "main" };
+
 // The repository of the project that is open. It is held in memory and kept by the project (store/projects.ts).
 export interface RepoState {
   connection: GitConnection | null;

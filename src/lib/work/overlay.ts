@@ -1,5 +1,4 @@
 import { gitBlobSha, type GitHost, type RepoReader } from "../github";
-import type { RepoSource } from "../repo-scan/types";
 import type { Base } from "../../store/edit";
 
 // The repository as it will be once the editor's changes are in it: the default branch's files, with the texts the
@@ -52,8 +51,3 @@ export function overlayReader(host: RepoReader & Partial<Pick<GitHost, "getFile"
     },
   };
 }
-
-export const overlaySource = (reader: OverlayReader, ref: string): RepoSource => ({
-  listFiles: () => reader.listTree(ref),
-  readText: (path) => reader.readText(path, ref),
-});

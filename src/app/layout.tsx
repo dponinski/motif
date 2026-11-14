@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
 import SyncManager from "@/components/sync/SyncManager";
@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   description: "A visual editor for the React components and tokens of a design system",
 };
 
+// No `maximum-scale`: pinch-zoom has to stay available to people who need it.
+export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+
 export default function RootLayout({
   children,
 }: {
@@ -16,7 +19,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         {/* FOUC prevention: apply theme before first paint */}
         <script
           dangerouslySetInnerHTML={{

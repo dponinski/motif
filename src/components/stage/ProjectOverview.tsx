@@ -9,7 +9,7 @@ import FirstCommit from "@/components/git/FirstCommit";
 import FrameworkDialog from "@/components/git/FrameworkDialog";
 import { useGitHost } from "@/components/git/hooks";
 import { useDesignSystemStore } from "@/store/design-system";
-import { repoSlug, useGitStore } from "@/store/git";
+import { NO_CONNECTION, repoSlug, useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
 import { useReadStatus } from "@/store/read-status";
@@ -31,7 +31,7 @@ export default function ProjectOverview() {
   const tokens = useDesignSystemStore((s) => s.colors.length + s.typography.length + s.spacing.length + s.radii.length + s.shadows.length);
   const { busy, error } = useReadStatus();
   const read = useReadRepository();
-  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", defaultBranch: "main" });
+  const host = useGitHost(connection ?? NO_CONNECTION);
   const [empty, setEmpty] = useState(false);
   const [frameworkOpen, setFrameworkOpen] = useState(false);
   const [creating, setCreating] = useState(false);

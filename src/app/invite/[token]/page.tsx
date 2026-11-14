@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import AuthDialog from "@/components/auth/AuthDialog";
@@ -44,7 +45,7 @@ export default function InvitePage() {
               <p className="text-sm font-medium" role="status">You&apos;re in {joined}.</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">Its design systems are on your dashboard.</p>
             </div>
-            <a href="/" className="flex h-9 items-center justify-center rounded-md bg-accent text-sm font-medium text-white transition-colors hover:bg-accent/90">Open the dashboard</a>
+            <Link href="/" className="flex h-9 items-center justify-center rounded-md bg-accent text-sm font-medium text-white transition-colors hover:bg-accent/90">Open the dashboard</Link>
           </>
         ) : !user ? (
           <>

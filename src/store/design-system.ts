@@ -192,11 +192,6 @@ function toKebab(name: string): string {
   return name.replace(/[^a-zA-Z0-9-]/g, "-").replace(/-+/g, "-").toLowerCase();
 }
 
-function resolveColor(token: ColorToken, sets: TokenSet[]): string {
-  const tokenSet = sets.find((s) => s.id === token.setId);
-  if (!tokenSet) return token.value;
-  return token.themeValues[tokenSet.activeThemeId] ?? token.value;
-}
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 

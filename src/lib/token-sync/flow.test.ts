@@ -91,7 +91,7 @@ describe("pushing edits made in Motif", () => {
 
 describe("pulling edits made in the repository", () => {
   it("brings them into Motif while Motif's own edits stay pending", async () => {
-    const { repo, link, slices: imported, state } = await linked();
+    const { repo, link, slices: imported } = await linked();
     // Someone edits the repository: a radius, and a dark-theme color.
     repo.files[CSS] = repo.files[CSS].replace("--radius-lg: 0.75rem;", "--radius-lg: 1rem;").replace("--background: oklch(0.17 0.015 265);", "--background: oklch(0.2 0.015 265);");
     const slices = setColor(imported, "success", "t-light", "#00ff00");
@@ -112,7 +112,7 @@ describe("pulling edits made in the repository", () => {
   });
 
   it("applies a token removed from the repository, and restores one removed in Motif", async () => {
-    const { repo, link, slices, state } = await linked();
+    const { repo, link, slices } = await linked();
     repo.files[CSS] = repo.files[CSS].split("\n").filter((l) => !/^\s*--ring:/.test(l)).join("\n");
     const theirs = await repo.read();
     expect(theirs.snapshot.doc.ring).toBeUndefined();
@@ -131,7 +131,7 @@ describe("pulling edits made in the repository", () => {
 
 describe("both sides editing the same value", () => {
   it("raises a conflict, and either choice leaves the two sides consistent", async () => {
-    const { repo, link, slices: imported, state } = await linked();
+    const { repo, link, slices: imported } = await linked();
     repo.files[CSS] = repo.files[CSS].replace("--primary: oklch(0.52 0.21 270);", "--primary: oklch(0.6 0.2 200);");
     const slices = setColor(imported, "primary", "t-light", "#ff0000");
     const theirs = await repo.read();

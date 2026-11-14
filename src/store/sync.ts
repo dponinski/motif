@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { safeStorage } from "../lib/safe-storage";
 import { applyTake, decide, metaOf, resolveClash, type Meta } from "../lib/sync/engine";
 import type { ItemConflict } from "../lib/sync/items";
-import { hashSections, sameHashes, toPayload, type Hashes, type ProjectPayload, type Section } from "../lib/sync/payload";
+import { hashSections, sameHashes, toPayload, type ProjectPayload, type Section } from "../lib/sync/payload";
 import { api, SignedOut, Unreachable } from "../lib/sync/api";
 import { applyPayload, projectFromPayload, type ServerInfo } from "../lib/sync/project";
 import { useProjectsStore, type Project } from "./projects";
@@ -450,4 +450,3 @@ export const useSync = create<SyncState>()(
   )
 );
 
-export const hashesOf = (project: Project): Hashes => hashSections(toPayload(project));

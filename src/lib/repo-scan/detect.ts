@@ -85,7 +85,7 @@ export function detectStack(input: DetectInput): RepoStack {
   if (present.size === 0 && input.cssTexts.length > 0) present.set("plain-css", "stylesheets without a styling library");
 
   const evidence: string[] = [];
-  for (const [system, why] of present) evidence.push(`${why}`);
+  for (const [, why] of present) evidence.push(`${why}`);
   for (const system of PREFERENCE) {
     const n = input.usage[system];
     if (n) evidence.push(`${n} of ${input.libraryFiles} component files use ${LABEL[system]}`);

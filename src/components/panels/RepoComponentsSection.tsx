@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Boxes, Loader2, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { describeUpdate } from "@/lib/preview/library";
-import { readerSource } from "@/lib/repo-scan/source";
+import { scanBranch } from "@/lib/read-repository";
 import type { Support } from "@/lib/repo-scan/types";
-import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { NO_CONNECTION, repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import { useNavRequest } from "@/store/nav";
@@ -23,8 +23,7 @@ function UpdateButton({ connection, onResult }: { connection: GitConnection; onR
   const update = async () => {
     setBusy(true);
     try {
-      const { scanRepository } = await import("@/lib/repo-scan");
-      const analysis = await scanRepository(readerSource(host, source.branch), { repo: source.repo, ref: source.branch });
+      const analysis = await scanBranch(host, source.repo, source.branch);
       const summary = useLibraryStore.getState().updateComponents(analysis);
       useGitStore.getState().setAnalysis(analysis);
       onResult(describeUpdate(summary), true);
@@ -49,7 +48,7 @@ function ImportPrompt() {
   const analysis = useGitStore((s) => s.analysis);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
-  const host = useGitHost(connection ?? { owner: "", repo: "", token: "", defaultBranch: "" });
+  const host = useGitHost(connection ?? NO_CONNECTION);
 
   // A project always has its repository; this is only here for the moment before it is loaded.
   if (!connection) return null;
@@ -62,8 +61,7 @@ function ImportPrompt() {
       // A scan made in the Git panel is used as it is; otherwise the default branch is scanned.
       let result = analysis?.repo === slug ? analysis : null;
       if (!result) {
-        const { scanRepository } = await import("@/lib/repo-scan");
-        result = await scanRepository(readerSource(host, connection.defaultBranch), { repo: slug, ref: connection.defaultBranch });
+        result = await scanBranch(host, slug, connection.defaultBranch);
         useGitStore.getState().setAnalysis(result);
       }
       const n = useLibraryStore.getState().importComponents(result);

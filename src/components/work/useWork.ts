@@ -12,11 +12,10 @@ import { useDesignSystemStore } from "@/store/design-system";
 import { errorMessage, useCanSend, useGitHost } from "@/components/git/hooks";
 import { useReadRepository } from "@/components/stage/useReadRepository";
 import { changedFiles, editLog, useEditStore, type Base } from "@/store/edit";
-import { useGitStore, type GitConnection } from "@/store/git";
+import { NO_CONNECTION, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { useWorkRuntime } from "@/store/work";
 
-const NONE: GitConnection = { owner: "", repo: "", token: "", defaultBranch: "main" };
 const REFRESH_EVERY = 60_000;
 
 export const TITLE = "Changes from Motif";
@@ -54,8 +53,8 @@ export function discardChanges(paths: string[]) {
 // request is doing, and finishing the cycle when it was merged or closed.
 export function useWorkActions() {
   const connection = useGitStore((s) => s.connection);
-  const host = useGitHost(connection ?? NONE);
-  const canSend = useCanSend(connection ?? NONE);
+  const host = useGitHost(connection ?? NO_CONNECTION);
+  const canSend = useCanSend(connection ?? NO_CONNECTION);
   const readRepository = useReadRepository();
   const busy = useRef(false);
 
@@ -192,7 +191,6 @@ export function useWorkActions() {
     };
 
     return { sync, refresh, updateBranch, canSend };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [host, canSend, readRepository]);
 }
 
@@ -216,7 +214,7 @@ export function useTokenChanges() {
 export function useWorkWatcher() {
   const actions = useWorkActions();
   const connection = useGitStore((s) => s.connection);
-  const host = useGitHost(connection ?? NONE);
+  const host = useGitHost(connection ?? NO_CONNECTION);
   const pr = useGitStore((s) => s.work?.pr?.number ?? null);
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);

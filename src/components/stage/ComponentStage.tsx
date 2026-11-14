@@ -314,7 +314,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         <div role="alert" className="flex flex-shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-500">
           <AlertTriangle size={12} className="flex-shrink-0" />
           <span className="min-w-0 flex-1 truncate" title={stale.join(", ")}>
-            {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} They aren't sent until you give up those edits.
+            {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} They aren&apos;t sent until you give up those edits.
           </span>
           <button
             onClick={() => { useEditStore.getState().discard(stale); useLibraryStore.getState().dropDrafts(stale); }}
@@ -348,7 +348,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                   </div>
                 )}
                 <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-col gap-2">
-                  {editError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can't run: {editError}</p>}
+                  {editError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can&apos;t run: {editError}</p>}
                   {runtimeError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
                 </div>
                 {mode === "examples" && examples.list.some((e) => e.notes.length > 0) && (

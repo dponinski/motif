@@ -12,14 +12,8 @@ const nextConfig = {
     unoptimized: process.env.TAURI_ENV === 'true',
   },
 
-  // Next 16 builds with Turbopack, which needs no extra setup here; the webpack hook below applies to `--webpack` builds.
+  // Next 16 builds with Turbopack by default; `npm run build` uses `--webpack`. Neither needs extra setup here.
   turbopack: {},
-
-  webpack: (config) => {
-    // Fabric.js needs canvas module excluded in SSR
-    config.externals = [...(config.externals || []), { canvas: 'canvas' }];
-    return config;
-  },
 };
 
 export default nextConfig;

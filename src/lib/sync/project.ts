@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import type { Project } from "@/store/projects";
 import { emptyTokenData, type TokenData } from "@/store/design-system";
 import type { ProjectPayload } from "./payload";
@@ -62,4 +61,3 @@ function keepStaged(server: ProjectPayload["tokenLink"], mine: Project["repo"]["
   return (staged ? { ...server, staged } : server) as unknown as Project["repo"]["tokenLink"];
 }
 
-export const newProjectId = () => nanoid(8);

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { clientFor, errorMessage, useBranches, useCanSend, useGitHost } from "@/components/git/hooks";
 import { SignInButton } from "@/components/git/AccountControls";
 import { useAccount } from "@/store/account";
-import { readerSource } from "@/lib/repo-scan/source";
+import { scanBranch } from "@/lib/read-repository";
 import { stackLine, stylingLine, supportCounts } from "@/lib/repo-scan/summary";
 import { importable } from "@/lib/preview/library";
 import { useLibraryStore } from "@/store/library";
@@ -41,8 +41,7 @@ function ScanSection({ connection, host, initialBranch, onOpenReport }: {
     setBusy(true);
     setError(null);
     try {
-      const { scanRepository } = await import("@/lib/repo-scan");
-      setAnalysis(await scanRepository(readerSource(host, branch), { repo: repoSlug(connection), ref: branch }));
+      setAnalysis(await scanBranch(host, repoSlug(connection), branch));
     } catch (err) {
       setError(errorMessage(err));
     } finally {

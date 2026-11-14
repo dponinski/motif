@@ -6,10 +6,9 @@ import { readRepoState } from "@/lib/token-sync/flow";
 import { overlayOf, overlayReader } from "@/lib/work/overlay";
 import { useGitHost } from "@/components/git/hooks";
 import { useEditStore } from "@/store/edit";
-import { useGitStore } from "@/store/git";
+import { NO_CONNECTION, useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 
-const NONE = { owner: "", repo: "", token: "", defaultBranch: "main" };
 const relevant = (path: string) => path === "package.json" || path.endsWith(".css");
 
 // The stack the preview and new components build on (is Tailwind there, which stylesheets) follows the editor's changes: a
@@ -17,7 +16,7 @@ const relevant = (path: string) => path === "package.json" || path.endsWith(".cs
 // repository is read again (after a merge) it is the repository's own.
 export function useStagedStack() {
   const connection = useGitStore((s) => s.connection);
-  const host = useGitHost(connection ?? NONE);
+  const host = useGitHost(connection ?? NO_CONNECTION);
   const sourceKey = useLibraryStore((s) => (s.source ? `${s.source.repo}@${s.source.branch}#${s.source.importedAt}` : null));
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);

@@ -6,14 +6,13 @@ import { cn } from "@/lib/utils";
 import { diffLines } from "@/lib/edit/diff";
 import { plan, statusOf, type Changed } from "@/lib/work/sync";
 import { changedFiles, useEditStore, type ChangedFile } from "@/store/edit";
-import { useGitStore } from "@/store/git";
+import { NO_CONNECTION, useGitStore } from "@/store/git";
 import { useWorkRuntime } from "@/store/work";
 import { discardChanges, useTokenChanges, useWorkActions } from "@/components/work/useWork";
 import { changeLine } from "@/lib/token-sync/pr";
 import FirstCommit from "@/components/git/FirstCommit";
 import { useGitHost } from "@/components/git/hooks";
 
-const NONE = { owner: "", repo: "", token: "", defaultBranch: "main" };
 
 // A new file is all additions: there is no empty line before it to show as taken away.
 function diffOf(f: ChangedFile) {
@@ -67,7 +66,7 @@ export default function SyncView() {
   const files = useMemo(() => changedFiles({ history, index, bases }), [history, index, bases]);
   const runtime = useWorkRuntime();
   const tokenChanges = useTokenChanges();
-  const host = useGitHost(connection ?? NONE);
+  const host = useGitHost(connection ?? NO_CONNECTION);
   // A repository with no commits has nothing to start a branch from: the first commit is offered here, where sending happens.
   const [empty, setEmpty] = useState(false);
   useEffect(() => {

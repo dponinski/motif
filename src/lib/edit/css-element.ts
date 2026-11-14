@@ -28,7 +28,7 @@ export const ownedClass = (classes: string, css: string): string | null => class
 export function usesOf(code: string, cls: string): number {
   let n = 0;
   for (const m of code.matchAll(/className\s*=\s*/g)) {
-    let i = m.index! + m[0].length;
+    const i = m.index! + m[0].length;
     let body = "";
     if (code[i] === '"' || code[i] === "'") {
       const end = code.indexOf(code[i], i + 1);

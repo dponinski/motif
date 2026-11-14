@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { gitBlobSha } from "@/lib/github";
+import { recordChange } from "@/components/panels/useEditRunner";
 import { GROUPS } from "@/lib/edit/classes";
 import { isFlagged } from "@/lib/edit/tokens";
 import { applyChanges, parseEdit, previewChanges, signatureOf, type Row } from "@/lib/ai/proposal";
@@ -83,11 +83,7 @@ export function EditProposal({ message }: { message: AIMessage }) {
       const elements = await src.elementsOf(code);
       if (signatureOf(elements) !== basis.signature) throw new Error("The component has changed since this was suggested. Ask again.");
       const done = await applyChanges(basis.file, code, elements, parsed.changes, src.names, src.values);
-      const store = useEditStore.getState();
-      if (done.changed > 0) {
-        const base = store.bases[basis.file] ? undefined : { text: code, sha: await gitBlobSha(code) };
-        store.change(basis.file, done.code, null, `AI: ${parsed.summary || "changes to the component"}`, base);
-      }
+      if (done.changed > 0) await recordChange(basis.file, code, done.code, null, `AI: ${parsed.summary || "changes to the component"}`);
       const left = done.skipped.map((s) => s.reason);
       setOutcome(
         message.id,

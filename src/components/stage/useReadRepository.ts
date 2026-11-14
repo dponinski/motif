@@ -2,17 +2,16 @@ import { useCallback, useEffect, useRef } from "react";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import { readRepository } from "@/lib/read-repository";
 import { useAccount } from "@/store/account";
-import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { NO_CONNECTION, repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { useReadStatus } from "@/store/read-status";
 import { useProjectsStore } from "@/store/projects";
 
-const NONE: GitConnection = { owner: "", repo: "", token: "", defaultBranch: "main" };
 
 // Reads the project's repository again (the scan, and the components brought into the library), reporting how it went
 // through the read status.
 export function useReadRepository() {
   const connection = useGitStore((s) => s.connection);
-  const host = useGitHost(connection ?? NONE);
+  const host = useGitHost(connection ?? NO_CONNECTION);
   return useCallback(async () => {
     const conn = useGitStore.getState().connection;
     if (!conn) return null;

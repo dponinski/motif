@@ -17,8 +17,6 @@
   --text-secondary: #888888;
   --text-tertiary: #555555;
   --text-inverse: #0a0a0a;
-  --canvas-bg: #141414;
-  --grid-line: rgba(255, 255, 255, 0.045);
   --scrollbar-thumb: #2e2e2e;
   --scrollbar-thumb-hover: #444;
   color-scheme: dark;
@@ -35,8 +33,6 @@
   --text-secondary: #606060;
   --text-tertiary: #9a9a9a;
   --text-inverse: #ffffff;
-  --canvas-bg: #e4e4e4;
-  --grid-line: rgba(0, 0, 0, 0.055);
   --scrollbar-thumb: #ccc;
   --scrollbar-thumb-hover: #bbb;
   color-scheme: light;
@@ -77,11 +73,6 @@ body {
   background: var(--scrollbar-thumb-hover);
 }
 
-/* Panel styles */
-.panel {
-  @apply bg-surface-raised border-surface-border;
-}
-
 /* Input styles */
 .input-sm {
   @apply bg-surface-subtle border border-surface-border rounded text-text-primary text-sm px-2 py-1 w-full outline-none
@@ -89,51 +80,9 @@ body {
          placeholder:text-text-tertiary transition-colors;
 }
 
-/* Token swatch */
-.token-swatch {
-  @apply w-5 h-5 rounded border border-white/10 flex-shrink-0;
-}
-
 /* Toolbar button */
 .tool-btn {
   @apply w-8 h-8 flex items-center justify-center rounded text-text-secondary
          hover:bg-surface-subtle hover:text-text-primary
          transition-colors cursor-pointer;
-}
-
-.tool-btn.active {
-  @apply bg-accent/15 text-accent;
-}
-
-/* Separator */
-.sep {
-  @apply h-px bg-surface-border my-1;
-}
-
-/* Panel section heading */
-.section-title {
-  @apply text-2xs font-medium text-text-tertiary uppercase tracking-wider px-3 py-2;
-}
-
-/* Canvas cursor overrides */
-.canvas-wrap canvas {
-  cursor: default;
-}
-
-.canvas-wrap.tool-rectangle canvas,
-.canvas-wrap.tool-ellipse canvas,
-.canvas-wrap.tool-frame canvas {
-  cursor: crosshair;
-}
-
-.canvas-wrap.tool-text canvas {
-  cursor: text;
-}
-
-.canvas-wrap.tool-hand canvas {
-  cursor: grab;
-}
-
-.canvas-wrap.tool-hand.panning canvas {
-  cursor: grabbing;
 }
