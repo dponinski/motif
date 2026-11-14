@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { statusOf } from "@/lib/work/sync";
 import { changedFiles, useEditStore } from "@/store/edit";
 import { useGitStore } from "@/store/git";
+import { useAuth } from "@/store/auth";
 import { useWorkRuntime } from "@/store/work";
 import { useTokenChanges } from "./work/useWork";
 
@@ -26,6 +27,7 @@ export default function AppNav({
   const connected = useGitStore((s) => s.connection !== null);
   const runtime = useWorkRuntime();
   const tokens = useTokenChanges().length;
+  const guest = useAuth((s) => !!s.user?.guest);
   const status = useMemo(() => statusOf({
     changed: changedFiles({ history, index, bases }).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })),
     work, refreshed: runtime.refreshed, syncing: runtime.syncing, error: runtime.error, tokens, tokenNote: runtime.tokenNote,
@@ -37,7 +39,8 @@ export default function AppNav({
     { id: "components", icon: <LayoutTemplate size={16} />, label: "Components" },
     { id: "tokens", icon: <Palette size={16} />, label: "Tokens" },
     { id: "docs", icon: <BookOpen size={16} />, label: "Docs" },
-    { id: "chat", icon: <Sparkles size={16} />, label: "Chat" },
+    // The assistant is paid for by the server: it isn't offered to someone a team brought in.
+    ...(guest ? [] : [{ id: "chat" as const, icon: <Sparkles size={16} />, label: "Chat" }]),
     ...(connected ? [{ id: "sync" as const, icon: <GitPullRequest size={16} />, label: `Sync: ${status.text}` }] : []),
     { id: "git", icon: <GitBranch size={16} />, label: "Git" },
   ];

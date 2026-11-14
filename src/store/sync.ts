@@ -3,8 +3,10 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { safeStorage } from "../lib/safe-storage";
 import { applyTake, decide, type Meta } from "../lib/sync/engine";
 import { hashSections, sameHashes, toPayload, type Hashes, type ProjectPayload, type Section } from "../lib/sync/payload";
-import { applyPayload, projectFromPayload } from "../lib/sync/project";
+import { api, SignedOut, Unreachable } from "../lib/sync/api";
+import { applyPayload, projectFromPayload, type ServerInfo } from "../lib/sync/project";
 import { useProjectsStore, type Project } from "./projects";
+import { useTeams } from "./teams";
 
 // Keeping a signed-in person's projects the same on every device they use. The browser keeps working on its own
 // copy; this sends what changed to the server, takes in what changed elsewhere, and stops to ask only when the same
@@ -20,6 +22,8 @@ export interface Conflict {
   version: number;
   data: ProjectPayload | null;
   sections: Section[];
+  // Who made the version the server has, when it is a teammate.
+  updatedBy?: string | null;
 }
 
 // The editor open on a project registers itself, so a change that arrives for it can be put into the editor, and
@@ -48,33 +52,14 @@ interface SyncState {
   resolve: (id: string, take: "server" | "local") => Promise<void>;
   setOpen: (open: OpenProject | null) => void;
   dismissNotice: () => void;
+  // Moves a design system into a team (or, for a team's owner, out of it to their own). Says what went wrong, or null.
+  move: (id: string, teamId: string | null) => Promise<string | null>;
 }
 
-class SignedOut extends Error {}
-class Unreachable extends Error {}
+interface ServerProject { id: string; version: number; updatedAt: number; deleted: boolean; data: ProjectPayload | null; teamId?: string | null; updatedBy?: string | null }
+type ProjectSummary = Omit<ServerProject, "data">;
 
-interface ServerProject { id: string; version: number; updatedAt: number; deleted: boolean; data: ProjectPayload | null }
-type Reply<T> = { status: number; body: T & { error?: string; conflict?: boolean; limit?: boolean; current?: ServerProject } };
-
-async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<Reply<T>> {
-  let res: Response;
-  try {
-    res = await fetch(path, {
-      method,
-      headers: { "x-requested-with": "motif", ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: "same-origin",
-      cache: "no-store",
-      signal: typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(30_000) : undefined,
-    });
-  } catch {
-    throw new Unreachable();
-  }
-  if (res.status === 401) throw new SignedOut();
-  // A server that is down or restarting is "offline" too.
-  if (res.status >= 500) throw new Unreachable();
-  return { status: res.status, body: ((await res.json().catch(() => ({}))) as Reply<T>["body"]) };
-}
+const infoOf = (server: { updatedAt: number; teamId?: string | null; updatedBy?: string | null }): ServerInfo => ({ updatedAt: server.updatedAt, teamId: server.teamId ?? null, updatedBy: server.updatedBy ?? null });
 
 let open: OpenProject | null = null;
 let running: Promise<void> | null = null;
@@ -118,6 +103,14 @@ export const useSync = create<SyncState>()(
 
       const setConflict = (id: string, conflict: Conflict) => set((s) => ({ conflicts: { ...s.conflicts, [id]: conflict } }));
 
+      // What a team project's local copy says about where it lives, brought in line with the server.
+      const setTeam = (id: string, teamId: string | null, updatedBy: string | null) => {
+        const p = localProject(id);
+        if (!p || ((p.teamId ?? null) === teamId && (p.updatedBy ?? null) === updatedBy)) return;
+        applying = true;
+        try { useProjectsStore.getState().put({ ...p, teamId, updatedBy }); } finally { applying = false; }
+      };
+
       const fetchOne = async (id: string): Promise<ServerProject | null> => {
         const r = await api<ServerProject>("GET", `/api/projects/${encodeURIComponent(id)}`);
         return r.status === 200 ? r.body : null;
@@ -129,21 +122,33 @@ export const useSync = create<SyncState>()(
         const hashes = hashSections(payload);
         const refused = get().refused[id];
         if (refused && refused.hash === JSON.stringify(hashes)) return;
-        const r = await api<{ version: number }>("PUT", `/api/projects/${encodeURIComponent(id)}`, { baseVersion: base, data: payload });
+        // A project that is new to the server goes where it was made: into its team, if it has one.
+        const teamId = base === 0 ? localProject(id)?.teamId ?? undefined : undefined;
+        const r = await api<{ version: number }>("PUT", `/api/projects/${encodeURIComponent(id)}`, { baseVersion: base, data: payload, ...(teamId ? { teamId } : {}) });
         if (r.status === 200) {
-          setMeta(id, { version: (r.body as { version: number }).version, hashes });
+          const saved = r.body as { version: number; teamId?: string | null; updatedBy?: string | null };
+          setMeta(id, { version: saved.version, hashes });
+          // Who last changed a team's design system is whoever just did.
+          if (saved.teamId) setTeam(id, saved.teamId, saved.updatedBy ?? null);
           if (get().refused[id]) set((s) => { const next = { ...s.refused }; delete next[id]; return { refused: next }; });
           return;
         }
+        // Not in that team (any more): it is the person's own, and goes to their account.
+        if (r.status === 403 && r.body.forbidden && teamId && depth < 3) {
+          setTeam(id, null, null);
+          return push(id, payload, 0, depth + 1);
+        }
         if (r.status === 409 && r.body.limit) {
-          if (!limitShown) set({ notice: "Your account has reached its limit of saved projects, so some projects stay only on this device. Delete projects you don't need." });
+          if (!limitShown) set({ notice: teamId ? (r.body.error ?? "This team has reached its limit of design systems.") : "Your account has reached its limit of saved projects, so some projects stay only on this device. Delete projects you don't need." });
           limitShown = true;
           return;
         }
         if (r.status === 409 && r.body.current && depth < 3) {
-          await reconcileWith(id, r.body.current, depth + 1);
+          await reconcileWith(id, r.body.current as ServerProject, depth + 1);
           return;
         }
+        // Several people saving at once can lose a few races in a row; that is not the server refusing the project.
+        if (r.status === 409 && r.body.current) { schedule(3000); return; }
         if (r.status === 409 || r.status === 422 || r.status === 413) {
           set((s) => ({ refused: { ...s.refused, [id]: { hash: JSON.stringify(hashes), reason: r.body.error ?? "The server refused this project" } }, status: "error" }));
         }
@@ -151,6 +156,8 @@ export const useSync = create<SyncState>()(
 
       // A project the server has, in whatever state, against the one here.
       const reconcileWith = async (id: string, server: ServerProject, depth = 0): Promise<void> => {
+        // What has been typed into the open editor is in the project before it is compared with the server's.
+        if (open?.id === id) open.flush();
         const p = localProject(id);
         const m = get().meta[id];
         if (server.deleted) {
@@ -162,11 +169,13 @@ export const useSync = create<SyncState>()(
         if (!server.data) return;
         const serverHashes = hashSections(server.data);
         if (!p) {
-          adopt(projectFromPayload(id, server.data));
+          adopt(projectFromPayload(id, server.data, infoOf(server)));
           setMeta(id, { version: server.version, hashes: serverHashes });
           return;
         }
-        const local = toPayload(p);
+        // Where it lives and who last changed it are the server's to say.
+        setTeam(id, server.teamId ?? null, server.updatedBy ?? null);
+        const local = toPayload(localProject(id) ?? p);
         const localHashes = hashSections(local);
         const d = decide(m ?? null, localHashes, serverHashes);
         switch (d.kind) {
@@ -174,7 +183,7 @@ export const useSync = create<SyncState>()(
             setMeta(id, { version: server.version, hashes: localHashes });
             return;
           case "pull":
-            adopt(applyPayload(p, server.data));
+            adopt(applyPayload(localProject(id) ?? p, server.data, infoOf(server)));
             setMeta(id, { version: server.version, hashes: serverHashes });
             return;
           case "push":
@@ -182,25 +191,26 @@ export const useSync = create<SyncState>()(
             return;
           case "merge": {
             const merged = applyTake(local, server.data, d.take);
-            adopt(applyPayload(p, merged));
+            adopt(applyPayload(localProject(id) ?? p, merged, { updatedBy: server.updatedBy ?? null }));
             // The server's version is the one the merged project is based on.
             setMeta(id, { version: server.version, hashes: serverHashes });
             await push(id, merged, server.version, depth);
             return;
           }
           case "conflict":
-            setConflict(id, { deleted: false, version: server.version, data: server.data, sections: d.sections });
+            setConflict(id, { deleted: false, version: server.version, data: server.data, sections: d.sections, updatedBy: server.updatedBy ?? null });
             return;
         }
       };
 
-      const reconcile = async (summary: { id: string; version: number; deleted: boolean }): Promise<void> => {
+      const reconcile = async (summary: ProjectSummary): Promise<void> => {
         const id = summary.id;
         if (get().conflicts[id]) return;
         const p = localProject(id);
         const m = get().meta[id];
-        if (summary.deleted) return reconcileWith(id, { ...summary, updatedAt: 0, data: null });
+        if (summary.deleted) return reconcileWith(id, { ...summary, data: null });
         if (p && m && m.version === summary.version) {
+          setTeam(id, summary.teamId ?? null, summary.updatedBy ?? null);
           const local = toPayload(p);
           if (sameHashes(hashSections(local), m.hashes)) return;
           return push(id, local, m.version);
@@ -222,29 +232,53 @@ export const useSync = create<SyncState>()(
             const r = await api("DELETE", `/api/projects/${encodeURIComponent(id)}?baseVersion=${get().meta[id].version}`);
             // Changed elsewhere since: that wins over the deletion, and it comes back below.
             if (r.status === 200 || r.status === 409) setMeta(id, null);
+            // A team's design system is deleted for everyone, which only an owner of the team may do: it stays, and comes back.
+            if (r.status === 403) set({ notice: "Only an owner of the team can delete its design systems." });
           }
 
-          const list = await api<{ projects: { id: string; version: number; updatedAt: number; deleted: boolean }[] }>("GET", "/api/projects");
-          const known = new Set<string>();
+          const list = await api<{ projects: ProjectSummary[] }>("GET", "/api/projects");
+          // A design system that moved between a person's own and a team's is listed twice: as deleted where it was and as
+          // alive where it is now. The live one is the project.
+          const byId = new Map<string, ProjectSummary>();
           for (const s of list.body.projects ?? []) {
+            const have = byId.get(s.id);
+            if (!have || (have.deleted && !s.deleted)) byId.set(s.id, s);
+          }
+          const known = new Set<string>();
+          for (const s of byId.values()) {
             known.add(s.id);
             await reconcile(s);
           }
+          // The teams change with the people in them, so they are asked about each time.
+          await useTeams.getState().refresh();
 
           // Projects the server has never seen, or has forgotten.
           const migrated: string[] = [];
+          const notices: string[] = [];
           for (const p of useProjectsStore.getState().projects) {
             if (known.has(p.id) || get().conflicts[p.id]) continue;
             if (get().meta[p.id]) {
-              // It was ours and is gone from the server: deleted elsewhere long ago.
               const local = toPayload(p);
-              if (sameHashes(hashSections(local), get().meta[p.id].hashes)) { dropLocal(p.id); setMeta(p.id, null); }
+              const unchanged = sameHashes(hashSections(local), get().meta[p.id].hashes);
+              if (p.teamId) {
+                // A team's design system that isn't listed any more: this person is out of the team. With nothing of their own in
+                // it, it goes; with changes they made, those are theirs and are kept as their own project.
+                setMeta(p.id, null);
+                if (unchanged) { dropLocal(p.id); notices.push(`You are no longer in the team that shared “${p.name}”, so it was taken off this browser.`); continue; }
+                setTeam(p.id, null, null);
+                notices.push(`You are no longer in the team that shared “${p.name}”. Your changes are kept as your own project.`);
+                await push(p.id, local, 0);
+                continue;
+              }
+              // It was ours and is gone from the server: deleted elsewhere long ago.
+              if (unchanged) { dropLocal(p.id); setMeta(p.id, null); }
               else { setMeta(p.id, null); setConflict(p.id, { deleted: true, version: 0, data: null, sections: [] }); }
               continue;
             }
             await push(p.id, toPayload(p), 0);
             if (get().meta[p.id]) migrated.push(p.name);
           }
+          if (notices.length) set({ notice: notices.join(" ") });
           if (migrated.length && !get().notice) set({ notice: migrated.length === 1 ? `“${migrated[0]}” is now saved to your account.` : `${migrated.length} projects from this browser are now saved to your account.` });
 
           set((s) => ({ status: Object.keys(s.refused).length ? "error" : "idle", lastSyncedAt: Date.now() }));
@@ -294,6 +328,7 @@ export const useSync = create<SyncState>()(
             // Projects on this browser that belong to someone else's account are theirs, not this person's.
             for (const id of Object.keys(get().meta)) dropLocal(id);
             set({ meta: {}, conflicts: {}, refused: {} });
+            useTeams.getState().clear();
           }
           set({ userId, status: "idle" });
           limitShown = false;
@@ -334,6 +369,7 @@ export const useSync = create<SyncState>()(
               else if (p) dropLocal(id);
             }
             set({ meta: keep, conflicts: {}, refused: {}, notice: null, status: "off", lastSyncedAt: null, userId: Object.keys(keep).length ? get().userId : null });
+            useTeams.getState().clear();
           } else {
             set({ status: "off" });
           }
@@ -349,7 +385,7 @@ export const useSync = create<SyncState>()(
           try {
             if (take === "server") {
               if (c.deleted) { if (p) dropLocal(id); setMeta(id, null); }
-              else if (p && c.data) { adopt(applyPayload(p, c.data)); setMeta(id, { version: c.version, hashes: hashSections(c.data) }); }
+              else if (p && c.data) { adopt(applyPayload(p, c.data, { updatedBy: c.updatedBy ?? null })); setMeta(id, { version: c.version, hashes: hashSections(c.data) }); }
             } else if (p) {
               // Keep this device's version: send it over the server's, based on the version the server has now.
               await push(id, toPayload(p), c.version);
@@ -359,6 +395,29 @@ export const useSync = create<SyncState>()(
             // Nothing was lost; the question comes back with the next sync.
           }
           void sync();
+        },
+
+        move: async (id, teamId) => {
+          const p = localProject(id);
+          if (!p || !get().userId) return "Sign in to move it.";
+          // It has to be on the server before it can be moved there.
+          await sync();
+          const m = get().meta[id];
+          if (!m) return "It isn't saved to your account yet. Try again in a moment.";
+          try {
+            const r = await api<{ version: number; teamId: string | null }>("POST", `/api/projects/${encodeURIComponent(id)}/move`, { teamId });
+            if (r.status !== 200) return r.body.error ?? "That didn't work.";
+            // The same content, in its new place: what was changed here since is sent from there.
+            applying = true;
+            try { useProjectsStore.getState().put({ ...(localProject(id) ?? p), teamId: r.body.teamId ?? null }); } finally { applying = false; }
+            setMeta(id, { version: r.body.version, hashes: m.hashes });
+            void sync();
+            return null;
+          } catch (err) {
+            if (err instanceof SignedOut) return "Sign in again to move it.";
+            if (err instanceof Unreachable) return "The server can't be reached. Try again in a moment.";
+            throw err;
+          }
         },
 
         setOpen: (next) => { open = next; },

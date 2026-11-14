@@ -106,6 +106,58 @@ export const MIGRATIONS: { version: number; sql: string[] }[] = [
       lockdown(["projects"]),
     ],
   },
+  {
+    version: 3,
+    sql: [
+      // Teams share design systems. A team has members (owners and members) and invitations that haven't been taken up.
+      `CREATE TABLE teams (
+        id VARCHAR(32) NOT NULL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        created_by VARCHAR(32) NULL REFERENCES users (id) ON DELETE SET NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      `CREATE TABLE team_members (
+        team_id VARCHAR(32) NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+        user_id VARCHAR(32) NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        role VARCHAR(8) NOT NULL CHECK (role IN ('owner', 'member')),
+        added_at BIGINT NOT NULL,
+        PRIMARY KEY (team_id, user_id)
+      )`,
+      `CREATE INDEX team_members_user ON team_members (user_id)`,
+      // The id is public (it is what an invited person accepts from their dashboard); the token in the emailed link is
+      // secret, and only its hash is kept.
+      `CREATE TABLE team_invites (
+        id VARCHAR(32) NOT NULL PRIMARY KEY,
+        team_id VARCHAR(32) NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+        email VARCHAR(254) NOT NULL,
+        token_hash CHAR(64) NOT NULL,
+        invited_by VARCHAR(32) NULL REFERENCES users (id) ON DELETE SET NULL,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL
+      )`,
+      `CREATE UNIQUE INDEX team_invites_open ON team_invites (team_id, email)`,
+      `CREATE INDEX team_invites_email ON team_invites (email)`,
+      `CREATE INDEX team_invites_token ON team_invites (token_hash)`,
+      // A design system that belongs to a team: the same as a person's project, kept apart from them, and with who made
+      // and last changed it.
+      `CREATE TABLE team_projects (
+        team_id VARCHAR(32) NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+        id VARCHAR(32) NOT NULL,
+        name VARCHAR(200) NOT NULL,
+        data TEXT NOT NULL,
+        version INT NOT NULL,
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        deleted_at BIGINT NULL,
+        created_by VARCHAR(32) NULL REFERENCES users (id) ON DELETE SET NULL,
+        updated_by VARCHAR(32) NULL REFERENCES users (id) ON DELETE SET NULL,
+        PRIMARY KEY (team_id, id)
+      )`,
+      `CREATE INDEX team_projects_deleted ON team_projects (deleted_at)`,
+      `CREATE INDEX team_projects_id ON team_projects (id)`,
+      lockdown(["teams", "team_members", "team_invites", "team_projects"]),
+    ],
+  },
 ];
 
 type Runner = Pick<Pool, "query">;

@@ -11,6 +11,8 @@ export interface AuthUser {
   email: string;
   name: string | null;
   avatar: string | null;
+  // Brought in by a team rather than listed by the server: their teams' design systems, and nothing the server pays for.
+  guest?: boolean;
 }
 
 export interface Providers { github: boolean; google: boolean; apple: boolean; email: boolean }

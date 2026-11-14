@@ -39,6 +39,7 @@ export default function UserMenu() {
           <div className="border-b border-surface-border px-3 py-2">
             {user.name && <p className="truncate text-text-primary">{user.name}</p>}
             <p className="truncate text-text-tertiary" data-account-email>{user.email}</p>
+            {user.guest && <p className="mt-0.5 text-2xs text-text-tertiary" data-guest>Guest: you are here through a team, so the team&apos;s design systems are yours to work on.</p>}
           </div>
           <div className="border-b border-surface-border px-3 py-1.5 text-2xs text-text-tertiary" data-sync-status={sync.status}>
             {sync.status === "syncing" ? "Saving your projects…"

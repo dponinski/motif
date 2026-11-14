@@ -3,10 +3,11 @@ import { readPayload, type ProjectPayload } from "../lib/sync/payload";
 import { emptyTokenData } from "./design-system";
 import { useProjectsStore, type Project } from "./projects";
 import { useSync } from "./sync";
+import { useTeams } from "./teams";
 
 // A small server that keeps projects the way the real one does (versions, deletions, refusing a device that is
 // behind), so the sync can be run against "another device" by changing what the server has.
-interface Row { version: number; data: ProjectPayload | null; deleted: boolean }
+interface Row { version: number; data: ProjectPayload | null; deleted: boolean; teamId?: string | null; updatedBy?: string | null; updatedAt?: number }
 class FakeServer {
   rows = new Map<string, Row>();
   calls: { method: string; path: string; body?: unknown }[] = [];
@@ -14,9 +15,16 @@ class FakeServer {
   signedIn = true;
   refuseWith: number | null = null;
   limit = 100;
+  // The teams this person is in, with their role; projects of other teams are not theirs to see.
+  teams: { id: string; name: string; role: "owner" | "member"; members: unknown[]; invites: unknown[] }[] = [];
+  // Ids that are listed as deleted (as a team does when an owner deletes) or not at all (when the person is out of the team).
+  unlisted = new Set<string>();
+  // Always answers a save with a newer version, as a busy team does.
+  alwaysBehind = false;
 
   reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-  current = (id: string) => { const r = this.rows.get(id)!; return { id, version: r.version, updatedAt: 1, deleted: r.deleted, data: r.data }; };
+  current = (id: string) => { const r = this.rows.get(id)!; return { id, version: r.version, updatedAt: r.updatedAt ?? 1, deleted: r.deleted, data: r.data, teamId: r.teamId ?? null, updatedBy: r.updatedBy ?? null }; };
+  summary = (id: string) => { const { data: _data, ...rest } = this.current(id); return rest; };
   // What another device does.
   put(id: string, data: ProjectPayload) { const r = this.rows.get(id); this.rows.set(id, { version: (r?.version ?? 0) + 1, data, deleted: false }); }
   drop(id: string) { const r = this.rows.get(id)!; this.rows.set(id, { version: r.version + 1, data: null, deleted: true }); }
@@ -27,28 +35,40 @@ class FakeServer {
     this.calls.push({ method, path: url, body });
     if (!this.online) throw new TypeError("Failed to fetch");
     if (!this.signedIn) return this.reply(401, { error: "Sign in", signInRequired: true });
+    if (url === "/api/teams") return this.reply(200, { teams: this.teams, invites: [] });
+    const move = url.match(/^\/api\/projects\/([^/?]+)\/move$/);
+    if (move && method === "POST") {
+      const mid = decodeURIComponent(move[1]);
+      const mrow = this.rows.get(mid);
+      if (!mrow) return this.reply(404, { error: "no" });
+      this.rows.set(mid, { ...mrow, version: mrow.version + 1, teamId: body.teamId });
+      return this.reply(200, { version: mrow.version + 1, teamId: body.teamId });
+    }
     const m = url.match(/^\/api\/projects(?:\/([^?]+))?(?:\?baseVersion=(\d+))?$/);
     if (!m) return this.reply(404, {});
     const id = m[1] ? decodeURIComponent(m[1]) : null;
-    if (!id) return this.reply(200, { projects: [...this.rows].map(([pid, r]) => ({ id: pid, version: r.version, updatedAt: 1, deleted: r.deleted })) });
+    if (!id) return this.reply(200, { projects: [...this.rows.keys()].filter((pid) => !this.unlisted.has(pid)).map((pid) => this.summary(pid)) });
     const row = this.rows.get(id);
     if (method === "GET") return row ? this.reply(200, this.current(id)) : this.reply(404, { error: "no" });
     if (method === "PUT") {
       if (this.refuseWith) return this.reply(this.refuseWith, { error: "Refused" });
+      if (this.alwaysBehind && row) { this.rows.set(id, { ...row, version: row.version + 1 }); return this.reply(409, { conflict: true, current: this.current(id) }); }
+      if (body.teamId && !this.teams.some((t) => t.id === body.teamId)) return this.reply(403, { error: "You aren't in that team", forbidden: true });
       const read = readPayload(body.data);
       if (!read.ok) return this.reply(422, { error: read.error });
       if (!row) {
         if (body.baseVersion !== 0) return this.reply(409, { conflict: true, current: { id, version: 0, updatedAt: 1, deleted: true, data: null } });
         if ([...this.rows.values()].filter((r) => !r.deleted).length >= this.limit) return this.reply(409, { limit: true, error: "limit" });
-        this.rows.set(id, { version: 1, data: read.payload, deleted: false });
-        return this.reply(200, { version: 1, updatedAt: 1 });
+        this.rows.set(id, { version: 1, data: read.payload, deleted: false, teamId: body.teamId ?? null, updatedBy: body.teamId ? "Me" : null });
+        return this.reply(200, { version: 1, updatedAt: 1, teamId: body.teamId ?? null });
       }
       if (row.version !== body.baseVersion) return this.reply(409, { conflict: true, current: this.current(id) });
-      this.rows.set(id, { version: row.version + 1, data: read.payload, deleted: false });
-      return this.reply(200, { version: row.version + 1, updatedAt: 1 });
+      this.rows.set(id, { ...row, version: row.version + 1, data: read.payload, deleted: false, ...(row.teamId ? { updatedBy: "Me" } : {}) });
+      return this.reply(200, { version: row.version + 1, updatedAt: 1, teamId: row.teamId ?? null });
     }
     if (method === "DELETE") {
       if (!row || row.deleted) return this.reply(200, { ok: true });
+      if (row.teamId && this.teams.find((t) => t.id === row.teamId)?.role !== "owner") return this.reply(403, { error: "Only an owner", forbidden: true });
       if (row.version !== Number(m[2])) return this.reply(409, { conflict: true, current: this.current(id) });
       this.drop(id);
       return this.reply(200, { ok: true });
@@ -79,6 +99,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(server.handle));
   useProjectsStore.setState({ projects: [] });
   useSync.setState({ userId: "u1", meta: {}, status: "idle", conflicts: {}, notice: null, refused: {}, lastSyncedAt: null });
+  useTeams.getState().clear();
   useSync.getState().dismissNotice();
   useSync.getState().setOpen(null);
 });
@@ -122,7 +143,7 @@ describe("a first sync", () => {
     server.calls = [];
     await sync();
     expect(server.writes()).toHaveLength(0);
-    expect(server.calls.map((c) => c.path)).toEqual(["/api/projects"]);
+    expect(server.calls.map((c) => c.path)).toEqual(["/api/projects", "/api/teams"]);
     expect(writes).toBe(1);
     expect(useProjectsStore.getState().projects.map((p) => p.id).sort()).toEqual(["a", "x"]);
   });
@@ -397,5 +418,130 @@ describe("signing out and in", () => {
     expect([...server.rows.keys()]).toEqual(["mine"]);
     await useSync.getState().stop();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("projects shared with a team", () => {
+  const team = (role: "owner" | "member" = "member") => ({ id: "t1", name: "Design", role, members: [], invites: [] });
+  beforeEach(() => { server.teams = [team()]; });
+
+  it("a new design system made in a team is saved there, and who last changed it is shown", async () => {
+    useProjectsStore.setState({ projects: [project("a", { teamId: "t1" })] });
+    await sync();
+    expect(server.writes()[0].body).toMatchObject({ baseVersion: 0, teamId: "t1" });
+    expect(server.rows.get("a")!.teamId).toBe("t1");
+    expect(local("a")).toMatchObject({ teamId: "t1" });
+    await sync();
+    expect(local("a")).toMatchObject({ teamId: "t1", updatedBy: "Me" });
+    expect(useTeams.getState().teams.map((t) => t.name)).toEqual(["Design"]);
+  });
+
+  it("is saved as the person's own when they turn out not to be in that team", async () => {
+    server.teams = [];
+    useProjectsStore.setState({ projects: [project("a", { teamId: "t1" })] });
+    await sync();
+    expect(server.rows.get("a")!.teamId).toBeNull();
+    expect(local("a")!.teamId).toBeNull();
+  });
+
+  it("a teammate's design system comes in with its team, who changed it and when, not 'just now'", async () => {
+    server.rows.set("x", { version: 3, data: payloadOf(project("x")), deleted: false, teamId: "t1", updatedBy: "Grace", updatedAt: 777 });
+    await sync();
+    expect(local("x")).toMatchObject({ teamId: "t1", updatedBy: "Grace", updatedAt: 777 });
+    // And her next change arrives the same way.
+    server.rows.set("x", { version: 4, data: payloadOf(project("x"), { docs: [doc("From Grace")] }), deleted: false, teamId: "t1", updatedBy: "Grace", updatedAt: 888 });
+    await sync();
+    expect(local("x")).toMatchObject({ updatedBy: "Grace", updatedAt: 888, docs: [doc("From Grace")] });
+  });
+
+  describe("when the person is no longer in the team", () => {
+    beforeEach(async () => {
+      server.rows.set("x", { version: 1, data: payloadOf(project("x")), deleted: false, teamId: "t1", updatedBy: "Grace" });
+      await sync();
+      server.calls = [];
+      server.unlisted.add("x");
+      server.teams = [];
+    });
+    it("a design system they hadn't changed is taken off this browser, and they are told", async () => {
+      await sync();
+      expect(local("x")).toBeUndefined();
+      expect(useSync.getState().notice).toMatch(/no longer in the team that shared “Project x”.*taken off this browser/);
+      expect(useSync.getState().meta.x).toBeUndefined();
+    });
+    it("their own changes are kept as their own project, and saved to their account", async () => {
+      edit("x", (p) => ({ ...p, docs: [doc("Mine")] }));
+      server.unlisted.delete("x");
+      server.rows.delete("x");
+      await sync();
+      expect(useSync.getState().notice).toMatch(/Your changes are kept as your own project/);
+      expect(local("x")).toMatchObject({ teamId: null, docs: [doc("Mine")] });
+      expect(server.rows.get("x")).toMatchObject({ teamId: null, version: 1 });
+    });
+  });
+
+  it("a member can't delete a team's design system: it stays, and they are told", async () => {
+    server.rows.set("x", { version: 1, data: payloadOf(project("x")), deleted: false, teamId: "t1" });
+    await sync();
+    useProjectsStore.getState().remove("x");
+    await sync();
+    expect(server.rows.get("x")!.deleted).toBe(false);
+    expect(useSync.getState().notice).toMatch(/Only an owner of the team/);
+    expect(local("x")).toBeDefined();
+  });
+
+  it("an owner deleting it deletes it for the team, and a teammate's device drops it", async () => {
+    server.teams = [team("owner")];
+    server.rows.set("x", { version: 1, data: payloadOf(project("x")), deleted: false, teamId: "t1" });
+    await sync();
+    useProjectsStore.getState().remove("x");
+    await sync();
+    expect(server.rows.get("x")!.deleted).toBe(true);
+  });
+
+  it("a move into a team is not a deletion: the project stays, in its team", async () => {
+    useProjectsStore.setState({ projects: [project("a")] });
+    await sync();
+    const error = await useSync.getState().move("a", "t1");
+    expect(error).toBeNull();
+    expect(local("a")).toMatchObject({ teamId: "t1" });
+    expect(useSync.getState().meta.a.version).toBe(2);
+    expect(server.rows.get("a")).toMatchObject({ teamId: "t1", version: 2 });
+    expect(local("a")).toBeDefined();
+  });
+
+  it("on another device a project listed both as deleted (where it was) and alive (in the team) is the live one", async () => {
+    server.rows.set("a", { version: 1, data: payloadOf(project("a")), deleted: false });
+    await sync();
+    // The server lists the old place as deleted, and the new as alive, under the same id.
+    const list = server.handle;
+    server.handle = async (url, init) => {
+      if (url === "/api/projects" && (init?.method ?? "GET") === "GET") {
+        return server.reply(200, { projects: [
+          { id: "a", version: 2, updatedAt: 1, deleted: true, teamId: null, updatedBy: null },
+          { id: "a", version: 3, updatedAt: 1, deleted: false, teamId: "t1", updatedBy: "Grace" },
+        ] });
+      }
+      return list(url, init);
+    };
+    server.rows.set("a", { version: 3, data: payloadOf(project("a")), deleted: false, teamId: "t1", updatedBy: "Grace" });
+    await sync();
+    expect(local("a")).toMatchObject({ teamId: "t1", updatedBy: "Grace" });
+    expect(useSync.getState().conflicts.a).toBeUndefined();
+  });
+
+  it("losing several saves in a row to busy teammates is tried again, not shown as refused", async () => {
+    vi.useFakeTimers();
+    try {
+      useProjectsStore.setState({ projects: [project("a")] });
+      await sync();
+      server.alwaysBehind = true;
+      edit("a", (p) => ({ ...p, docs: [doc("Busy")] }));
+      await sync();
+      expect(useSync.getState().refused).toEqual({});
+      expect(useSync.getState().status).not.toBe("error");
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });

@@ -3,7 +3,8 @@ import { allowedEmail, isAllowed, normalizeEmail } from "./allowlist";
 import { parseAllowed, providersOf, readAuthConfig } from "./config";
 import { MIGRATIONS, closeAll, createPool, migrate, poolConfig, wrap, type Db } from "./db";
 import { completeSignIn } from "./signin";
-import { getProject, listProjects, removeProject, saveProject } from "./projects";
+import { MAX_TEAM_PROJECTS, getProject, listProjects, moveProject, removeProject, saveProject } from "./projects";
+import { MAX_MEMBERS, acceptInviteById, acceptInviteByToken, createInvite, createTeam, deleteTeam, invitesFor, listTeams, mayEnter, renameTeam, revokeInvite, roleIn, setRole, teamAccess } from "./teams";
 import type { ProjectPayload } from "../sync/payload";
 import {
   LOGIN_LINK_MINUTES, SESSION_DAYS, consumeLoginToken, createLoginToken, createSession, createUser, deleteSession, deleteUserSessions, findIdentity,
@@ -113,20 +114,20 @@ describe.skipIf(!URL)("accounts in a database", () => {
 
   beforeAll(async () => {
     pool = createPool(URL!);
-    for (const t of ["projects", "sessions", "identities", "login_tokens", "rate_buckets", "users", "schema_migrations"]) await pool.query(`DROP TABLE IF EXISTS ${t} CASCADE`);
+    for (const t of ["team_projects", "team_invites", "team_members", "teams", "projects", "sessions", "identities", "login_tokens", "rate_buckets", "users", "schema_migrations"]) await pool.query(`DROP TABLE IF EXISTS ${t} CASCADE`);
     await migrate(pool);
     db = wrap(pool);
   });
   afterAll(async () => { await pool.end(); await closeAll(); });
   beforeEach(async () => {
-    await pool.query("TRUNCATE projects, sessions, identities, login_tokens, rate_buckets, users CASCADE");
+    await pool.query("TRUNCATE team_projects, team_invites, team_members, teams, projects, sessions, identities, login_tokens, rate_buckets, users CASCADE");
   });
 
   describe("the schema", () => {
     it("has row level security on for every table, so Supabase's public API can't read any of them", async () => {
       const tables = await db.query<{ relname: string; relrowsecurity: boolean }>(
         "SELECT c.relname, c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relkind = 'r' AND n.nspname = current_schema()");
-      expect(tables.map((t) => t.relname).sort()).toEqual(["identities", "login_tokens", "projects", "rate_buckets", "schema_migrations", "sessions", "users"]);
+      expect(tables.map((t) => t.relname).sort()).toEqual(["identities", "login_tokens", "projects", "rate_buckets", "schema_migrations", "sessions", "team_invites", "team_members", "team_projects", "teams", "users"]);
       expect(tables.filter((t) => !t.relrowsecurity)).toEqual([]);
       expect(await db.query("SELECT 1 FROM pg_policies WHERE schemaname = current_schema()")).toEqual([]);
     });
@@ -309,6 +310,28 @@ describe.skipIf(!URL)("accounts in a database", () => {
   describe("letting someone in", () => {
     const list = ["ada@example.com", "@acme.io"];
 
+    it("lets in someone a team has invited, but only while the invitation or the membership holds", async () => {
+      const owner = (await createUser(db, { email: "ada@example.com" })).id;
+      const made = await createTeam(db, owner, "Team", 1000);
+      if (!made.ok) throw new Error("no team");
+      const claim = { provider: "google" as const, subject: "g-9", emails: [{ email: "linus@guests.test", verified: true }], name: "Linus" };
+      // Nothing yet: not on the list, and nobody has asked them.
+      expect(await completeSignIn(db, list, claim, 1500)).toMatchObject({ ok: false, reason: "not-allowed" });
+      const invite = await createInvite(db, made.id, owner, "linus@guests.test", 2000);
+      if (!invite.ok) throw new Error("no invite");
+      const first = await completeSignIn(db, list, claim, 3000);
+      expect(first).toMatchObject({ ok: true, created: true, user: { email: "linus@guests.test" } });
+      if (!first.ok) return;
+      await acceptInviteByToken(db, first.user, invite.token, 3500);
+      // As a member they can come back the same way, and by another way with the same address.
+      expect(await completeSignIn(db, list, claim, 4000)).toMatchObject({ ok: true, created: false });
+      expect(await completeSignIn(db, list, { ...claim, provider: "github", subject: "77" }, 4000)).toMatchObject({ ok: true, linked: true });
+      // Taken out of the team, they can't any more, by either way.
+      await setRole(db, made.id, owner, first.user.id, "remove");
+      expect(await completeSignIn(db, list, claim, 5000)).toMatchObject({ ok: false, reason: "not-allowed" });
+      expect(await completeSignIn(db, list, { ...claim, provider: "github", subject: "77" }, 5000)).toMatchObject({ ok: false, reason: "not-allowed" });
+    });
+
     it("makes an account for someone who is on the list, and remembers how they signed in", async () => {
       const r = await completeSignIn(db, list, { provider: "google", subject: "g-1", emails: [{ email: "Ada@Example.com", verified: true }], name: "Ada", avatar: "https://a.test/a.png" });
       expect(r).toMatchObject({ ok: true, created: true, linked: false, user: { email: "ada@example.com", name: "Ada" } });
@@ -387,10 +410,10 @@ describe.skipIf(!URL)("accounts in a database", () => {
     });
 
     it("keeps a new project at version 1 and returns exactly what was saved", async () => {
-      expect(await saveProject(db, ada, "p1", 0, payload(), 1000)).toEqual({ ok: true, version: 1, updatedAt: 1000 });
+      expect(await saveProject(db, ada, "p1", 0, payload(), 1000)).toEqual({ ok: true, version: 1, updatedAt: 1000, teamId: null });
       const got = await getProject(db, ada, "p1");
       expect(got).toMatchObject({ id: "p1", name: "Acme", version: 1, deleted: false, updatedAt: 1000, data: payload() });
-      expect(await listProjects(db, ada)).toEqual([{ id: "p1", version: 1, updatedAt: 1000, deleted: false }]);
+      expect(await listProjects(db, ada)).toEqual([{ id: "p1", version: 1, updatedAt: 1000, deleted: false, teamId: null, updatedBy: null }]);
     });
 
     it("keeps unicode and large content intact", async () => {
@@ -401,7 +424,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
 
     it("raises the version with each change, from a device that had the latest", async () => {
       await saveProject(db, ada, "p1", 0, payload());
-      expect(await saveProject(db, ada, "p1", 1, payload({ name: "Two" }), 2000)).toEqual({ ok: true, version: 2, updatedAt: 2000 });
+      expect(await saveProject(db, ada, "p1", 1, payload({ name: "Two" }), 2000)).toEqual({ ok: true, version: 2, updatedAt: 2000, teamId: null });
       expect((await getProject(db, ada, "p1"))!.name).toBe("Two");
     });
 
@@ -448,7 +471,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
       expect(await removeProject(db, ada, "p1", 1, 5000)).toEqual({ ok: true });
       expect(await getProject(db, ada, "p1")).toMatchObject({ deleted: true, version: 2, data: null, name: "" });
       expect(await db.query<{ data: string }>("SELECT data FROM projects WHERE id = 'p1'")).toEqual([{ data: "" }]);
-      expect(await listProjects(db, ada)).toEqual([{ id: "p1", version: 2, updatedAt: 5000, deleted: true }]);
+      expect(await listProjects(db, ada)).toEqual([{ id: "p1", version: 2, updatedAt: 5000, deleted: true, teamId: null, updatedBy: null }]);
       // Deleting it again, or one that isn't there, is fine.
       expect(await removeProject(db, ada, "p1", 1)).toEqual({ ok: true });
       expect(await removeProject(db, ada, "never", 4)).toEqual({ ok: true });
@@ -465,7 +488,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
       await saveProject(db, ada, "p1", 0, payload());
       await removeProject(db, ada, "p1", 1);
       expect(await saveProject(db, ada, "p1", 1, payload({ name: "Late" }))).toMatchObject({ ok: false, reason: "conflict", current: { deleted: true, version: 2 } });
-      expect(await saveProject(db, ada, "p1", 2, payload({ name: "Back" }), 9000)).toEqual({ ok: true, version: 3, updatedAt: 9000 });
+      expect(await saveProject(db, ada, "p1", 2, payload({ name: "Back" }), 9000)).toEqual({ ok: true, version: 3, updatedAt: 9000, teamId: null });
       expect(await getProject(db, ada, "p1")).toMatchObject({ deleted: false, name: "Back", version: 3, data: payload({ name: "Back" }) });
     });
 
@@ -480,7 +503,7 @@ describe.skipIf(!URL)("accounts in a database", () => {
     it("stops at 100 projects, counting only those not deleted", async () => {
       await db.exec("INSERT INTO projects (user_id, id, name, data, version, created_at, updated_at) SELECT ?::text, 'b' || seq, 'x', '{}', 1, 1, 1 FROM (" +
         Array.from({ length: 100 }, (_, i) => `SELECT ${i} AS seq`).join(" UNION ALL ") + ") t", [ada]);
-      expect(await saveProject(db, ada, "extra", 0, payload())).toEqual({ ok: false, reason: "limit" });
+      expect(await saveProject(db, ada, "extra", 0, payload())).toEqual({ ok: false, reason: "limit", team: false });
       await removeProject(db, ada, "b1", 1);
       expect((await saveProject(db, ada, "extra", 0, payload())).ok).toBe(true);
       // Grace has her own allowance
@@ -491,6 +514,256 @@ describe.skipIf(!URL)("accounts in a database", () => {
       await saveProject(db, ada, "p1", 0, payload());
       await db.exec("DELETE FROM users WHERE id = ?", [ada]);
       expect(await db.query("SELECT 1 FROM projects")).toHaveLength(0);
+    });
+  });
+
+  describe("teams", () => {
+    const payload = (over: Partial<ProjectPayload> = {}): ProjectPayload => ({ name: "Acme", connection: { owner: "acme", repo: "ds", defaultBranch: "main" }, tokenLink: null, tokens: { colors: [] }, docs: [], ...over });
+    let ada: string, grace: string, linus: string, team: string;
+    const allowed = ["ada@example.com", "grace@example.com"];
+    beforeEach(async () => {
+      ada = (await createUser(db, { email: "ada@example.com", name: "Ada" })).id;
+      grace = (await createUser(db, { email: "grace@example.com", name: "Grace" })).id;
+      linus = (await createUser(db, { email: "linus@guests.test", name: "Linus" })).id;
+      const made = await createTeam(db, ada, "  Design   team ", 1000);
+      if (!made.ok) throw new Error("no team");
+      team = made.id;
+    });
+    const invite = async (email: string, by = ada) => {
+      const r = await createInvite(db, team, by, email, 2000);
+      if (!r.ok) throw new Error(`invite refused: ${r.reason}`);
+      return r;
+    };
+    const join = async (userId: string, email: string) => { const r = await invite(email); return acceptInviteByToken(db, { id: userId, email }, r.token, 2500); };
+
+    describe("making and listing them", () => {
+      it("makes the creator its owner, with a tidied name", async () => {
+        expect(await roleIn(db, team, ada)).toBe("owner");
+        const teams = await listTeams(db, ada);
+        expect(teams).toHaveLength(1);
+        expect(teams[0]).toMatchObject({ name: "Design team", role: "owner" });
+        expect(teams[0].members).toEqual([{ userId: ada, name: "Ada", email: "ada@example.com", avatar: null, role: "owner" }]);
+        expect(await listTeams(db, grace)).toEqual([]);
+      });
+      it("refuses an empty or long name, and ten teams owned by one person", async () => {
+        expect(await createTeam(db, ada, "   ")).toEqual({ ok: false, reason: "name" });
+        expect(await createTeam(db, ada, "x".repeat(81))).toEqual({ ok: false, reason: "name" });
+        for (let i = 0; i < 9; i++) expect((await createTeam(db, ada, `T${i}`)).ok).toBe(true);
+        expect(await createTeam(db, ada, "one more")).toEqual({ ok: false, reason: "limit" });
+      });
+      it("shows owners the invitations that are out, and members only the people", async () => {
+        await join(grace, "grace@example.com");
+        await invite("new@example.com");
+        const asOwner = (await listTeams(db, ada, 3000))[0];
+        const asMember = (await listTeams(db, grace, 3000))[0];
+        expect(asOwner.invites.map((i) => i.email)).toEqual(["new@example.com"]);
+        expect(asMember.invites).toEqual([]);
+        expect(asMember.members.map((m) => m.name)).toEqual(["Ada", "Grace"]);
+      });
+      it("only an owner renames it", async () => {
+        await join(grace, "grace@example.com");
+        expect(await renameTeam(db, team, grace, "Mine")).toEqual({ ok: false, reason: "forbidden" });
+        expect(await renameTeam(db, team, linus, "Mine")).toEqual({ ok: false, reason: "not-found" });
+        expect(await renameTeam(db, team, ada, "Renamed")).toEqual({ ok: true });
+        expect((await listTeams(db, ada))[0].name).toBe("Renamed");
+      });
+    });
+
+    describe("invitations", () => {
+      it("are taken up from the emailed link by the address that was invited, once", async () => {
+        const r = await invite("linus@guests.test");
+        expect(await acceptInviteByToken(db, { id: grace, email: "grace@example.com" }, r.token, 3000)).toEqual({ ok: false, reason: "wrong-email" });
+        expect(await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, "nonsense", 3000)).toEqual({ ok: false, reason: "not-found" });
+        expect(await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, r.token, 3000)).toMatchObject({ ok: true, teamId: team });
+        expect(await roleIn(db, team, linus)).toBe("member");
+        expect(await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, r.token, 3001)).toEqual({ ok: false, reason: "not-found" });
+      });
+      it("only keep the hash of the token", async () => {
+        const r = await invite("linus@guests.test");
+        const rows = await db.query<{ token_hash: string }>("SELECT token_hash FROM team_invites");
+        expect(rows[0].token_hash).toHaveLength(64);
+        expect(rows[0].token_hash).not.toContain(r.token);
+      });
+      it("are taken up from the dashboard by the same address, and listed for it", async () => {
+        const r = await invite("Linus@Guests.test");
+        expect((await invitesFor(db, "linus@guests.test", 3000)).map((i) => [i.teamName, i.invitedBy])).toEqual([["Design team", "Ada"]]);
+        expect(await invitesFor(db, "grace@example.com", 3000)).toEqual([]);
+        expect(await acceptInviteById(db, { id: grace, email: "grace@example.com" }, r.id, 3000)).toEqual({ ok: false, reason: "wrong-email" });
+        expect((await acceptInviteById(db, { id: linus, email: "linus@guests.test" }, r.id, 3000)).ok).toBe(true);
+        expect(await invitesFor(db, "linus@guests.test", 3000)).toEqual([]);
+      });
+      it("expire after two weeks", async () => {
+        const r = await invite("linus@guests.test");
+        expect(await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, r.token, 2000 + 15 * 86_400_000)).toEqual({ ok: false, reason: "expired" });
+        expect(await invitesFor(db, "linus@guests.test", 2000 + 15 * 86_400_000)).toEqual([]);
+      });
+      it("inviting again replaces the earlier link, and revoking ends it", async () => {
+        const first = await invite("linus@guests.test");
+        const second = await invite("linus@guests.test");
+        expect(await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, first.token, 3000)).toEqual({ ok: false, reason: "not-found" });
+        expect(await db.query("SELECT 1 FROM team_invites")).toHaveLength(1);
+        expect(await revokeInvite(db, team, grace, second.id)).toEqual({ ok: false, reason: "not-found" });
+        expect(await revokeInvite(db, team, ada, second.id)).toEqual({ ok: true });
+        expect(await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, second.token, 3000)).toEqual({ ok: false, reason: "not-found" });
+      });
+      it("are for owners to send, to addresses that aren't in the team, up to fifty people", async () => {
+        await join(grace, "grace@example.com");
+        expect(await createInvite(db, team, grace, "x@example.com", 2000)).toEqual({ ok: false, reason: "forbidden" });
+        expect(await createInvite(db, team, linus, "x@example.com", 2000)).toEqual({ ok: false, reason: "not-found" });
+        expect(await createInvite(db, team, ada, "not an address", 2000)).toEqual({ ok: false, reason: "email" });
+        expect(await createInvite(db, team, ada, "grace@example.com", 2000)).toEqual({ ok: false, reason: "member" });
+        for (let i = 0; i < MAX_MEMBERS - 2; i++) await invite(`p${i}@example.com`);
+        expect(await createInvite(db, team, ada, "straw@example.com", 2000)).toEqual({ ok: false, reason: "limit" });
+      });
+    });
+
+    describe("who may sign in", () => {
+      it("is the server's list, or a team that has someone or has asked them", async () => {
+        expect(await mayEnter(db, "ada@example.com", allowed)).toBe(true);
+        expect(await mayEnter(db, "linus@guests.test", allowed, 2000)).toBe(false);
+        const r = await invite("linus@guests.test");
+        expect(await teamAccess(db, "linus@guests.test", 3000)).toBe(true);
+        expect(await mayEnter(db, "linus@guests.test", allowed, 3000)).toBe(true);
+        expect(await mayEnter(db, "linus@guests.test", allowed, 2000 + 15 * 86_400_000)).toBe(false);
+        await acceptInviteByToken(db, { id: linus, email: "linus@guests.test" }, r.token, 3000);
+        expect(await mayEnter(db, "linus@guests.test", allowed, 2000 + 30 * 86_400_000)).toBe(true);
+        // Out of the team, and no way in.
+        await setRole(db, team, ada, linus, "remove");
+        expect(await mayEnter(db, "linus@guests.test", allowed, 4000)).toBe(false);
+      });
+    });
+
+    describe("members and owners", () => {
+      beforeEach(async () => { await join(grace, "grace@example.com"); });
+      it("owners change roles and remove people; members don't", async () => {
+        expect(await setRole(db, team, grace, ada, "member")).toEqual({ ok: false, reason: "forbidden" });
+        expect(await setRole(db, team, ada, grace, "owner")).toEqual({ ok: true });
+        expect(await roleIn(db, team, grace)).toBe("owner");
+        expect(await setRole(db, team, ada, grace, "member")).toEqual({ ok: true });
+        expect(await setRole(db, team, ada, grace, "remove")).toEqual({ ok: true });
+        expect(await roleIn(db, team, grace)).toBeNull();
+        expect(await setRole(db, team, ada, grace, "remove")).toEqual({ ok: false, reason: "not-found" });
+      });
+      it("a member can leave, and there is always an owner", async () => {
+        expect(await setRole(db, team, grace, grace, "remove")).toEqual({ ok: true });
+        expect(await setRole(db, team, ada, ada, "remove")).toEqual({ ok: false, reason: "last-owner" });
+        expect(await setRole(db, team, ada, ada, "member")).toEqual({ ok: false, reason: "last-owner" });
+        await join(grace, "grace@example.com");
+        await setRole(db, team, ada, grace, "owner");
+        expect(await setRole(db, team, ada, ada, "remove")).toEqual({ ok: true });
+      });
+      it("two owners leaving at once can't both go", async () => {
+        await setRole(db, team, ada, grace, "owner");
+        const results = await Promise.all([setRole(db, team, ada, ada, "remove"), setRole(db, team, grace, grace, "remove")]);
+        expect(results.filter((r) => r.ok)).toHaveLength(1);
+        expect((await db.query("SELECT 1 FROM team_members WHERE team_id = ? AND role = 'owner'", [team])).length).toBe(1);
+      });
+      it("a team goes only when it has no design systems", async () => {
+        await saveProject(db, grace, "t1", 0, payload(), 3000, { teamId: team });
+        expect(await deleteTeam(db, team, grace)).toEqual({ ok: false, reason: "forbidden" });
+        expect(await deleteTeam(db, team, ada)).toEqual({ ok: false, reason: "has-projects" });
+        await removeProject(db, ada, "t1", 1, 4000);
+        expect(await deleteTeam(db, team, ada)).toEqual({ ok: true });
+        expect(await listTeams(db, ada)).toEqual([]);
+      });
+    });
+
+    describe("the team's design systems", () => {
+      beforeEach(async () => { await join(grace, "grace@example.com"); });
+      it("are made in a team by its members, and seen by all of them, with who last changed them", async () => {
+        expect(await saveProject(db, ada, "t1", 0, payload({ name: "Shared" }), 3000, { teamId: team })).toEqual({ ok: true, version: 1, updatedAt: 3000, teamId: team });
+        expect(await listProjects(db, ada)).toEqual([{ id: "t1", version: 1, updatedAt: 3000, deleted: false, teamId: team, updatedBy: "Ada" }]);
+        // Grace changes it, from the version she has.
+        expect(await saveProject(db, grace, "t1", 1, payload({ name: "Shared 2" }), 4000)).toEqual({ ok: true, version: 2, updatedAt: 4000, teamId: team });
+        expect(await getProject(db, ada, "t1")).toMatchObject({ name: "Shared 2", version: 2, teamId: team, updatedBy: "Grace", data: payload({ name: "Shared 2" }) });
+        expect((await listProjects(db, grace)).map((p) => [p.id, p.updatedBy])).toEqual([["t1", "Grace"]]);
+      });
+      it("are unseen and unreachable by anyone outside the team, and say nothing about whether an id exists", async () => {
+        await saveProject(db, ada, "t1", 0, payload(), 3000, { teamId: team });
+        expect(await listProjects(db, linus)).toEqual([]);
+        expect(await getProject(db, linus, "t1")).toBeNull();
+        // Linus saving a project with that id makes his own: nothing of the team's is touched.
+        expect((await saveProject(db, linus, "t1", 0, payload({ name: "His" }), 3500)).ok).toBe(true);
+        expect((await getProject(db, ada, "t1"))!.name).toBe("Acme");
+        // And a version he can't know about is the same answer as for something that was never there.
+        expect(await saveProject(db, linus, "t2", 5, payload())).toMatchObject({ ok: false, reason: "conflict", current: { deleted: true, version: 0 } });
+        expect(await saveProject(db, linus, "t3", 0, payload(), 3600, { teamId: team })).toEqual({ ok: false, reason: "forbidden" });
+        expect(await removeProject(db, linus, "t1", 1, 4000)).toEqual({ ok: true });
+        expect((await getProject(db, ada, "t1"))!.deleted).toBe(false);
+      });
+      it("are refused a stale version, so two people can't overwrite each other", async () => {
+        await saveProject(db, ada, "t1", 0, payload(), 3000, { teamId: team });
+        await saveProject(db, grace, "t1", 1, payload({ name: "Grace's" }), 4000);
+        expect(await saveProject(db, ada, "t1", 1, payload({ name: "Ada's" }), 5000)).toMatchObject({ ok: false, reason: "conflict", current: { name: "Grace's", version: 2 } });
+      });
+      it("take six writers at once with exactly one winner per version", async () => {
+        await saveProject(db, ada, "t1", 0, payload(), 3000, { teamId: team });
+        const results = await Promise.all([ada, grace, ada, grace, ada, grace].map((u, i) => saveProject(db, u, "t1", 1, payload({ name: `W${i}` }), 4000 + i)));
+        expect(results.filter((r) => r.ok)).toHaveLength(1);
+        expect(results.filter((r) => !r.ok && r.reason === "conflict")).toHaveLength(5);
+        expect((await getProject(db, ada, "t1"))!.version).toBe(2);
+      });
+      it("are deleted for everyone only by an owner, and members learn of it", async () => {
+        await saveProject(db, ada, "t1", 0, payload(), 3000, { teamId: team });
+        expect(await removeProject(db, grace, "t1", 1, 4000)).toEqual({ ok: false, reason: "forbidden" });
+        expect(await removeProject(db, ada, "t1", 1, 4000)).toEqual({ ok: true });
+        expect(await listProjects(db, grace)).toEqual([{ id: "t1", version: 2, updatedAt: 4000, deleted: true, teamId: team, updatedBy: "Ada" }]);
+      });
+      it("stop at a hundred a team, counting only those not deleted", async () => {
+        await db.exec("INSERT INTO team_projects (team_id, id, name, data, version, created_at, updated_at) SELECT ?::text, 'b' || seq, 'x', '{}', 1, 1, 1 FROM (" +
+          Array.from({ length: MAX_TEAM_PROJECTS }, (_, i) => `SELECT ${i} AS seq`).join(" UNION ALL ") + ") t", [team]);
+        expect(await saveProject(db, ada, "extra", 0, payload(), 3000, { teamId: team })).toEqual({ ok: false, reason: "limit", team: true });
+        await removeProject(db, ada, "b1", 1);
+        expect((await saveProject(db, ada, "extra", 0, payload(), 3000, { teamId: team })).ok).toBe(true);
+      });
+      it("are lost to a person who is taken out of the team, not to the team", async () => {
+        await saveProject(db, grace, "t1", 0, payload(), 3000, { teamId: team });
+        await setRole(db, team, ada, grace, "remove");
+        expect(await listProjects(db, grace)).toEqual([]);
+        expect(await getProject(db, grace, "t1")).toBeNull();
+        expect((await listProjects(db, ada)).map((p) => p.id)).toEqual(["t1"]);
+      });
+      it("outlive the person who made them", async () => {
+        await saveProject(db, grace, "t1", 0, payload(), 3000, { teamId: team });
+        await db.exec("DELETE FROM users WHERE id = ?", [grace]);
+        const got = await getProject(db, ada, "t1");
+        expect(got).toMatchObject({ id: "t1", deleted: false });
+        expect(got!.updatedBy).toBeNull();
+      });
+    });
+
+    describe("moving a design system", () => {
+      beforeEach(async () => { await join(grace, "grace@example.com"); });
+      it("into a team leaves a note in the old place, so devices learn it moved", async () => {
+        await saveProject(db, grace, "p1", 0, payload({ name: "Mine" }), 3000);
+        expect(await moveProject(db, grace, "p1", { teamId: team }, 4000)).toEqual({ ok: true, version: 2, teamId: team });
+        const list = await listProjects(db, grace);
+        expect(list.map((p) => [p.id, p.teamId, p.deleted]).sort()).toEqual([["p1", null, true], ["p1", team, false]]);
+        // It is the team's project now, found by its id, for every member.
+        expect(await getProject(db, grace, "p1")).toMatchObject({ teamId: team, name: "Mine", deleted: false, data: payload({ name: "Mine" }) });
+        expect(await getProject(db, ada, "p1")).toMatchObject({ teamId: team, name: "Mine" });
+      });
+      it("into a team the person isn't in, or one that doesn't exist, is refused", async () => {
+        await saveProject(db, linus, "p1", 0, payload(), 3000);
+        expect(await moveProject(db, linus, "p1", { teamId: team }, 4000)).toEqual({ ok: false, reason: "forbidden" });
+        expect(await moveProject(db, linus, "nope", { teamId: team }, 4000)).toEqual({ ok: false, reason: "not-found" });
+      });
+      it("out of a team to the owner's own is for owners, and can go back in", async () => {
+        await saveProject(db, grace, "t1", 0, payload(), 3000, { teamId: team });
+        expect(await moveProject(db, grace, "t1", { teamId: null }, 4000)).toEqual({ ok: false, reason: "forbidden" });
+        expect(await moveProject(db, ada, "t1", { teamId: null }, 4000)).toMatchObject({ ok: true, teamId: null });
+        expect((await getProject(db, ada, "t1"))).toMatchObject({ teamId: null, deleted: false });
+        expect((await getProject(db, grace, "t1"))).toMatchObject({ deleted: true });
+        // And back into the team: the old deleted note is replaced.
+        expect(await moveProject(db, ada, "t1", { teamId: team }, 5000)).toMatchObject({ ok: true, teamId: team });
+        expect(await getProject(db, grace, "t1")).toMatchObject({ teamId: team, deleted: false });
+      });
+      it("is refused where it already is", async () => {
+        await saveProject(db, ada, "p1", 0, payload(), 3000);
+        expect(await moveProject(db, ada, "p1", { teamId: null }, 4000)).toEqual({ ok: false, reason: "exists" });
+        await moveProject(db, ada, "p1", { teamId: team }, 4000);
+        expect(await moveProject(db, ada, "p1", { teamId: team }, 5000)).toEqual({ ok: false, reason: "exists" });
+      });
     });
   });
 });
