@@ -10,6 +10,9 @@ interface PreviewStore {
   mode: "playground" | "variants" | "examples" | "edit";
   // Whether previews show the tokens Motif has changed since the last sync.
   motifTokens: boolean;
+  // Which state or width the style controls (and the handles on the canvas) edit: "" for the plain classes, "hover:", "md:"...
+  editModifier: string;
+  setEditModifier: (modifier: string) => void;
   setValue: (id: string, name: string, value: unknown) => void;
   resetValues: (id: string) => void;
   setDark: (dark: boolean) => void;
@@ -25,6 +28,8 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
   // Opening a component lands in Design: the canvas you work on. "playground" is shown as Preview, to use the component.
   mode: "edit",
   motifTokens: true,
+  editModifier: "",
+  setEditModifier: (editModifier) => set({ editModifier }),
   setValue: (id, name, value) =>
     set((s) => {
       const current = { ...(s.values[id] ?? {}) };

@@ -305,6 +305,12 @@ export async function deleteElement(path: string, code: string, start: number): 
   return { ...applyEdits(code, [{ ...span, text: "" }], null), selection: null, summary: `${info?.tag ?? "element"}: deleted` };
 }
 
+// The text of an element as it is written, for copying it.
+export async function elementSource(path: string, code: string, start: number): Promise<string | null> {
+  const el = findElement(await context(path, code), start);
+  return el ? code.slice(start, el.end as number) : null;
+}
+
 export async function duplicateElement(path: string, code: string, start: number): Promise<EditResult | null> {
   const ctx = await context(path, code);
   const el = findElement(ctx, start);

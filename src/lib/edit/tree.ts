@@ -71,6 +71,34 @@ export async function elementTree(path: string, code: string, component: string)
   return out;
 }
 
+// Where the keyboard goes from an element: out to the one around it, into its first one, along to the one before or after.
+// Only elements that can be picked count (a component is shown in the tree but can't be selected).
+export interface Relatives { parent: number | null; firstChild: number | null; previous: number | null; next: number | null }
+
+export function relatives(tree: TreeNode[], start: number): Relatives {
+  const none: Relatives = { parent: null, firstChild: null, previous: null, next: null };
+  const search = (nodes: TreeNode[], parent: TreeNode | null): Relatives | null => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.start === start) {
+        const pickable = (list: TreeNode[]) => list.filter((n) => n.selectable);
+        const siblings = pickable(nodes);
+        const at = siblings.findIndex((n) => n.start === start);
+        return {
+          parent: parent && parent.selectable ? parent.start : null,
+          firstChild: pickable(node.children)[0]?.start ?? null,
+          previous: at > 0 ? siblings[at - 1].start : null,
+          next: at >= 0 && at < siblings.length - 1 ? siblings[at + 1].start : null,
+        };
+      }
+      const inner = search(node.children, node);
+      if (inner) return inner;
+    }
+    return null;
+  };
+  return search(tree, null) ?? none;
+}
+
 // The element at `start` and the elements above it, outermost first, so the tree can open to a selection.
 export function pathTo(tree: TreeNode[], start: number): number[] {
   for (const node of tree) {

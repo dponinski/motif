@@ -7,6 +7,13 @@ import { cn } from "@/lib/utils";
 // of the component).
 export const StageZoom = createContext(1);
 
+// Tells what is listening how far the canvas is zoomed (the page inside the frame draws its handles by it).
+export function ZoomSync({ onZoom }: { onZoom: (zoom: number) => void }) {
+  const zoom = useContext(StageZoom);
+  useEffect(() => { onZoom(zoom); }, [zoom, onZoom]);
+  return null;
+}
+
 export const MIN_WIDTH = 200;
 export const MAX_WIDTH = 3000;
 const clampWidth = (w: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(w)));
