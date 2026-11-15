@@ -171,12 +171,16 @@ const check = (name, ok, detail = "") => {
 
   // ── Changing a block ─────────────────────────────────────────────────────
   const block = paper.locator(".md-block", { has: page.locator('iframe[title="Button preview"]') });
-  // A block's controls show while the pointer is over it. The page can move after the pointer got there (a preview loading, a block
-  // added), so the pointer is put back over the block until the control shows, and then the control is used.
+  // A block's controls show while the pointer is over it, and the page moves under a pointer that stays still (a preview that is loading
+  // changes the block's height, which can leave the pointer outside it). So the pointer is put over the block and the control used as
+  // one attempt, and tried again if the control went before it was used.
   const pick = async (box, label, option) => {
-    const control = box.getByLabel(label);
-    for (let i = 0; i < 100 && !(await control.isVisible()); i++) { await box.hover(); await page.waitForTimeout(100); }
-    await control.selectOption(option);
+    let last = null;
+    for (let i = 0; i < 20; i++) {
+      await box.hover();
+      try { await box.getByLabel(label).selectOption(option, { timeout: 1500 }); return; } catch (e) { last = e; }
+    }
+    throw last;
   };
   await pick(block, "Preview shows", "single");
   check("a preview can show one instead of every variant", await settle(async () => (await preview("Button").locator("#root button").count()) === 1));
