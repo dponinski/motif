@@ -141,7 +141,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
 ];
 
 export default function RepoComponentPanel({ component }: { component: LibraryComponent }) {
-  const editing = usePreviewStore((s) => s.mode === "edit");
+  const editing = usePreviewStore((s) => s.mode === "edit" || s.mode === "variants");
   const source = useLibraryStore((s) => s.source);
   const connection = useGitStore((s) => s.connection);
   const [tab, setTab] = useState<Tab>("design");
@@ -151,7 +151,7 @@ export default function RepoComponentPanel({ component }: { component: LibraryCo
     return <div className="flex-1 select-text overflow-y-auto"><PropsContent component={component} /></div>;
   }
   return (
-    <Tabs.Root value={tab} onValueChange={(v) => setTab(v as Tab)} className="flex min-h-0 flex-1 flex-col">
+    <Tabs.Root value={tab} onValueChange={(v) => setTab(v as Tab)} data-tour="panel" className="flex min-h-0 flex-1 flex-col">
       <Tabs.List aria-label="Component panel" className="flex flex-shrink-0 border-b border-surface-border bg-surface-raised">
         {TABS.map((t) => (
           <Tabs.Trigger

@@ -171,11 +171,20 @@ const check = (name, ok, detail = "") => {
 
   // ── Changing a block ─────────────────────────────────────────────────────
   const block = paper.locator(".md-block", { has: page.locator('iframe[title="Button preview"]') });
-  await block.hover();
-  await block.getByLabel("Preview shows").selectOption("single");
+  // A block's controls show while the pointer is over it, and the page moves under a pointer that stays still (a preview that is loading
+  // changes the block's height, which can leave the pointer outside it). So the pointer is put over the block and the control used as
+  // one attempt, and tried again if the control went before it was used.
+  const pick = async (box, label, option) => {
+    let last = null;
+    for (let i = 0; i < 20; i++) {
+      await box.hover();
+      try { await box.getByLabel(label).selectOption(option, { timeout: 1500 }); return; } catch (e) { last = e; }
+    }
+    throw last;
+  };
+  await pick(block, "Preview shows", "single");
   check("a preview can show one instead of every variant", await settle(async () => (await preview("Button").locator("#root button").count()) === 1));
-  await block.hover();
-  await block.getByLabel("Repository component").selectOption({ label: "Badge" });
+  await pick(block, "Repository component", { label: "Badge" });
   check("or another component", await settle(async () => (await page.locator('iframe[title="Badge preview"]').count()) === 1));
   await preview("Badge").locator("#root span.rounded-full").waitFor({ timeout: 60000 });
 
@@ -186,10 +195,8 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("menuitem", { name: "Component preview" }).click();
   const added = paper.locator(".md-block").nth(1);
   check("a block can be added to any page, for any imported component", (await added.count()) === 1);
-  await added.hover();
-  await added.getByLabel("Repository component").selectOption({ label: "Alert" });
-  await added.hover();
-  await added.getByLabel("Preview shows").selectOption("variants");
+  await pick(added, "Repository component", { label: "Alert" });
+  await pick(added, "Preview shows", "variants");
   check("and it runs", await settle(async () => (await page.locator('iframe[title="Alert preview"]').count()) === 1));
   await page.screenshot({ path: `${OUT}/docsr-own-page.png` });
 

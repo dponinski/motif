@@ -174,6 +174,7 @@ export default function StageCanvas({
     <div
       ref={box}
       data-stage-canvas
+      data-tour="canvas"
       className={cn("relative h-full w-full overflow-hidden bg-surface-base", panning ? "cursor-grabbing" : "cursor-default")}
       style={{ backgroundImage: "radial-gradient(var(--surface-border) 1px, transparent 1px)", backgroundSize: `${dot}px ${dot}px`, backgroundPosition: `${view.x}px ${view.y}px` }}
       onPointerDown={onPointerDown}

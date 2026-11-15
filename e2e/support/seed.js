@@ -14,6 +14,8 @@ async function seedAt(base, page, id, { repo = "acme/ds", token = "t", name = "A
       ...extra,
     };
     localStorage.setItem("motif-projects", JSON.stringify({ state: { projects: [project] }, version: 1 }));
+    // The first-run tour is not part of what the suites are about (e2e/tour.js clears this).
+    localStorage.setItem("motif-tour-done", "1");
     localStorage.setItem("motif-theme", JSON.stringify({ state: { mode: "light" }, version: 0 }));
   }, [id, repo, token, name, extra]);
 }
