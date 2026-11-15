@@ -2,6 +2,7 @@ import { rateSupport, scanComponentFile, type ScannedComponent } from "./compone
 import { detectStack, type PackageJson } from "./detect";
 import { Resolver, normalize } from "./model";
 import { isIgnoredPath, isLibraryPath, mapLimit } from "./source";
+import { tokenUsage, type UsageSource } from "./usage";
 import { finalizeTokens, newAccumulator, scanCss, scanTailwindConfig, scanTokenJson } from "./tokens";
 import type { RepoAnalysis, RepoSource, StylingSystem } from "./types";
 
@@ -145,12 +146,14 @@ export async function scanRepository(
   const usage: Partial<Record<StylingSystem, number>> = {};
   let libraryFiles = 0;
 
+  const usageSources: UsageSource[] = cssFiles.map((f) => ({ path: f.path, text: f.text, css: true }));
   const readComponents = !options.tokensOnly;
   if (readComponents && early.supported) {
     const all = paths.filter((p) => /\.[jt]sx$/.test(p) && isLibraryPath(p));
     if (all.length > MAX_COMPONENT_FILES) warnings.push(`Only the first ${MAX_COMPONENT_FILES} of ${all.length} component files were read`);
     const results = await mapLimit(all.slice(0, MAX_COMPONENT_FILES), 8, async (path) => {
       const model = await resolver.model(path);
+      if (model) usageSources.push({ path, text: model.code, css: false });
       return model ? scanComponentFile(model, resolver) : null;
     });
     for (const result of results) {
@@ -189,6 +192,7 @@ export async function scanRepository(
     stack,
     themes,
     tokens,
+    ...(options.tokensOnly ? {} : { tokenUsage: tokenUsage({ tokens, themes, tailwind: stack.tailwindVersion, sources: usageSources }) }),
     components,
     styleFiles: cssPaths,
     tailwindEntry: cssFiles.find((f) => /@import\s+["']tailwindcss["']/.test(f.text))?.path ?? null,

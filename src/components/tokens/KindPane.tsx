@@ -37,6 +37,8 @@ const chip = (on: boolean) => cn("rounded-full border px-2 py-0.5 text-2xs trans
 export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: TokenSet; sets: TokenSet[] }) {
   const ds = () => useDesignSystemStore.getState();
   const rows = useRows(kind, set.id, set.themes);
+  // Whether the repository has been counted for where its tokens are used.
+  const counted = rows.some((r) => r.use !== null);
   const hasRepo = useGitStore((s) => !!(s.tokenLink || s.analysis));
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<Only>("all");
@@ -170,9 +172,12 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
           <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <input ref={search} aria-label="Search tokens" placeholder="Search (press /)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setQuery(""); e.currentTarget.blur(); } }} className="w-52 rounded border border-surface-border bg-surface-base py-1 pl-6 pr-2 text-xs text-text-primary outline-none focus:border-accent" />
         </label>
-        {([["all", "All"], ["changed", "Changed"], ["unsynced", "Not in repository"], ["readonly", "Read-only"]] as [Only, string][]).map(([id, label]) => (
+        {([["all", "All"], ["changed", "Changed"], ["unsynced", "Not in repository"], ["readonly", "Read-only"], ...(counted ? [["unused", "Unused"]] : [])] as [Only, string][]).map(([id, label]) => (
           <button key={id} type="button" aria-pressed={only === id} onClick={() => setOnly(id)} className={chip(only === id)}>{label}</button>
         ))}
+        {!counted && hasRepo && rows.some((r) => r.linked) && (
+          <button type="button" disabled title="Scan the repository again (in the Git panel) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
+        )}
         <div className="flex-1" />
         <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>
         {showTheme && (

@@ -85,6 +85,12 @@ export interface RepoComponent {
   notes: string[];
 }
 
+// Where a token is used in the repository: how many times, and in which files (the ones that use it most first).
+export interface TokenUse {
+  n: number;
+  files: string[];
+}
+
 export interface RepoAnalysis {
   repo: string;
   ref: string;
@@ -92,6 +98,8 @@ export interface RepoAnalysis {
   stack: RepoStack;
   themes: string[];
   tokens: RepoToken[];
+  // By token name. Absent in a scan that only read tokens, and in one made before this was counted; a token that is not in it is unused.
+  tokenUsage?: Record<string, TokenUse>;
   components: RepoComponent[];
   // Stylesheets that were read, and the one that imports Tailwind (where a new tokens file would be imported).
   styleFiles: string[];
