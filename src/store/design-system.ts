@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
+import { normalizeColor } from "@/lib/token-sync/color";
+import { deriveGroup, uniqueName } from "@/lib/tokens/organize";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
 
@@ -36,6 +38,8 @@ export interface TypographyToken {
   fontWeight: number;
   lineHeight: number;
   letterSpacing?: number;
+  // Motif's own way of arranging tokens; never sent to a repository.
+  group?: string;
   setId: string;
 }
 
@@ -43,6 +47,7 @@ export interface SpacingToken {
   id: string;
   name: string;
   value: number;
+  group?: string;
   setId: string;
   repoName?: string;
 }
@@ -51,6 +56,7 @@ export interface RadiusToken {
   id: string;
   name: string;
   value: number;
+  group?: string;
   setId: string;
   repoName?: string;
 }
@@ -78,6 +84,11 @@ export interface ComponentDefinition {
   description: string;
   defaultProps: Record<string, unknown>;
 }
+
+export type TokenKind = "color" | "typography" | "spacing" | "radius" | "shadow";
+
+// What a token is in a group when nothing says.
+export const DEFAULT_GROUP = "base";
 
 // ── Store interface ───────────────────────────────────────────────────────────
 
@@ -123,6 +134,23 @@ interface DesignSystemStore {
   addShadow: (token: Omit<ShadowToken, "id">) => void;
   updateShadow: (id: string, updates: Partial<ShadowToken>) => void;
   deleteShadow: (id: string) => void;
+
+  // Arranging tokens. Each takes the kind of token and the ids; the screen makes each one step of its undo.
+  // A token the repository names can't be renamed here: the repository's name is what Sync matches it by.
+  renameToken: (kind: TokenKind, id: string, name: string) => boolean;
+  setTokenGroup: (kind: TokenKind, ids: string[], group: string) => void;
+  moveTokensToSet: (kind: TokenKind, ids: string[], setId: string) => void;
+  duplicateTokens: (kind: TokenKind, ids: string[]) => string[];
+  deleteTokens: (kind: TokenKind, ids: string[]) => void;
+  renameGroup: (kind: TokenKind, setId: string, from: string, to: string) => void;
+  // Puts the tokens before another (or last) and, when a group is given, in it.
+  moveTokensBefore: (kind: TokenKind, ids: string[], beforeId: string | null, group?: string) => void;
+  // Re-derives the group of every color of a set from its names.
+  regroupColors: (setId: string) => void;
+  // A color's value in one theme, written as typed when it is a color Motif can read.
+  setColorText: (id: string, themeId: string, text: string) => boolean;
+  // Puts the tokens back as they were (for undo and redo).
+  replaceTokenData: (data: TokenData) => void;
 
   loadTokens: (data: {
     colors?: ColorToken[];
@@ -192,6 +220,23 @@ function toKebab(name: string): string {
   return name.replace(/[^a-zA-Z0-9-]/g, "-").replace(/-+/g, "-").toLowerCase();
 }
 
+
+const SLICE = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows" } as const;
+
+type Arranged = { id: string; name: string; setId: string; group?: string; repoName?: string };
+const listOf = (s: TokenData, kind: TokenKind) => s[SLICE[kind]] as unknown as Arranged[];
+const withList = (kind: TokenKind, list: Arranged[]) => ({ [SLICE[kind]]: list }) as unknown as Partial<TokenData>;
+
+// A color moved to another set keeps what it was in each theme the two sets share by name, and the active theme's value elsewhere.
+function remapThemes(c: ColorToken, from: TokenSet | undefined, to: TokenSet): Record<string, string> {
+  const out: Record<string, string> = {};
+  const fallback = (from && c.themeValues[from.activeThemeId]) ?? c.value;
+  for (const t of to.themes) {
+    const same = from?.themes.find((x) => x.name.toLowerCase() === t.name.toLowerCase());
+    out[t.id] = (same && c.themeValues[same.id]) ?? fallback;
+  }
+  return out;
+}
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
@@ -377,6 +422,98 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         })),
       deleteShadow: (id) =>
         set((s) => ({ shadows: s.shadows.filter((sh) => sh.id !== id) })),
+
+      // ── Arranging ────────────────────────────────────────────────────────
+
+      renameToken: (kind, id, name) => {
+        const clean = name.trim();
+        const token = listOf(get(), kind).find((t) => t.id === id);
+        if (!token || !clean || clean === token.name || token.repoName) return false;
+        set((s) => withList(kind, listOf(s, kind).map((t) => (t.id === id ? { ...t, name: clean } : t))) as never);
+        return true;
+      },
+
+      setTokenGroup: (kind, ids, group) =>
+        set((s) => withList(kind, listOf(s, kind).map((t) => (ids.includes(t.id) ? { ...t, group } : t))) as never),
+
+      moveTokensToSet: (kind, ids, setId) =>
+        set((s) => {
+          const target = s.sets.find((x) => x.id === setId);
+          if (!target) return {};
+          const next = listOf(s, kind).map((t) => {
+            if (!ids.includes(t.id) || t.setId === setId) return t;
+            const moved = { ...t, setId };
+            // In the new set the token is a token of Motif's own until it is synced there.
+            delete moved.repoName;
+            if (kind === "color") {
+              const c = moved as unknown as ColorToken;
+              c.themeValues = remapThemes(t as unknown as ColorToken, s.sets.find((x) => x.id === t.setId), target);
+              c.value = c.themeValues[target.activeThemeId] ?? Object.values(c.themeValues)[0] ?? c.value;
+            }
+            return moved;
+          });
+          return withList(kind, next) as never;
+        }),
+
+      duplicateTokens: (kind, ids) => {
+        const made: string[] = [];
+        set((s) => {
+          const out = [...listOf(s, kind)];
+          for (const id of ids) {
+            const at = out.findIndex((t) => t.id === id);
+            if (at < 0) continue;
+            const source = out[at];
+            const taken = out.filter((t) => t.setId === source.setId).map((t) => t.name);
+            const copy = { ...source, id: nanoid(6), name: uniqueName(source.name, taken) } as Arranged;
+            // A copy is Motif's own: it isn't the repository's token.
+            delete copy.repoName;
+            if (kind === "color") (copy as unknown as ColorToken).themeValues = { ...(source as unknown as ColorToken).themeValues };
+            out.splice(at + 1, 0, copy);
+            made.push(copy.id);
+          }
+          return withList(kind, out) as never;
+        });
+        return made;
+      },
+
+      deleteTokens: (kind, ids) =>
+        set((s) => withList(kind, listOf(s, kind).filter((t) => !ids.includes(t.id))) as never),
+
+      renameGroup: (kind, setId, from, to) =>
+        set((s) => withList(kind, listOf(s, kind).map((t) => (t.setId === setId && (t.group ?? DEFAULT_GROUP) === from ? { ...t, group: to } : t))) as never),
+
+      moveTokensBefore: (kind, ids, beforeId, group) =>
+        set((s) => {
+          const list = listOf(s, kind);
+          const moving = list.filter((t) => ids.includes(t.id)).map((t) => (group === undefined ? t : { ...t, group }));
+          const rest = list.filter((t) => !ids.includes(t.id));
+          const at = beforeId === null ? rest.length : rest.findIndex((t) => t.id === beforeId);
+          rest.splice(at < 0 ? rest.length : at, 0, ...moving);
+          return withList(kind, rest) as never;
+        }),
+
+      regroupColors: (setId) =>
+        set((s) => {
+          const names = s.colors.filter((c) => c.setId === setId).map((c) => c.repoName ?? c.name);
+          return { colors: s.colors.map((c) => (c.setId === setId ? { ...c, group: deriveGroup(c.repoName ?? c.name, names) } : c)) };
+        }),
+
+      setColorText: (id, themeId, text) => {
+        const typed = text.trim();
+        if (!typed || normalizeColor(typed) === null) return false;
+        set((s) => ({
+          colors: s.colors.map((c) => {
+            if (c.id !== id) return c;
+            const themeValues = { ...c.themeValues, [themeId]: typed };
+            const tokenSet = s.sets.find((st) => st.id === c.setId);
+            return { ...c, themeValues, value: tokenSet?.activeThemeId === themeId ? typed : c.value };
+          }),
+        }));
+        return true;
+      },
+
+      replaceTokenData: (data) =>
+        set({ sets: data.sets, colors: data.colors, typography: data.typography, spacing: data.spacing, radii: data.radii, shadows: data.shadows, components: data.components }),
 
       // ── Load / Export / Import ──────────────────────────────────────────────
 

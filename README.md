@@ -286,6 +286,16 @@ It can answer in words (review a component for accessibility or consistency, nam
 
 It cannot add, remove or move elements, change props or variants, or edit anything the inspector can't. The chat starts again when another project is opened.
 
+## The Tokens screen
+
+Tokens are what a design system is made of, so the screen reads like one.
+
+- **Palette**: a color group is a **ramp** (`gray-50` … `gray-900`): swatches in step order, each with its hex, **Light and Dark side by side** (or one theme, from the list above the palette). Press a swatch to edit it: the value for each theme (hex, `rgb()`, `oklch()`, any color Motif can read; what isn't one is refused), the picker, how it reads on white and on black (WCAG grades), its group, copy as hex or `var()`, duplicate, delete. **List** shows one row per token instead, with the values editable where they stand. The view you used last is remembered. Spacing is shown as bars with px and rem, radii as shapes, shadows as cards, text styles as specimens.
+- **Adding**: **Add** on a group opens a row for a new token with its name already suggested (`primary-950` after `primary-900`). Type a hex and press Enter: it is added and the row stays for the next, so a ramp is a run of hex codes. A color pasted where the name goes is taken as the value. **New group** makes a group.
+- **Organizing**: **search** (press `/`) finds tokens by name, group or value; the chips narrow to *Changed* since the last sync, *Not in repository* or *Read-only*. Click a name to rename it in place, and double-click a group's name to rename the group. Pick tokens with the checkboxes (or Shift-click a range, Ctrl/Cmd-click to add), and a bar offers **Move to group**, **Move to set**, **Duplicate** and **Delete** (which asks once more, and says so when the repository will bring a token back at the next sync). **Drag** a token by its handle onto a group's header to move it there, or between two tokens to put it there. **Regroup by name** files every color under the group its name says: a ramp is a group, `primary` and `primary-foreground` are one. Keys: `Delete`, `Ctrl/Cmd+D`, `Ctrl/Cmd+A`, `Esc`.
+- **Undo**: **Undo** and **Redo** (Ctrl/Cmd+Z, with Shift to redo) take back what was done on the screen, a bulk move or a pasted batch being one step. A sync or the assistant changing the tokens ends the history, so undo never takes back something it didn't make.
+- **What belongs to Motif and what to the repository**: groups, their order and the sets are Motif's own and are never sent. **A token the repository names can't be renamed here**, because Sync matches it by that name (it shows a lock where it is defined somewhere Motif can't edit yet); a copy of it, a token added here, or one moved to another set is Motif's own until it is synced.
+
 ## Syncing tokens with a repository
 
 Open **Sync tokens** in the Git panel (or **Repo sync** in the Tokens view) with a repository connected. Sending them is **Sync** (see above); this dialog links a set to the repository and resolves what the repository changed. Syncing needs a token with Contents and Pull requests read and write.

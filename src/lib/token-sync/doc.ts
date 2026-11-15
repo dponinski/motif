@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import type { ColorToken, RadiusToken, ShadowToken, SpacingToken } from "../../store/design-system";
 import type { RepoToken } from "../repo-scan/types";
 import { normalizeColor } from "./color";
+import { deriveGroup } from "../tokens/organize";
 import { normalizeShadow, parseLengthPx, parseShadow, shadowKey } from "./values";
 
 // What is compared between Motif and a repository: tokens by repository name, each with one
@@ -127,10 +128,9 @@ export function readMotifTokens(state: TokenSlices, link: LinkShape): SyncDoc {
 
 // ── Applying a document to Motif ──────────────────────────────────────────────
 
-// "primary" and "primary-foreground" share a group; everything else is "base".
+// A ramp (`gray-50` … `gray-950`) is a group, and so are "primary" and "primary-foreground"; everything else is "base".
 export function colorGroup(name: string, all: string[]): string {
-  const stem = name.replace(/-foreground$/, "");
-  return all.includes(stem) && all.includes(`${stem}-foreground`) ? stem : "base";
+  return deriveGroup(name, all);
 }
 
 const firstValue = (t: SyncToken, baseTheme: string) => t.values[baseTheme] ?? Object.values(t.values)[0];
