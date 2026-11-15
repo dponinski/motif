@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Palette as PaletteIcon, Rows3, Search, Wand2 } from "lucide-react";
+import { ListPlus, Palette as PaletteIcon, Rows3, Search, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { filterItems, groupItems, nextName, sortForReading, uniqueName, type Only } from "@/lib/tokens/organize";
 import { normalizeColor } from "@/lib/token-sync/color";
@@ -9,6 +9,7 @@ import { useDesignSystemStore, type TokenKind, type TokenSet } from "@/store/des
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
 import { AddRow, type AddField } from "./fields";
+import AddTokensDialog from "./AddTokensDialog";
 import GroupedTokens from "./GroupedTokens";
 import BulkBar from "./BulkBar";
 import { ListBody, ListHead, PaletteBody, type ColorCtx } from "./ColorViews";
@@ -43,6 +44,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   const [themeId, setThemeId] = useState<string>("all");
   const [adding, setAdding] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [addMany, setAddMany] = useState(false);
   const search = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(() => filterItems(rows, query, only), [rows, query, only]);
@@ -150,7 +152,10 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
     <div className="flex flex-col items-center gap-2 px-6 py-16 text-center" data-empty>
       <p className="text-sm font-medium text-text-primary">No {NOUN[kind]} tokens in {set.name} yet</p>
       <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">Add the first one below, or bring them in from the repository with Repo sync.</p>
-      <button type="button" onClick={() => setAdding("base")} className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90">Add a {NOUN[kind]}</button>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setAdding("base")} className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90">Add a {NOUN[kind]}</button>
+        <button type="button" onClick={() => setAddMany(true)} className="rounded border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>
+      </div>
     </div>
   ) : (
     <p className="px-6 py-10 text-center text-xs text-text-tertiary" data-no-match>Nothing matches{query ? ` “${query}”` : ""}.</p>
@@ -168,6 +173,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
           <button key={id} type="button" aria-pressed={only === id} onClick={() => setOnly(id)} className={chip(only === id)}>{label}</button>
         ))}
         <div className="flex-1" />
+        <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>
         {showTheme && (
           <select aria-label="Theme shown" value={themeId} onChange={(e) => setThemeId(e.target.value)} className="rounded border border-surface-border bg-surface-base px-1.5 py-1 text-xs text-text-secondary outline-none">
             <option value="all">All themes</option>
@@ -197,6 +203,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
         onClear={selection.clear}
       />
 
+      <AddTokensDialog open={addMany} onOpenChange={setAddMany} set={set} kind={kind} />
       {colorsView && view === "list" && rows.length > 0 && <ListHead ctx={colorCtx} />}
       <GroupedTokens
         rows={filtered}
