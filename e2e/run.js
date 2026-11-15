@@ -14,7 +14,7 @@ const path = require("path");
 const { ROOT, APP_PORT, APP_URL } = require("./support/env");
 
 // Use the shared server.
-const SHARED = ["build", "canvas", "chat", "direct", "insert", "docs-repo", "docs", "edit", "empty", "import", "migrate", "persist", "preview", "projects", "props", "repo", "stage", "states", "structure", "sync-flow", "sync-mixed", "tokenpick", "tokens", "variants", "compare", "tour", "tokens-screen"];
+const SHARED = ["build", "canvas", "chat", "direct", "insert", "docs-repo", "docs", "edit", "empty", "import", "migrate", "persist", "preview", "projects", "props", "repo", "stage", "states", "structure", "sync-flow", "sync-mixed", "tokenpick", "tokens", "variants", "compare", "tour", "tokens-screen", "tokens-add"];
 // Start a server of their own, with no database.
 const OWN = ["signin"];
 // Start a server of their own, and need PostgreSQL.
