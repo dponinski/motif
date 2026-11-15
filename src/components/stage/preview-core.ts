@@ -6,6 +6,8 @@ import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
 import { changedValues, tokenOverrides } from "@/lib/preview/overrides";
 import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import { readMotifTokens, resolveInDoc } from "@/lib/token-sync/doc";
+import { motifOnlyTokens } from "@/lib/edit/motif-tokens";
+import type { RepoToken } from "@/lib/repo-scan/types";
 import { aliasTarget } from "@/lib/tokens/alias";
 import { EMPTY_INDEX, buildTokenIndex, type TokenIndex } from "@/lib/edit/tokens";
 import { useDesignSystemStore } from "@/store/design-system";
@@ -70,7 +72,7 @@ export function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, 
 
 
 // What Motif has changed in its tokens since the last sync, as CSS for a preview, when the user has it switched on.
-export function useTokenOverrides(repo: string | null): { css: string; changed: string[]; shown: string } {
+export function useTokenOverrides(repo: string | null): { css: string; changed: string[]; shown: string; theme: string } {
   const link = useGitStore((s) => s.tokenLink);
   const motifTokens = usePreviewStore((s) => s.motifTokens);
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
@@ -78,7 +80,13 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
     () => (link && repo && link.repo === repo ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes)) : { css: "", changed: [] as string[] }),
     [link, repo, colors, spacing, radii, shadows]
   );
-  return { ...motif, shown: motifTokens ? motif.css : "" };
+  // A Tailwind 4 preview has a class for a token the repository doesn't have only when told, in a stylesheet of its own.
+  const analysis = useGitStore((s) => s.analysis);
+  const theme = useMemo(() => {
+    if (!analysis || !link || !repo || link.repo !== repo || analysis.stack.tailwindVersion !== 4) return "";
+    return motifOnlyTokens(readMotifTokens({ colors, spacing, radii, shadows }, link), analysis.tokens, 4).themeCss;
+  }, [analysis, link, repo, colors, spacing, radii, shadows]);
+  return { ...motif, shown: motifTokens ? motif.css : "", theme: motifTokens ? theme : "" };
 }
 
 // The graph of one component, kept for as long as the import is current and shared by everything that shows it.
@@ -108,6 +116,12 @@ export function useTokenIndex(repo: string | null): TokenIndex {
   return useMemo(() => {
     if (!analysis || !repo || analysis.repo !== repo) return EMPTY_INDEX;
     let overrides: Record<string, Record<string, string>> = {};
+    let extra: RepoToken[] = [];
+    if (link && link.repo === repo) {
+      const current = readMotifTokens({ colors, spacing, radii, shadows }, link);
+      // The tokens Motif has made and the repository hasn't got yet are offered like any other.
+      extra = motifOnlyTokens(current, analysis.tokens, analysis.stack.tailwindVersion).tokens;
+    }
     if (motifTokens && link && link.repo === repo) {
       const current = readMotifTokens({ colors, spacing, radii, shadows }, link);
       overrides = changedValues(current, link.base);
@@ -119,6 +133,6 @@ export function useTokenIndex(repo: string | null): TokenIndex {
       }
     }
     // Without Tailwind the tokens are the repository's CSS variables, and a stylesheet's controls offer them by name.
-    return buildTokenIndex(analysis.tokens, analysis.themes, analysis.stack.tailwindVersion, overrides, analysis.stack.tailwindVersion === null);
+    return buildTokenIndex([...analysis.tokens, ...extra], analysis.themes, analysis.stack.tailwindVersion, overrides, analysis.stack.tailwindVersion === null);
   }, [analysis, repo, link, motifTokens, colors, spacing, radii, shadows]);
 }

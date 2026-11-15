@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ClassGroup } from "@/lib/edit/classes";
 import { choicesFor, isFlagged, splitOpacity, statusOf, suggest, swatchOf, type Choice, type TokenIndex } from "@/lib/edit/tokens";
@@ -247,10 +247,75 @@ export function fieldStatus(group: ClassGroup, value: string | null, index: Toke
   return statusOf(group.role, value, index) === "token" ? "token" : null;
 }
 
+// What it takes to make a written-out value a token (see `useSaveToken`).
+export interface SaveToken {
+  // The prefix the name carries so a class can name it, or why it can't be done here.
+  plan: { prefix: string } | { reason: string };
+  kind: "color" | "radius" | "spacing";
+  prefix: string;
+  // The value, as the token will have it ("#1d4ed8", "10px").
+  value: string;
+  suggested: string;
+  taken: (name: string) => boolean;
+  // Adds the token, and uses it where the value was.
+  save: (name: string) => void;
+}
+
+// A name for the token, and the press that makes it and uses it.
+function SaveAsToken({ label, save }: { label: string; save: SaveToken }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const reason = "reason" in save.plan ? save.plan.reason : null;
+  const typed = name.trim();
+  const problem = !typed ? "Give it a name" : save.taken(typed) ? "A token has that name" : null;
+  const go = () => { if (problem || reason) return; save.save(typed); setOpen(false); };
+  return (
+    <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (o) setName(save.suggested); }}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          disabled={!!reason}
+          aria-label={`Save ${label} as a token`}
+          title={reason ?? "Make this value a token, and use it here"}
+          className="flex items-center gap-1 rounded border border-amber-500/40 px-1.5 py-0.5 text-text-primary hover:bg-amber-500/10 disabled:opacity-40 disabled:hover:bg-transparent"
+        >
+          <Plus size={10} /> Save as token…
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content side="left" align="start" sideOffset={10} collisionPadding={8} aria-label={`Save ${label} as a token`} className="z-50 w-64 rounded-lg border border-surface-border bg-surface-raised p-3 text-xs text-text-primary shadow-2xl" onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).querySelector("input")?.select(); }}>
+          <p className="mb-2 flex items-center gap-1.5 text-text-secondary">
+            {save.kind === "color" && <Swatch color={swatchOf(save.value)} className="h-3.5 w-3.5" />}
+            <span className="font-mono">{save.value}</span>
+          </p>
+          <label className="flex flex-col gap-1 text-2xs text-text-tertiary">
+            Name
+            <span className="flex items-center gap-1">
+              {save.prefix && <span className="font-mono text-text-tertiary">{save.prefix}</span>}
+              <input
+                className={cn("input-sm min-w-0 flex-1", problem && typed && "border-red-500/60")}
+                aria-label={`Name of the new ${save.kind} token`}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); go(); } }}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </span>
+          </label>
+          <p className="mt-1.5 min-h-[1rem] text-2xs text-text-tertiary">{problem && typed ? problem : "It goes in the tokens linked to the repository, and is sent with the next sync."}</p>
+          <button type="button" disabled={!!problem} onClick={go} className="mt-1 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Save and use</button>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 // Under a field whose value is written out: what is wrong with it, and one press to make it the token it matches.
 export function RawHint({
-  group, label, value, index, onUse, indent = true,
+  group, label, value, index, onUse, save, indent = true,
 }: {
+  save?: SaveToken | null;
   group: ClassGroup;
   label: string;
   value: string | null;
@@ -261,6 +326,7 @@ export function RawHint({
 }) {
   if (!group.role || value === null || !isFlagged(group.role, value, index)) return null;
   const found = suggest(group, value, index);
+  // `save` goes only to a value with no token that is the same (see `useSaveToken`).
   const palette = statusOf(group.role, value, index) === "palette";
   const name = found ? shown(found.value) : "";
   return (
@@ -278,6 +344,7 @@ export function RawHint({
           {found.exact ? "Use" : "Closest:"} {name}{!found.swatch && found.hint ? ` (${found.hint})` : ""}
         </button>
       )}
+      {save && <SaveAsToken label={label} save={save} />}
     </div>
   );
 }

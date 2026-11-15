@@ -21,6 +21,8 @@ export interface RenderMessage {
   dark: boolean;
   // CSS appended after the repository's own, used to show Motif's token values.
   overrides: string;
+  // Tailwind 4 `@theme` lines that give classes to tokens Motif has and the repository hasn't: a stylesheet Tailwind reads with the rest.
+  theme?: string;
 }
 
 // Replaces the code of some modules and renders again, so an edit shows without loading the page again.

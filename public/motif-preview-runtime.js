@@ -87,6 +87,20 @@
       var updates = Promise.resolve();
       var rootElement = document.getElementById('root');
       var overrides = document.getElementById('motif-overrides');
+      // Tailwind 4 reads every `text/tailwindcss` stylesheet and builds again when one changes; this one holds the `@theme` lines of
+      // tokens Motif has and the repository hasn't, so a class can name them.
+      var themeStyle = null;
+      function setTheme(css) {
+        css = css || '';
+        if (!themeStyle) {
+          if (!css) return;
+          themeStyle = document.createElement('style');
+          themeStyle.id = 'motif-theme';
+          themeStyle.setAttribute('type', 'text/tailwindcss');
+          document.head.appendChild(themeStyle);
+        }
+        if (themeStyle.textContent !== css) themeStyle.textContent = css;
+      }
       var root = createRoot(rootElement);
       var h = React.createElement;
       var errorStyle = { color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: 12, margin: 0, font: '12px/1.5 ui-monospace, monospace', whiteSpace: 'pre-wrap', maxWidth: 480 };
@@ -559,6 +573,7 @@
           document.documentElement.classList.toggle('dark', !!message.dark);
           document.documentElement.style.colorScheme = message.dark ? 'dark' : 'light';
           overrides.textContent = message.overrides || '';
+          setTheme(message.theme);
           renderLast();
         } else if (message.type === 'modules') {
           // New code can need packages the page didn't start with; they are loaded before it runs. Messages are
