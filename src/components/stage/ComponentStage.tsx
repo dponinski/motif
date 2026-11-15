@@ -24,6 +24,7 @@ import { errorMessage, useGitHost } from "@/components/git/hooks";
 import StageCanvas from "./StageCanvas";
 import { BreakpointBar, FrameLabel, WidthHandle, ZoomSync } from "./Frame";
 import ElementMenu from "./ElementMenu";
+import InsertPalette, { type PaletteItem } from "./InsertPalette";
 import { useCanvasActions } from "./useCanvasActions";
 import { useElementEdit } from "@/components/panels/useElementEdit";
 import Tip, { MOD } from "@/components/Tip";
@@ -77,11 +78,16 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   useEffect(() => { useEditStore.getState().adopt(`${source.repo}@${source.branch}`); }, [source]);
 
   // What can be done to the picked element, by the inspector or on the canvas (handles, keys, the right-click menu).
+  const [editError, setEditError] = useState<string | null>(null);
   const edit = useElementEdit(component, source, connection);
-  const actions = useCanvasActions(component, source, edit);
+  const actions = useCanvasActions(component, source, edit, setEditError);
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // An element dragged from the palette over the page: where the page says it would go, and what follows the pointer.
+  const probe = useRef<{ key: string | null; position: string | null }>({ key: null, position: null });
+  const [ghost, setGhost] = useState<{ x: number; y: number; label: string } | null>(null);
+  const library = useLibraryStore((s) => s.components);
 
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
@@ -122,6 +128,12 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         if (picked) useEditStore.getState().select(picked);
       } else if (data.type === "error") setRuntimeError(data.message);
       else if (data.type === "dragging") setResizing(data.on);
+      else if (data.type === "dropTarget") probe.current = { key: data.key, position: data.position };
+      else if (data.type === "move") void actionsRef.current.moveTo(data.key, data.target, data.position);
+      else if (data.type === "textEdit") {
+        // A double click: if the element's text is something that can be typed in, the page turns it into a field.
+        void actionsRef.current.canEditText(data.key).then((yes) => { if (yes) iframeRef.current?.contentWindow?.postMessage({ type: "textEditStart", key: data.key } satisfies ToPreview, "*"); });
+      } else if (data.type === "text") void actionsRef.current.commitText(data.key, data.value);
       else if (data.type === "gesture") {
         // A handle was let go: what it asks for is made an edit, and the page is told whether the source changed.
         const tell = (changed: boolean) => iframeRef.current?.contentWindow?.postMessage({ type: "gestureEnd", changed } satisfies ToPreview, "*");
@@ -177,7 +189,6 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const work = useGitStore((s) => s.work ?? null);
   const tokenChanges = useTokenChanges().length;
   const waiting = useEditStore((s) => { const p = plan(changedFiles(s).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })), work); return waitingCount(p); }) + tokenChanges;
-  const [editError, setEditError] = useState<string | null>(null);
 
   // The props and variants shown for a component follow the edits made to its file.
   useEffect(() => {
@@ -216,8 +227,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   // Which element is selected, and whether clicking picks one.
   const selectedKey = editing && selection ? `${selection.path}|${selection.start}` : null;
   useEffect(() => {
-    if (ready) post({ type: "edit", on: editing, selected: selectedKey });
-  }, [ready, editing, selectedKey, revision]);
+    if (ready) post({ type: "edit", on: editing, selected: selectedKey, file: component.file });
+  }, [ready, editing, selectedKey, revision, component.file]);
 
   // An edit changes the source of some modules; the preview runs the new code without loading again.
   const sent = useRef<Record<string, string>>({});
@@ -282,6 +293,40 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   // The width of the frame: the one chosen, or the one the view calls for.
   const frameWidth = width ?? (mode === "variants" || mode === "examples" ? 960 : 640);
 
+  // Dragging an element from the palette over the page. The palette's button keeps the pointer, so the moves and the release come here
+  // even while the pointer is over the page; the page is asked where the element would go, and draws a line there.
+  const startPaletteDrag = (item: PaletteItem) => {
+    probe.current = { key: null, position: null };
+    setResizing(true);
+    const toPage = (e: PointerEvent) => {
+      const frame = iframeRef.current;
+      if (!frame) return null;
+      const box = frame.getBoundingClientRect();
+      if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return null;
+      const scale = frame.offsetWidth ? box.width / frame.offsetWidth : 1;
+      return { x: (e.clientX - box.left) / scale, y: (e.clientY - box.top) / scale };
+    };
+    const move = (e: PointerEvent) => {
+      setGhost({ x: e.clientX, y: e.clientY, label: item.label });
+      const at = toPage(e);
+      if (at) post({ type: "dropProbe", ...at });
+      else { probe.current = { key: null, position: null }; post({ type: "dropEnd" }); }
+    };
+    const finish = (e: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      setGhost(null);
+      setResizing(false);
+      const target = probe.current;
+      post({ type: "dropEnd" });
+      if (e.type === "pointerup" && target.key) void actionsRef.current.insertAtKey(item, target.key, target.position);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  };
+
   // The keys of editing, when nothing has the focus (with the focus in the page they come from it as messages instead). A key that
   // belongs to a field, a list or a menu is left to it.
   useEffect(() => {
@@ -323,6 +368,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             </button>
           ))}
         </div>
+
+        {editing && <InsertPalette components={library.filter((c) => c.id !== component.id)} onInsert={(item) => void actionsRef.current.insertItem(item)} onDrag={startPaletteDrag} />}
 
         {(editing || canUndo || canRedo) && (
           <div className="flex items-center gap-0.5">
@@ -443,6 +490,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           </StageCanvas>
         )}
       </div>
+      {ghost && <div className="pointer-events-none fixed z-[80] rounded bg-accent px-2 py-1 text-xs font-medium text-white shadow-lg" style={{ left: ghost.x + 12, top: ghost.y + 12 }}>{ghost.label}</div>}
       {menu && <ElementMenu point={menu} info={edit.info} canPaste={actions.canPaste()} actions={actions.act} onClose={() => setMenu(null)} />}
     </div>
   );

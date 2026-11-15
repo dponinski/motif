@@ -76,6 +76,14 @@
       var canvasOn = false;
       var selectedKey = null;
       var hovered = null;
+      // The file being edited, where a dragged element is about to land, and what is being moved or typed into.
+      var file = null;
+      var drop = null;
+      var moving = null;
+      var textEl = null;
+      var textKey = null;
+      var textOriginal = null;
+      var remountNext = false;
       var updates = Promise.resolve();
       var rootElement = document.getElementById('root');
       var overrides = document.getElementById('motif-overrides');
@@ -160,6 +168,7 @@
         el.style.cssText = 'position:fixed;display:block;box-sizing:border-box;pointer-events:' + (handle ? 'auto' : 'none') + ';left:' + left + 'px;top:' + top + 'px;' +
           'width:' + (width === null ? 'auto' : width + 'px') + ';height:' + (height === null ? 'auto' : height + 'px') + ';' + css;
         if (handle) el.setAttribute('data-motif-handle', handle); else el.removeAttribute('data-motif-handle');
+        el.removeAttribute('data-motif-drop');
         el.textContent = '';
         return el;
       }
@@ -181,6 +190,54 @@
       var MARGIN = 'background:rgba(251,146,60,0.30)';
       var PADDING = 'background:rgba(34,197,94,0.30)';
       var GAP = 'background:rgba(236,72,153,0.30)';
+      // Where an element dropped at a point would go: before or after the element under it (near its edge), or inside it, among its
+      // children. Only elements of the file being edited count, and never the one being moved or what it holds.
+      var VOID_TAGS = /^(img|input|br|hr|meta|link|source|wbr)$/;
+      var inFile = function (el) {
+        var key = el && el.getAttribute && el.getAttribute('data-motif');
+        return !!key && (!file || key.indexOf(file + '|') === 0);
+      };
+      function ownerOf(node) {
+        for (var n = node; n && n.nodeType === 1; n = n.parentElement) if (inFile(n)) return n;
+        return null;
+      }
+      var horizontal = function (el) { var cs = getComputedStyle(el); return /flex/.test(cs.display) && /row/.test(cs.flexDirection); };
+      var kidsOf = function (el) { return Array.prototype.filter.call(el.children, inFile); };
+      function dropTargetAt(x, y, movingKey) {
+        var node = ownerOf(document.elementFromPoint(x, y));
+        if (!node) return null;
+        if (movingKey) for (var m = node; m; m = m.parentElement) if (m.getAttribute && m.getAttribute('data-motif') === movingKey) return null;
+        var r = node.getBoundingClientRect();
+        var parent = node.parentElement && ownerOf(node.parentElement);
+        var isVoid = VOID_TAGS.test(node.tagName.toLowerCase());
+        var found = null;
+        if (parent) {
+          var h = horizontal(parent);
+          var near = h ? Math.min(10, r.width / 4) : Math.min(10, r.height / 4);
+          var at = h ? x - r.left : y - r.top;
+          var length = h ? r.width : r.height;
+          if (isVoid) found = { el: node, position: at < length / 2 ? 'before' : 'after' };
+          else if (at < near) found = { el: node, position: 'before' };
+          else if (at > length - near) found = { el: node, position: 'after' };
+        } else if (isVoid) return null;
+        if (!found) {
+          var kids = kidsOf(node);
+          if (kids.length === 0) found = { el: node, position: 'last-child' };
+          else {
+            var hz = horizontal(node);
+            for (var i = 0; i < kids.length && !found; i++) {
+              var kr = kids[i].getBoundingClientRect();
+              if (hz ? x < kr.left + kr.width / 2 : y < kr.top + kr.height / 2) found = { el: kids[i], position: 'before' };
+            }
+            if (!found) found = { el: kids[kids.length - 1], position: 'after' };
+          }
+        }
+        if (movingKey && found.el.getAttribute('data-motif') === movingKey) return null;
+        found.horizontal = found.position !== 'last-child' && !!found.el.parentElement && horizontal(found.el.parentElement);
+        return found;
+      }
+      var keyOf = function (el) { return el.getAttribute('data-motif'); };
+
       var gesture = null;
       var transient = [];
       var clearTimer = null;
@@ -243,6 +300,21 @@
           if (row) shape(used++, (k0.right + k1.left) / 2 - 3 * line, k0.top + k0.height / 2 - 10 * line, 6 * line, 20 * line, pill + ';cursor:ew-resize', 'gap');
           else shape(used++, k0.left + k0.width / 2 - 10 * line, (k0.bottom + k1.top) / 2 - 3 * line, 20 * line, 6 * line, pill + ';cursor:ns-resize', 'gap');
         }
+        // A grip to move the element by: out of the way beside its left edge. Not on the
+        // outermost element, which has nothing around it to be moved within.
+        if (r.width > 0 && el.parentElement && ownerOf(el.parentElement)) {
+          var G = 16 * line, GW = 14 * line;
+          var roomy = r.width >= 80 * line && r.height >= 56 * line;
+          // Beside the element's left edge, out of the way of what is above and below it. With no room there: above its corner, inside it
+          // if it is large enough to leave something to click, else below it.
+          var gx = r.left - GW - 2 * line, gy = r.top;
+          if (gx < 0) {
+            gx = r.left;
+            gy = r.top - G - 3 * line >= 0 ? r.top - G - 3 * line : roomy ? r.top + 3 * line : r.bottom + 3 * line;
+          }
+          var grip = shape(used++, gx, gy, GW, G, 'background:#6366f1;color:#fff;border-radius:' + 3 * line + 'px;cursor:grab;display:flex;align-items:center;justify-content:center;font:700 ' + 9 * line + 'px/1 system-ui', 'move');
+          grip.textContent = '⋮⋮';
+        }
         return used;
       }
 
@@ -260,6 +332,14 @@
             var hr = hovered.getBoundingClientRect();
             shape(used++, hr.left, hr.top, hr.width, hr.height, 'border:' + line + 'px dashed #6366f1');
           }
+        }
+        if (editOn && drop) {
+          var dr = drop.el.getBoundingClientRect();
+          var thick = 3 * line;
+          var accent = '#6366f1';
+          if (drop.position === 'last-child') shape(used++, dr.left, dr.top, dr.width, dr.height, 'border:' + 2 * line + 'px dashed ' + accent + ';background:rgba(99,102,241,0.10);border-radius:' + 3 * line + 'px').setAttribute('data-motif-drop', 'inside');
+          else if (drop.horizontal) shape(used++, (drop.position === 'before' ? dr.left : dr.right) - thick / 2, dr.top, thick, dr.height, 'background:' + accent + ';border-radius:' + thick + 'px').setAttribute('data-motif-drop', drop.position);
+          else shape(used++, dr.left, (drop.position === 'before' ? dr.top : dr.bottom) - thick / 2, dr.width, thick, 'background:' + accent + ';border-radius:' + thick + 'px').setAttribute('data-motif-drop', drop.position);
         }
         for (var i = used; i < pool.length; i++) pool[i].style.display = 'none';
       }
@@ -294,6 +374,12 @@
         event.preventDefault();
         event.stopImmediatePropagation();
         clearTransient();
+        if (h.getAttribute('data-motif-handle') === 'move') {
+          moving = { key: selectedKey, id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+          try { h.setPointerCapture(event.pointerId); } catch (e) { /* the drag still works while the pointer is over the page */ }
+          post({ type: 'dragging', on: true });
+          return;
+        }
         var cs = getComputedStyle(el), r = el.getBoundingClientRect();
         var p = sides(cs, 'padding'), b = sides(cs, 'border', 'Width');
         var row = /row/.test(cs.flexDirection);
@@ -308,6 +394,26 @@
         try { h.setPointerCapture(event.pointerId); } catch (e) { /* the drag still works while the pointer is over the page */ }
         post({ type: 'dragging', on: true });
       }, true);
+      window.addEventListener('pointermove', function (event) {
+        if (!moving || event.pointerId !== moving.id) return;
+        if (!moving.moved && Math.abs(event.clientX - moving.x) + Math.abs(event.clientY - moving.y) < 5) return;
+        moving.moved = true;
+        event.preventDefault();
+        drop = dropTargetAt(event.clientX, event.clientY, moving.key);
+        draw();
+      }, true);
+      function endMove(event, cancel) {
+        var m = moving;
+        if (!m || (event && event.pointerId !== m.id)) return;
+        moving = null;
+        post({ type: 'dragging', on: false });
+        var at = drop;
+        drop = null;
+        draw();
+        if (!cancel && m.moved && at) post({ type: 'move', key: m.key, target: keyOf(at.el), position: at.position });
+      }
+      window.addEventListener('pointerup', function (event) { endMove(event, false); }, true);
+      window.addEventListener('pointercancel', function (event) { endMove(event, true); }, true);
       window.addEventListener('pointermove', function (event) {
         var g = gesture;
         if (!g || event.pointerId !== g.id) return;
@@ -365,11 +471,19 @@
 
       var pick = function (event) { return event.target && event.target.closest ? event.target.closest('[data-motif]') : null; };
       // While editing, the page is for picking: nothing the component does on click or submit should happen.
+      // (Not inside the text that is being typed into, which needs the pointer to place its caret.)
+      var typingHere = function (event) { return !!textEl && textEl.contains(event.target); };
       ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'submit', 'dblclick', 'contextmenu'].forEach(function (name) {
-        window.addEventListener(name, function (event) { if (editOn) { event.preventDefault(); event.stopPropagation(); } }, true);
+        window.addEventListener(name, function (event) { if (editOn && !typingHere(event)) { event.preventDefault(); event.stopPropagation(); } }, true);
       });
+      // A double click on an element asks the editor whether its text can be edited where it is.
+      window.addEventListener('dblclick', function (event) {
+        if (!editOn || typingHere(event)) return;
+        var el = pick(event);
+        if (el) post({ type: 'textEdit', key: keyOf(el) });
+      }, true);
       window.addEventListener('click', function (event) {
-        if (!editOn) return;
+        if (!editOn || typingHere(event)) return;
         event.preventDefault();
         event.stopPropagation();
         var el = pick(event);
@@ -397,8 +511,33 @@
         post({ type: 'key', key: event.key, ctrlKey: event.ctrlKey, metaKey: event.metaKey, shiftKey: event.shiftKey, altKey: event.altKey });
       }, true);
 
+      // Typing into an element's text where it is. The page's own text node is replaced by the browser while typing, so after this
+      // the page is built again from scratch the next time it renders, rather than updating a node that is no longer there.
+      function finishText(commit) {
+        var el = textEl;
+        if (!el) return;
+        textEl = null;
+        var value = el.textContent;
+        el.removeAttribute('contenteditable');
+        if (commit && value !== textOriginal) post({ type: 'text', key: textKey, value: value });
+        else el.textContent = textOriginal;
+        draw();
+      }
+      document.addEventListener('focusout', function (event) { if (textEl && event.target === textEl) finishText(true); }, true);
+      window.addEventListener('keydown', function (event) {
+        if (!textEl || event.target !== textEl) return;
+        if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finishText(true); }
+        else if (event.key === 'Escape') { event.preventDefault(); finishText(false); }
+      }, true);
+
       function renderLast() {
         if (!lastRender) return;
+        if (remountNext) {
+          remountNext = false;
+          try { root.unmount(); } catch (e) { /* nothing was mounted */ }
+          rootElement.textContent = '';
+          root = createRoot(rootElement);
+        }
         root.render(h(App, { items: lastRender.items, layout: lastRender.layout, fit: !!lastRender.fit }));
         reportHeight();
         requestAnimationFrame(function () {
@@ -455,6 +594,29 @@
             found.textContent = files[path];
           });
           if (kept) clearTransient(); else draw();
+        } else if (message.type === 'dropProbe') {
+          drop = dropTargetAt(message.x, message.y, null);
+          post({ type: 'dropTarget', key: drop ? keyOf(drop.el) : null, position: drop ? drop.position : null });
+          draw();
+        } else if (message.type === 'dropEnd') {
+          drop = null;
+          draw();
+        } else if (message.type === 'textEditStart') {
+          var target = matching(message.key)[0];
+          if (!target) return;
+          textEl = target;
+          textKey = message.key;
+          textOriginal = target.textContent;
+          remountNext = true;
+          target.setAttribute('contenteditable', 'plaintext-only');
+          if (target.contentEditable !== 'plaintext-only') target.setAttribute('contenteditable', 'true');
+          target.focus();
+          var range = document.createRange();
+          range.selectNodeContents(target);
+          var selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+          draw();
         } else if (message.type === 'zoom') {
           zoom = message.zoom > 0 ? message.zoom : 1;
           draw();
@@ -464,6 +626,7 @@
           canvasOn = !!message.on;
         } else if (message.type === 'edit') {
           editOn = !!message.on;
+          file = message.file || null;
           selectedKey = message.selected || null;
           if (!editOn) hovered = null;
           draw();

@@ -4,7 +4,7 @@ import { memorySource, scanRepository } from "../repo-scan";
 import { toLibrary } from "../preview/library";
 import { analyze } from "./element";
 import { importEdits, relativeSpecifier } from "./imports";
-import { changeTag, insertElement, unwrapElement, wrapElement } from "./insert";
+import { changeTag, insertElement, moveElementTo, unwrapElement, wrapElement } from "./insert";
 import { componentSnippet, SNIPPETS } from "./snippets";
 
 const code = [
@@ -191,5 +191,46 @@ describe("changing the tag", () => {
     await expect(changeTag(P, code, at("<ul>"), "Not Valid")).rejects.toThrow(/isn't an HTML element/);
     await expect(changeTag(P, code, at("<ul>"), "img")).rejects.toThrow(/can't contain/);
     expect(at2(code, "<p>")).toBeGreaterThan(0);
+  });
+});
+
+describe("moving an element to another place", () => {
+  it("moves it before or after a sibling, and the move is all that changes", async () => {
+    const out = await moveElementTo(P, code, at("<span />"), at("<h1>"), "before");
+    expect(out!.code).toContain('<div className="flex">\n      <span />\n      <h1>Title</h1>\n      <p>One</p>');
+    expect(out!.code).not.toContain("      <b></b>\n      <span />");
+    // The same lines, in another order: nothing is rewritten.
+    expect(out!.code.split("\n").sort()).toEqual(code.split("\n").sort());
+    expect(out!.code.slice(out!.selection!, out!.selection! + 8)).toBe("<span />");
+    const after = await moveElementTo(P, code, at("<h1>"), at("<p>One"), "after");
+    expect(after!.code).toContain("      <p>One</p>\n      <h1>Title</h1>\n      <ul>");
+  });
+
+  it("moves it inside another, first or last, indented as the place calls for", async () => {
+    const last = await moveElementTo(P, code, at("<p>One"), at("<ul>"), "last-child");
+    expect(last!.code).toContain("      <ul>\n        <li>a</li>\n        <p>One</p>\n      </ul>");
+    const first = await moveElementTo(P, code, at("<p>One"), at("<ul>"), "first-child");
+    expect(first!.code).toContain("      <ul>\n        <p>One</p>\n        <li>a</li>\n      </ul>");
+  });
+
+  it("takes an element with its own children up a level, and down, re-indenting them", async () => {
+    const up = await moveElementTo(P, code, at("<li>a"), at("<b>"), "after");
+    expect(up!.code).toContain("      <b></b>\n      <li>a</li>\n    </div>");
+    const down = await moveElementTo(P, code, at("<ul>"), at("<b>"), "first-child");
+    expect(down!.code).toContain("      <b>\n        <ul>\n          <li>a</li>\n        </ul>\n      </b>");
+  });
+
+  it("does nothing when there is nothing to do", async () => {
+    // Into itself or what it holds, beside itself, the root, and where it already is.
+    expect(await moveElementTo(P, code, at("<ul>"), at("<li>a"), "last-child")).toBeNull();
+    expect(await moveElementTo(P, code, at("<ul>"), at("<ul>"), "after")).toBeNull();
+    expect(await moveElementTo(P, code, at('<div className="flex">'), at("<p>One"), "after")).toBeNull();
+    expect(await moveElementTo(P, code, at("<p>One"), at("<ul>"), "before")).toBeNull();
+    expect(await moveElementTo(P, code, at("<p>One"), at("<h1>"), "after")).toBeNull();
+  });
+
+  it("says nothing happens for an element or a place that isn't there", async () => {
+    expect(await moveElementTo(P, code, 999999, at("<h1>"), "before")).toBeNull();
+    expect(await moveElementTo(P, code, at("<p>One"), 999999, "before")).toBeNull();
   });
 });

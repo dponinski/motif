@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { elementTree, pathTo, relatives } from "./tree";
+import { elementTree, findNode, pathTo, relatives, within } from "./tree";
 
 const SOURCE = `import { Icon } from "./icon";
 
@@ -99,5 +99,17 @@ describe("relatives", () => {
     expect(relatives(tree, section.children.find((c) => c.tag === "ul")!.start).next).toBe(small.start);
     expect(relatives(tree, small.start).previous).toBe(section.children.find((c) => c.tag === "ul")!.start);
     expect(relatives(tree, 99999)).toEqual({ parent: null, firstChild: null, previous: null, next: null });
+  });
+});
+
+describe("finding in the tree", () => {
+  it("finds a node, and says what is inside it", async () => {
+    const tree = await elementTree("Card.tsx", SOURCE, "Card");
+    const ul = findNode(tree, tree[0].children.find((c) => c.tag === "ul")!.start)!;
+    expect(ul.tag).toBe("ul");
+    expect(within(ul, ul.start)).toBe(true);
+    expect(within(ul, ul.children[0].start)).toBe(true);
+    expect(within(ul, tree[0].start)).toBe(false);
+    expect(findNode(tree, 123456)).toBeNull();
   });
 });
