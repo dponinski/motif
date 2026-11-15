@@ -1,8 +1,11 @@
 import { keyName, lineOf, nameOf, parseModule, staticString, unwrap, type AnyNode } from "./ast";
 import { isColorValue } from "./summary";
+import { aliasTarget } from "../tokens/alias";
 import type { RepoToken, RepoTokenKind, TokenContainer } from "./types";
 
 export const BASE = "base";
+
+export { aliasTarget };
 
 export interface TokenFile {
   path: string;
@@ -251,12 +254,31 @@ export function finalizeTokens(acc: TokenAccumulator): { themes: string[]; token
   for (const alias of acc.aliases) {
     const target = acc.tokens.get(alias.target);
     const kind = namespaceKind(alias.tailwind);
-    if (target) {
+    // A name in a `@theme` block for a variable defined somewhere else (`--color-background: var(--background)`, with `--background`
+    // set on :root) is that variable's name for Tailwind. One that points at another `@theme` entry (`--color-background:
+    // var(--color-gray-50)`) is a token of its own that is another token, and the one it points at keeps its own name.
+    const definedInTheme = !!target && Object.values(target.locations).every((l) => l.container === "theme");
+    if (target && !definedInTheme) {
       target.tailwind = alias.tailwind;
       if (target.kind === "other" && kind) target.kind = kind;
     } else if (!acc.tokens.has(alias.tailwind)) {
       put(acc, { name: alias.tailwind, theme: BASE, value: alias.value, file: alias.file, line: alias.line, container: "theme", tailwind: alias.tailwind });
     }
+  }
+
+  // A variable that is another variable (`--text: var(--gray-12)`) is what that one is, a color if it is a color; and so on along a chain.
+  const VALUED: RepoTokenKind[] = ["color", "radius", "spacing", "shadow"];
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    for (const t of acc.tokens.values()) {
+      if (t.kind !== "other") continue;
+      const targets = Object.values(t.values).map(aliasTarget);
+      if (targets.length === 0 || targets.some((x) => !x || !acc.tokens.has(x))) continue;
+      const kinds = new Set(targets.map((x) => acc.tokens.get(x!)!.kind));
+      const [only] = [...kinds];
+      if (kinds.size === 1 && VALUED.includes(only)) { t.kind = only; changed = true; }
+    }
+    if (!changed) break;
   }
 
   const keys = new Set<string>();

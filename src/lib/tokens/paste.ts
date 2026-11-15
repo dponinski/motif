@@ -1,6 +1,9 @@
 import { finalizeTokens, newAccumulator, scanCss } from "../repo-scan/tokens";
 import { cssName } from "../token-sync/doc";
 import { normalizeColor } from "../token-sync/color";
+import { aliasTarget } from "./alias";
+import { tokenKey } from "./alias-colors";
+import type { ColorToken } from "../../store/design-system";
 import { normalizeShadow, parseLengthPx, parseShadow } from "../token-sync/values";
 import type { Draft } from "./drafts";
 
@@ -51,7 +54,7 @@ function draftOf(name: string, text: string, themes: ThemeRef[], themeValues?: R
     case "color": return { kind: "color", name, values: themeValues ?? Object.fromEntries(themes.slice(0, 1).map((t) => [t.id, text.trim()])) };
     case "shadow": return shadowDraft(name, text) ?? { reason: "isn't a shadow Motif can read" };
     case "length": { const n = lengthOf(text)!; return { kind: RADIUS_NAME.test(name) ? "radius" : "spacing", name, value: n }; }
-    default: return { reason: /^var\(/i.test(text.trim()) ? "refers to another token (var()), which Motif can't hold yet" : "isn't a color, a length or a shadow Motif can read" };
+    default: return { reason: /^var\(/i.test(text.trim()) ? "refers to another token (var()), which Motif keeps between colors only" : "isn't a color, a length or a shadow Motif can read" };
   }
 }
 
@@ -63,7 +66,11 @@ const dedupe = (drafts: Draft[]): Draft[] => {
 
 // ── CSS ───────────────────────────────────────────────────────────────────────
 
-async function fromCss(text: string, themes: ThemeRef[]): Promise<Parsed> {
+// The colors the set has, by the key a token is known by in the repository: what each is in each theme (by id).
+export type Known = Record<string, Record<string, string>>;
+export const knownOf = (colors: ColorToken[], setId: string): Known => Object.fromEntries(colors.filter((c) => c.setId === setId).map((c) => [tokenKey(c), c.themeValues]));
+
+async function fromCss(text: string, themes: ThemeRef[], known: Known): Promise<Parsed> {
   // Declarations with no rule around them are taken as `:root`'s.
   const css = text.includes("{") ? text : `:root {\n${text}\n}`;
   const acc = newAccumulator();
@@ -81,23 +88,47 @@ async function fromCss(text: string, themes: ThemeRef[]): Promise<Parsed> {
     return ["default", "light", "base"].includes(key) ? themes[0] ?? null : null;
   };
 
+  const byName = new Map(tokens.map((t) => [t.name, t]));
+  // What a token the text refers to is, in a theme of the text: the text's own, then the set's.
+  const resolve = (name: string, key: string, theme: ThemeRef, depth = 0): string | null => {
+    const own = byName.get(name);
+    if (own && own.kind !== "font") {
+      const v = own.values[key] ?? own.values.default ?? Object.values(own.values)[0];
+      if (v === undefined || depth > 8) return null;
+      const next = aliasTarget(v);
+      return next === null ? (normalizeColor(v) === null ? null : v.trim()) : resolve(next, key, theme, depth + 1);
+    }
+    return known[name]?.[theme.id] ?? null;
+  };
+
   for (const token of tokens) {
     const first = Object.values(token.values)[0] ?? "";
-    if (token.kind === "font" || token.kind === "other") {
-      notes.push(`${token.name}: ${/^var\(/i.test(first.trim()) ? "refers to another token (var()), which Motif can't hold yet" : token.kind === "font" ? "Motif has no font tokens yet" : "isn't a color, a length or a shadow"}`);
+    // A color that is a color the set has already is a color, though the text doesn't say what the other one is.
+    const aliasOfKnown = token.kind === "other" && Object.values(token.values).every((v) => { const t = aliasTarget(v); return t !== null && (byName.get(t)?.kind === "color" || t in known); });
+    if (!aliasOfKnown && (token.kind === "font" || token.kind === "other")) {
+      notes.push(`${token.name}: ${aliasTarget(first) !== null ? `refers to ${aliasTarget(first)}, which isn't a color in the text or this set` : token.kind === "font" ? "Motif has no font tokens yet" : "isn't a color, a length or a shadow"}`);
       continue;
     }
-    if (token.kind === "color") {
+    if (token.kind === "color" || aliasOfKnown) {
       const values: Record<string, string> = {};
+      const aliases: Record<string, string> = {};
       let unreadable = false;
+      let why = "Motif can't read this color (it may use color-mix())";
       for (const [key, v] of Object.entries(token.values)) {
-        if (normalizeColor(v) === null) { unreadable = true; break; }
+        const target = aliasTarget(v);
         const theme = themeFor(key);
+        if (target !== null) {
+          const resolved = theme ? resolve(target, key, theme) : null;
+          if (theme && resolved === null) { unreadable = true; why = `refers to ${target}, which isn't a color in the text or this set`; break; }
+          if (theme) { values[theme.id] = resolved!; aliases[theme.id] = target; } else lost.add(key);
+          continue;
+        }
+        if (normalizeColor(v) === null) { unreadable = true; break; }
         if (theme) values[theme.id] = v.trim(); else lost.add(key);
       }
-      if (unreadable) { notes.push(`${token.name}: Motif can't read this color (it may use var() or color-mix())`); continue; }
+      if (unreadable) { notes.push(`${token.name}: ${why}`); continue; }
       if (Object.keys(values).length === 0 && themes[0]) values[themes[0].id] = first.trim();
-      drafts.push({ kind: "color", name: token.name, values });
+      drafts.push({ kind: "color", name: token.name, values, ...(Object.keys(aliases).length ? { aliases } : {}) });
       continue;
     }
     if (token.kind === "radius" || token.kind === "spacing") {
@@ -202,7 +233,7 @@ function fromLines(text: string, themes: ThemeRef[], prefix: string): Parsed {
 
 // ── Which it is ───────────────────────────────────────────────────────────────
 
-export async function parsePaste(text: string, themes: ThemeRef[], options: { prefix?: string } = {}): Promise<Parsed> {
+export async function parsePaste(text: string, themes: ThemeRef[], options: { prefix?: string; known?: Known } = {}): Promise<Parsed> {
   const t = text.trim();
   if (!t) return { format: "empty", drafts: [], notes: [] };
   if (t.startsWith("{") || t.startsWith("[")) {
@@ -210,6 +241,6 @@ export async function parsePaste(text: string, themes: ThemeRef[], options: { pr
   }
   // CSS when there are rules, or when every line is a custom property; a mix of forms is read line by line.
   const lines = t.split(/\r?\n/).map((l) => l.replace(/\/\*.*?\*\//g, "").trim()).filter((l) => l && !l.startsWith("//"));
-  if (t.includes("{") || (lines.length > 0 && lines.every((l) => /^--[\w-]+\s*:/.test(l)))) return fromCss(t, themes);
+  if (t.includes("{") || (lines.length > 0 && lines.every((l) => /^--[\w-]+\s*:/.test(l)))) return fromCss(t, themes, options.known ?? {});
   return fromLines(t, themes, cssName(options.prefix || "color"));
 }

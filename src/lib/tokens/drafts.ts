@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { normalizeColor } from "../token-sync/color";
 import type { ColorToken, RadiusToken, ShadowToken, SpacingToken, TokenData, TypographyToken } from "../../store/design-system";
 import { deriveGroup } from "./organize";
+import { detachMissing, refreshAliases } from "./alias-colors";
 
 // Tokens that are about to be added, before they are. Pasted text, a scale and the like make drafts; the screen shows what adding
 // them would do (new tokens, changes to existing ones, ones that are there already) and `applyPlan` does it.
@@ -15,7 +16,8 @@ interface Base {
 }
 
 export type Draft =
-  | (Base & { kind: "color"; values: Record<string, string> })
+  // `aliases`: themes (by id) in which the color is another token (its key), `values` having what that comes to.
+  | (Base & { kind: "color"; values: Record<string, string>; aliases?: Record<string, string> })
   | (Base & { kind: "spacing"; value: number })
   | (Base & { kind: "radius"; value: number })
   | (Base & { kind: "shadow"; x: number; y: number; blur: number; spread: number; color: string; inset?: boolean; raw?: string })
@@ -48,7 +50,7 @@ function sameValue(draft: Draft, t: Existing, themeIds: string[]): boolean {
       return Object.entries(draft.values).every(([theme, v]) => {
         if (!themeIds.includes(theme)) return true;
         const current = c.themeValues[theme] ?? c.value;
-        return normalizeColor(current) === normalizeColor(v) && normalizeColor(v) !== null;
+        return normalizeColor(current) === normalizeColor(v) && normalizeColor(v) !== null && c.themeAlias?.[theme] === draft.aliases?.[theme];
       });
     }
     case "spacing":
@@ -100,8 +102,13 @@ export function applyPlan(state: TokenData, setId: string, plan: PlanItem[]): To
       if (d.kind === "color") {
         const c = t as ColorToken;
         const themeValues = { ...c.themeValues };
-        for (const [theme, v] of Object.entries(d.values)) if (set.themes.some((x) => x.id === theme)) themeValues[theme] = v;
-        list[at] = { ...c, themeValues, value: themeValues[set.activeThemeId] ?? c.value };
+        const aliases = { ...c.themeAlias };
+        for (const [theme, v] of Object.entries(d.values)) {
+          if (!set.themes.some((x) => x.id === theme)) continue;
+          themeValues[theme] = v;
+          if (d.aliases?.[theme]) aliases[theme] = d.aliases[theme]; else delete aliases[theme];
+        }
+        list[at] = { ...c, themeValues, themeAlias: Object.keys(aliases).length ? aliases : undefined, value: themeValues[set.activeThemeId] ?? c.value };
       } else if (d.kind === "spacing" || d.kind === "radius") list[at] = { ...(t as SpacingToken), value: d.value };
       else if (d.kind === "shadow") { const { x, y, blur, spread, color, inset, raw } = d; list[at] = { ...(t as ShadowToken), x, y, blur, spread, color, inset, raw }; }
       else { const { fontFamily, fontSize, fontWeight, lineHeight } = d; list[at] = { ...(t as TypographyToken), fontFamily, fontSize, fontWeight, lineHeight }; }
@@ -113,11 +120,13 @@ export function applyPlan(state: TokenData, setId: string, plan: PlanItem[]): To
       const first = Object.values(d.values)[0] ?? "#000000";
       const themeValues: Record<string, string> = {};
       for (const t of set.themes) themeValues[t.id] = d.values[t.id] ?? first;
-      out.colors.push({ id: nanoid(6), name: item.name, value: themeValues[set.activeThemeId] ?? first, group, setId, themeValues });
+      const aliases = Object.fromEntries(Object.entries(d.aliases ?? {}).filter(([theme]) => themeValues[theme] !== undefined));
+      out.colors.push({ id: nanoid(6), name: item.name, value: themeValues[set.activeThemeId] ?? first, group, setId, themeValues, ...(Object.keys(aliases).length ? { themeAlias: aliases } : {}) });
     } else if (d.kind === "spacing") out.spacing.push({ id: nanoid(6), name: item.name, value: d.value, group, setId });
     else if (d.kind === "radius") out.radii.push({ id: nanoid(6), name: item.name, value: d.value, group, setId });
     else if (d.kind === "shadow") out.shadows.push({ id: nanoid(6), name: item.name, x: d.x, y: d.y, blur: d.blur, spread: d.spread, color: d.color, group, setId, inset: d.inset, raw: d.raw });
     else out.typography.push({ id: nanoid(6), name: item.name, fontFamily: d.fontFamily, fontSize: d.fontSize, fontWeight: d.fontWeight, lineHeight: d.lineHeight, group, setId });
   }
+  out.colors = refreshAliases(detachMissing(out.colors), out.sets);
   return out;
 }

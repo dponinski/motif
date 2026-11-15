@@ -3,6 +3,7 @@ import type { ColorToken, RadiusToken, ShadowToken, SpacingToken } from "../../s
 import type { RepoToken } from "../repo-scan/types";
 import { normalizeColor } from "./color";
 import { deriveGroup } from "../tokens/organize";
+import { aliasTarget, varRef } from "../tokens/alias";
 import { normalizeShadow, parseLengthPx, parseShadow, shadowKey } from "./values";
 
 // What is compared between Motif and a repository: tokens by repository name, each with one
@@ -29,6 +30,21 @@ function normalize(kind: SyncKind, text: string): string | null {
   return px === null ? null : lengthKey(px);
 }
 
+// Why a token that is another token can't be kept as one: Motif keeps these between colors, and the one it points at has to be a
+// color of the repository's that doesn't point back.
+function aliasProblem(byName: Map<string, RepoToken>, name: string, target: string): string | null {
+  const seen = new Set([name]);
+  for (let at: string | undefined = target, depth = 0; at !== undefined; depth++) {
+    const t = byName.get(at);
+    if (!t || t.kind !== "color") return `refers to ${at}, which isn't a color of the repository's that Motif can read`;
+    if (seen.has(at) || depth > 8) return `refers to ${at}, which leads back to this token`;
+    seen.add(at);
+    const next = Object.values(t.values).map(aliasTarget).find((x) => x !== null);
+    at = next ?? undefined;
+  }
+  return null;
+}
+
 const UNREADABLE: Record<SyncKind, string> = {
   color: "Motif can't read this color (it may use var() or color-mix())",
   radius: "Motif can only read px and rem lengths",
@@ -50,6 +66,7 @@ export interface RepoSnapshot {
 export function readRepoTokens(tokens: RepoToken[], themes: string[]): RepoSnapshot {
   const baseTheme = themes[0] ?? "default";
   const out: RepoSnapshot = { doc: {}, raw: {}, readonly: {}, skipped: [], notes: [], baseTheme };
+  const byName = new Map(tokens.map((t) => [t.name, t]));
 
   for (const token of tokens) {
     const kind = KIND[token.kind];
@@ -61,13 +78,22 @@ export function readRepoTokens(tokens: RepoToken[], themes: string[]): RepoSnaps
     const themesRead = kind === "color" ? available : [baseTheme in token.values ? baseTheme : available[0]];
     const values: Record<string, string> = {};
     let unreadable = false;
+    let why = UNREADABLE[kind];
     for (const theme of themesRead) {
+      const target = aliasTarget(token.values[theme]);
+      if (target !== null) {
+        // A color that is another color is kept as that: what is compared and written is `var(--target)`.
+        const problem = kind === "color" ? aliasProblem(byName, token.name, target) : "refers to another token; Motif keeps aliases between colors only";
+        if (problem) { unreadable = true; why = problem; break; }
+        values[theme] = varRef(target);
+        continue;
+      }
       const normalized = normalize(kind, token.values[theme]);
       if (normalized === null) { unreadable = true; break; }
       values[theme] = normalized;
     }
     if (unreadable) {
-      out.skipped.push({ name: token.name, reason: UNREADABLE[kind] });
+      out.skipped.push({ name: token.name, reason: why });
       continue;
     }
     if (kind !== "color" && available.length > 1) out.notes.push(`${token.name}: only the ${themesRead[0]} value is synced`);
@@ -116,7 +142,9 @@ export function readMotifTokens(state: TokenSlices, link: LinkShape): SyncDoc {
     const values: Record<string, string> = {};
     for (const [theme, id] of Object.entries(link.themes)) {
       const v = c.themeValues[id];
-      if (v !== undefined) values[theme] = normalizeColor(v) ?? v;
+      const alias = c.themeAlias?.[id];
+      if (alias) values[theme] = varRef(alias);
+      else if (v !== undefined) values[theme] = normalizeColor(v) ?? v;
     }
     doc[keyOf(c)] = { kind: "color", values };
   }
@@ -134,6 +162,27 @@ export function colorGroup(name: string, all: string[]): string {
 }
 
 const firstValue = (t: SyncToken, baseTheme: string) => t.values[baseTheme] ?? Object.values(t.values)[0];
+
+// What a color token is in a theme, following the tokens it is (`var(--gray-12)` is what gray-12 is). Null when it leads nowhere.
+export function resolveInDoc(doc: SyncDoc, name: string, theme: string, baseTheme: string, depth = 0): string | null {
+  const t = doc[name];
+  if (!t || t.kind !== "color" || depth > 8) return null;
+  const value = t.values[theme] ?? firstValue(t, baseTheme);
+  if (value === undefined) return null;
+  const next = aliasTarget(value);
+  return next === null ? value : resolveInDoc(doc, next, theme, baseTheme, depth + 1);
+}
+
+// The same document with every color that is another token given as the color it comes to, for what shows colors and has no use for
+// the link between them (the swatches in the inspector).
+export function resolveDoc(doc: SyncDoc, baseTheme: string): SyncDoc {
+  const out: SyncDoc = {};
+  for (const [name, t] of Object.entries(doc)) {
+    if (t.kind !== "color") { out[name] = t; continue; }
+    out[name] = { ...t, values: Object.fromEntries(Object.entries(t.values).map(([theme, v]) => [theme, aliasTarget(v) === null ? v : (resolveInDoc(doc, name, theme, baseTheme) ?? v)])) };
+  }
+  return out;
+}
 
 export function applyDoc(state: TokenSlices, link: LinkShape, doc: SyncDoc, activeThemeId: string): TokenSlices {
   const entries = Object.entries(doc);
@@ -161,12 +210,17 @@ export function applyDoc(state: TokenSlices, link: LinkShape, doc: SyncDoc, acti
   const colorValues = (token: SyncToken, previous: Record<string, string> = {}) => {
     const fallback = firstValue(token, link.baseTheme);
     const themeValues: Record<string, string> = { ...previous };
+    const themeAlias: Record<string, string> = {};
     for (const [theme, id] of themeIds) {
-      const next = token.values[theme] ?? fallback;
+      const raw = token.values[theme] ?? fallback;
+      // A color that is another token shows as the color that one is, and remembers which it is.
+      const target = aliasTarget(raw);
+      const next = target === null ? raw : (resolveInDoc(doc, target, theme, link.baseTheme) ?? previous[id] ?? "#000000");
+      if (target !== null) themeAlias[id] = target;
       // Keep the text Motif already has when it means the same color.
       themeValues[id] = previous[id] !== undefined && normalizeColor(previous[id]) === next ? previous[id] : next;
     }
-    return { themeValues, value: themeValues[activeThemeId] ?? Object.values(themeValues)[0] };
+    return { themeValues, themeAlias: Object.keys(themeAlias).length ? themeAlias : undefined, value: themeValues[activeThemeId] ?? Object.values(themeValues)[0] };
   };
 
   const colors = sync<ColorToken>(

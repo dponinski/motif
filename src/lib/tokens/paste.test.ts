@@ -41,7 +41,7 @@ describe("pasted CSS", () => {
 
   it("says what it left out and why", async () => {
     const r = await parsePaste(css, [L, D]);
-    expect(r.notes.join("\n")).toMatch(/border: refers to another token \(var\(\)\)/);
+    expect(r.notes.join("\n")).toMatch(/border: refers to .*, which isn't a color/);
     expect(r.notes.join("\n")).toMatch(/font-sans/);
   });
 
@@ -145,5 +145,21 @@ describe("pasted lines", () => {
 
   it("says when there is nothing", async () => {
     expect((await parsePaste("   \n  ", [L])).format).toBe("empty");
+  });
+});
+
+describe("pasted aliases", () => {
+  it("reads a color that is another color of the text, with what it comes to", async () => {
+    const r = await parsePaste(":root { --gray-50: #f9fafb; --background: var(--gray-50); }\n.dark { --gray-50: #111111; --background: var(--gray-50); }", [L, D]);
+    expect(r.notes).toEqual([]);
+    expect(find(r, "background")).toEqual({ kind: "color", name: "background", values: { L: "#f9fafb", D: "#111111" }, aliases: { L: "gray-50", D: "gray-50" } });
+  });
+
+  it("reads one that is a color the set has already, and refuses one that is nowhere", async () => {
+    const known = { "gray-900": { L: "#111827", D: "#111827" } };
+    const r = await parsePaste("--foreground: var(--gray-900);\n--lost: var(--nowhere);", [L, D], { known });
+    expect(find(r, "foreground")).toMatchObject({ values: { L: "#111827" }, aliases: { L: "gray-900" } });
+    expect(names(r)).toEqual(["foreground"]);
+    expect(r.notes.join(" ")).toMatch(/lost: refers to nowhere/);
   });
 });

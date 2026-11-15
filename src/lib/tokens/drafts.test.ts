@@ -108,3 +108,33 @@ describe("adding what the plan says", () => {
     expect(out.shadows[0]).toMatchObject({ id: "h1", y: 4, blur: 8, group: "default" });
   });
 });
+
+describe("drafts that are other tokens", () => {
+  const withGray = (): TokenData => ({ ...base(), colors: [{ id: "g", name: "gray-50", value: "#f9fafb", group: "gray", setId: base().sets[0].id, themeValues: { [L]: "#f9fafb" } }] });
+  const bg: Draft = { kind: "color", name: "background", values: { [L]: "#f9fafb" }, aliases: { [L]: "gray-50" } };
+
+  it("adds a color that is another token", () => {
+    const state = withGray();
+    const out = applyPlan(state, state.sets[0].id, planDrafts([bg], state, state.sets[0].id));
+    expect(out.colors.find((c) => c.name === "background")).toMatchObject({ themeValues: { [L]: "#f9fafb" }, themeAlias: { [L]: "gray-50" } });
+  });
+
+  it("is the same only when it is the same token, and a plain color over it detaches it", () => {
+    const state = withGray();
+    const first = applyPlan(state, state.sets[0].id, planDrafts([bg], state, state.sets[0].id));
+    expect(planDrafts([bg], first, first.sets[0].id)[0].status).toBe("same");
+    const plain: Draft = { kind: "color", name: "background", values: { [L]: "#f9fafb" } };
+    const plan = planDrafts([plain], first, first.sets[0].id);
+    expect(plan[0].status).toBe("update");
+    const out = applyPlan(first, first.sets[0].id, plan);
+    expect(out.colors.find((c) => c.name === "background")!.themeAlias).toBeUndefined();
+  });
+
+  it("keeps the color but not the link when the other token isn't there", () => {
+    const state = base();
+    const out = applyPlan(state, state.sets[0].id, planDrafts([bg], state, state.sets[0].id));
+    const made = out.colors.find((c) => c.name === "background")!;
+    expect(made.themeAlias).toBeUndefined();
+    expect(made.themeValues[L]).toBe("#f9fafb");
+  });
+});
