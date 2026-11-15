@@ -9,7 +9,7 @@ import { parseMotifKey } from "@/lib/edit/instrument";
 import { findExamples, type ExampleIndex, type RepoExample } from "@/lib/preview/examples";
 import { rescanComponent } from "@/lib/preview/rescan";
 import { initialProps, variantCombinations } from "@/lib/preview/props";
-import { isFromPreview, type RenderItem, type ToPreview } from "@/lib/preview/protocol";
+import { isFromPreview, type ModulesMessage, type RenderItem, type ToPreview } from "@/lib/preview/protocol";
 import { esmUrl } from "@/lib/preview/srcdoc";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
@@ -22,7 +22,8 @@ import { useTokenChanges } from "@/components/work/useWork";
 import { plan, waitingCount } from "@/lib/work/sync";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import StageCanvas from "./StageCanvas";
-import { BreakpointBar, FrameLabel, WidthHandle, ZoomSync } from "./Frame";
+import { BREAKPOINTS, BreakpointBar, ZoomSync } from "./Frame";
+import PreviewFrame from "./PreviewFrame";
 import ElementMenu from "./ElementMenu";
 import InsertPalette, { type PaletteItem } from "./InsertPalette";
 import { useCanvasActions } from "./useCanvasActions";
@@ -91,7 +92,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   const examples = useExamples(component, source, host);
   const overrides = usePreviewStore((s) => s.values[component.id]);
-  const { dark, width, mode: wanted, motifTokens, setDark, setWidth, setMode, setMotifTokens } = usePreviewStore(useShallow((s) => ({ dark: s.dark, width: s.width, mode: s.mode, motifTokens: s.motifTokens, setDark: s.setDark, setWidth: s.setWidth, setMode: s.setMode, setMotifTokens: s.setMotifTokens })));
+  const { dark, width, compare, mode: wanted, motifTokens, setDark, setWidth, setCompare, setMode, setMotifTokens } = usePreviewStore(useShallow((s) => ({ dark: s.dark, width: s.width, compare: s.compare, mode: s.mode, motifTokens: s.motifTokens, setDark: s.setDark, setWidth: s.setWidth, setCompare: s.setCompare, setMode: s.setMode, setMotifTokens: s.setMotifTokens })));
   const mode = wanted === "examples" && !examples.list.length ? "edit" : wanted;
   const exampleDoc = useSrcdoc(mode === "examples", `examples:${component.id}`, source, host, (paths) =>
     buildGraph({
@@ -104,24 +105,29 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const motif = useTokenOverrides(source.repo);
   const overridesCss = motif.shown;
 
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const renderId = useRef(0);
+  // The previews on the canvas: one, or several at different widths. What is sent to "the preview" goes to each of them.
+  const frames = useRef(new Map<string, HTMLIFrameElement>());
+  const register = useCallback((id: string, element: HTMLIFrameElement | null) => { if (element) frames.current.set(id, element); else frames.current.delete(id); }, []);
+  const post = (message: ToPreview) => frames.current.forEach((el) => el.contentWindow?.postMessage(message, "*"));
+  const frameOf = (source: MessageEventSource | null) => [...frames.current.values()].find((el) => el.contentWindow === source) ?? null;
   const [ready, setReady] = useState(false);
   const [rendered, setRendered] = useState(false);
-  const [height, setHeight] = useState(120);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   // While the edge of the frame is being dragged, the canvas keeps its view.
   const [resizing, setResizing] = useState(false);
 
   useEffect(() => { setReady(false); setRendered(false); setRuntimeError(null); }, [srcdoc]);
+  const onReady = useCallback(() => setReady(true), []);
+  const onRendered = useCallback(() => setRendered(true), []);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow || !isFromPreview(event.data)) return;
+      const frame = frameOf(event.source);
+      if (!frame || !isFromPreview(event.data)) return;
       const data = event.data;
-      if (data.type === "ready") setReady(true);
-      else if (data.type === "rendered") { setRendered(true); setHeight(data.height); }
-      else if (data.type === "select") {
+      // What is sent back goes to the page that asked.
+      const reply = (message: ToPreview) => frame.contentWindow?.postMessage(message, "*");
+      if (data.type === "select") {
         const picked = parseMotifKey(data.key);
         // Clicking the canvas takes the keyboard from whatever had it (a list button would otherwise get the Enter and arrows).
         if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
@@ -132,17 +138,16 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
       else if (data.type === "move") void actionsRef.current.moveTo(data.key, data.target, data.position);
       else if (data.type === "textEdit") {
         // A double click: if the element's text is something that can be typed in, the page turns it into a field.
-        void actionsRef.current.canEditText(data.key).then((yes) => { if (yes) iframeRef.current?.contentWindow?.postMessage({ type: "textEditStart", key: data.key } satisfies ToPreview, "*"); });
+        void actionsRef.current.canEditText(data.key).then((yes) => { if (yes) reply({ type: "textEditStart", key: data.key }); });
       } else if (data.type === "text") void actionsRef.current.commitText(data.key, data.value);
       else if (data.type === "gesture") {
         // A handle was let go: what it asks for is made an edit, and the page is told whether the source changed.
-        const tell = (changed: boolean) => iframeRef.current?.contentWindow?.postMessage({ type: "gestureEnd", changed } satisfies ToPreview, "*");
+        const tell = (changed: boolean) => reply({ type: "gestureEnd", changed });
         void actionsRef.current.applyGesture(data.key, data.edits).then(tell, () => tell(false));
       } else if (data.type === "key") void actionsRef.current.onKey(data);
       else if (data.type === "menu") {
         const picked = parseMotifKey(data.key);
-        const frame = iframeRef.current;
-        if (!picked || !frame) return;
+        if (!picked) return;
         useEditStore.getState().select(picked);
         if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
         // The page's own pixels, on a canvas that may be zoomed.
@@ -169,11 +174,6 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   );
   const layout = mode === "examples" ? "stack" : items.length > 1 ? "grid" : "single";
 
-  useEffect(() => {
-    if (!ready) return;
-    const message: ToPreview = { type: "render", id: ++renderId.current, items, layout, dark, overrides: overridesCss };
-    iframeRef.current?.contentWindow?.postMessage(message, "*");
-  }, [ready, items, layout, dark, overridesCss]);
 
   // ── Editing ────────────────────────────────────────────────────────────────
   // Design and Variants are both a canvas to work on: in Variants the same element is picked in every variant, and one edit changes them all.
@@ -210,33 +210,34 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
     return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision, component.id, component.file]);
-  const post = (message: ToPreview) => iframeRef.current?.contentWindow?.postMessage(message, "*");
 
   // How far the canvas is zoomed, for the page to draw its handles by.
   const zoomRef = useRef(1);
-  const onZoom = useCallback((zoom: number) => {
-    zoomRef.current = zoom;
-    iframeRef.current?.contentWindow?.postMessage({ type: "zoom", zoom } satisfies ToPreview, "*");
-  }, []);
-  useEffect(() => { if (ready) post({ type: "zoom", zoom: zoomRef.current }); }, [ready]);
-
-  // The preview is on a canvas: scrolling, pinching and Space over it move the canvas, not the page inside.
-  useEffect(() => {
-    if (ready) post({ type: "canvas", on: true });
-  }, [ready]);
+  const [zoom, setZoom] = useState(1);
+  const onZoom = useCallback((z: number) => { zoomRef.current = z; setZoom(z); }, []);
 
   // Which element is selected, and whether clicking picks one.
   const selectedKey = editing && selection ? `${selection.path}|${selection.start}` : null;
-  useEffect(() => {
-    if (ready) post({ type: "edit", on: editing, selected: selectedKey, file: component.file });
-  }, [ready, editing, selectedKey, revision, component.file]);
 
   // An edit changes the source of some modules; the preview runs the new code without loading again.
   const sent = useRef<Record<string, string>>({});
   const sentCss = useRef<Record<string, string>>({});
   const loaded = useRef(new Set<string>());
   const patched = useRef(false);
+  // Everything that was sent to the pages, so that one opened later (another size added to the canvas) can be brought up to date.
+  const patchedModules = useRef<ModulesMessage["modules"]>({});
+  const patchedCss = useRef<Record<string, string>>({});
+  const patchedExternals = useRef<Record<string, string>>({});
+  const catchUp = useCallback((): ToPreview[] => {
+    const out: ToPreview[] = [];
+    if (Object.keys(patchedCss.current).length > 0) out.push({ type: "css", files: { ...patchedCss.current } });
+    if (Object.keys(patchedModules.current).length > 0) out.push({ type: "modules", modules: { ...patchedModules.current }, externals: { ...patchedExternals.current } });
+    return out;
+  }, []);
   useEffect(() => {
+    patchedModules.current = {};
+    patchedCss.current = {};
+    patchedExternals.current = {};
     sent.current = Object.fromEntries(Object.entries(main.graph?.modules ?? {}).map(([p, m]) => [p, m.code]));
     sentCss.current = Object.fromEntries((main.graph?.css ?? []).map((c) => [c.path, c.text]));
     loaded.current = new Set(["react", "react/jsx-runtime", "react-dom", "react-dom/client", ...(main.graph?.bare ?? [])]);
@@ -259,6 +260,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         if (Object.keys(styles).length > 0) {
           patched.current = true;
           Object.assign(sentCss.current, styles);
+          Object.assign(patchedCss.current, styles);
           post({ type: "css", files: styles });
         }
         if (Object.keys(modules).length === 0) return;
@@ -267,6 +269,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         // An inserted component can bring packages the page hasn't loaded.
         const externals = Object.fromEntries(graph.bare.filter((spec) => !loaded.current.has(spec)).map((spec) => [spec, esmUrl(spec, graph.deps)]));
         for (const spec of Object.keys(externals)) loaded.current.add(spec);
+        Object.assign(patchedModules.current, modules);
+        Object.assign(patchedExternals.current, externals);
         post({ type: "modules", modules, externals });
       } catch (err) {
         if (!stale) setEditError(errorMessage(err));
@@ -293,25 +297,31 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   // The width of the frame: the one chosen, or the one the view calls for.
   const frameWidth = width ?? (mode === "variants" || mode === "examples" ? 960 : 640);
+  // Several sizes side by side, in Design and Preview: each is the same component, and an edit made in one shows in all.
+  const sizes = compare && (mode === "edit" || mode === "playground") ? compare : null;
 
   // Dragging an element from the palette over the page. The palette's button keeps the pointer, so the moves and the release come here
   // even while the pointer is over the page; the page is asked where the element would go, and draws a line there.
   const startPaletteDrag = (item: PaletteItem) => {
     probe.current = { key: null, position: null };
     setResizing(true);
+    // The page the pointer is over (there can be several), and where in it, in the page's own pixels.
     const toPage = (e: PointerEvent) => {
-      const frame = iframeRef.current;
-      if (!frame) return null;
-      const box = frame.getBoundingClientRect();
-      if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) return null;
-      const scale = frame.offsetWidth ? box.width / frame.offsetWidth : 1;
-      return { x: (e.clientX - box.left) / scale, y: (e.clientY - box.top) / scale };
+      for (const frame of frames.current.values()) {
+        const box = frame.getBoundingClientRect();
+        if (e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom) continue;
+        const scale = frame.offsetWidth ? box.width / frame.offsetWidth : 1;
+        return { frame, x: (e.clientX - box.left) / scale, y: (e.clientY - box.top) / scale };
+      }
+      return null;
     };
     const move = (e: PointerEvent) => {
       setGhost({ x: e.clientX, y: e.clientY, label: item.label });
       const at = toPage(e);
-      if (at) post({ type: "dropProbe", ...at });
-      else { probe.current = { key: null, position: null }; post({ type: "dropEnd" }); }
+      // The pages the pointer is not over lose their line.
+      frames.current.forEach((el) => { if (el !== at?.frame) el.contentWindow?.postMessage({ type: "dropEnd" } satisfies ToPreview, "*"); });
+      if (at) at.frame.contentWindow?.postMessage({ type: "dropProbe", x: at.x, y: at.y } satisfies ToPreview, "*");
+      else probe.current = { key: null, position: null };
     };
     const finish = (e: PointerEvent) => {
       window.removeEventListener("pointermove", move);
@@ -434,7 +444,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           </Notice>
         ) : (
           <StageCanvas
-            resetKey={`${component.id}|${mode === "edit" || mode === "playground" ? "one" : mode}|${width ?? "auto"}`}
+            resetKey={`${component.id}|${mode === "edit" || mode === "playground" ? "one" : mode}|${sizes ? sizes.join("+") : width ?? "auto"}`}
             freeze={resizing}
             overlay={
               <>
@@ -445,7 +455,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                   </div>
                 )}
                 <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
-                  <BreakpointBar width={width} onChange={setWidth} />
+                  <BreakpointBar width={width} onChange={setWidth} compare={mode === "edit" || mode === "playground" ? compare : undefined} onCompare={setCompare} />
                 </div>
                 {editing && !selection && rendered && (
                   <p data-canvas-hint className="pointer-events-none absolute inset-x-0 bottom-4 text-center text-2xs text-text-tertiary">
@@ -470,22 +480,36 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             }
           >
             {srcdoc && (
-              <div data-frame className="flex flex-col gap-1.5">
+              <div data-frames className="flex items-start gap-12">
                 <ZoomSync onZoom={onZoom} />
-                <FrameLabel name={component.name} width={frameWidth} height={Math.max(height, 80)} dark={dark} />
-                <div className="relative">
-                  <iframe
-                    ref={iframeRef}
-                    title="Component preview"
-                    // Opaque origin: no access to Motif's storage, tokens or cookies.
-                    sandbox="allow-scripts"
-                    srcDoc={srcdoc}
-                    // Content-box, so a 768 preview is 768 wide inside its border and a `md:` class applies.
-                    style={{ display: "block", width: frameWidth, height: Math.max(height, 80), boxSizing: width ? "content-box" : "border-box", backgroundColor: dark ? "#0b0b0f" : "#ffffff" }}
-                    className="rounded-lg border border-surface-border shadow-sm"
-                  />
-                  <WidthHandle start={() => frameWidth} onResize={setWidth} onResizing={setResizing} />
-                </div>
+                {(sizes ?? [null]).map((w) => {
+                  const bp = w === null ? null : BREAKPOINTS.find((b) => b.value === w);
+                  return (
+                    <PreviewFrame
+                      key={w ?? "main"}
+                      id={String(w ?? "main")}
+                      name={bp ? `${component.name} · ${bp.label}` : component.name}
+                      srcdoc={srcdoc}
+                      width={w ?? frameWidth}
+                      chosen={w !== null || width !== null}
+                      dark={dark}
+                      items={items}
+                      layout={layout}
+                      overrides={overridesCss}
+                      editing={editing}
+                      selectedKey={selectedKey}
+                      file={component.file}
+                      revision={revision}
+                      zoom={zoom}
+                      catchUp={catchUp}
+                      register={register}
+                      onReady={onReady}
+                      onRendered={onRendered}
+                      onResize={w === null ? setWidth : undefined}
+                      onResizing={w === null ? setResizing : undefined}
+                    />
+                  );
+                })}
               </div>
             )}
           </StageCanvas>

@@ -7,6 +7,8 @@ interface PreviewStore {
   dark: boolean;
   // Width of the preview in px; null fills the stage.
   width: number | null;
+  // The widths shown side by side, or null for one preview.
+  compare: number[] | null;
   mode: "playground" | "variants" | "examples" | "edit";
   // Whether previews show the tokens Motif has changed since the last sync.
   motifTokens: boolean;
@@ -17,6 +19,7 @@ interface PreviewStore {
   resetValues: (id: string) => void;
   setDark: (dark: boolean) => void;
   setWidth: (width: number | null) => void;
+  setCompare: (widths: number[] | null) => void;
   setMode: (mode: "playground" | "variants" | "examples" | "edit") => void;
   setMotifTokens: (on: boolean) => void;
 }
@@ -25,6 +28,7 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
   values: {},
   dark: false,
   width: null,
+  compare: null,
   // Opening a component lands in Design: the canvas you work on. "playground" is shown as Preview, to use the component.
   mode: "edit",
   motifTokens: true,
@@ -40,6 +44,7 @@ export const usePreviewStore = create<PreviewStore>((set) => ({
   resetValues: (id) => set((s) => { const { [id]: _, ...rest } = s.values; return { values: rest }; }),
   setDark: (dark) => set({ dark }),
   setWidth: (width) => set({ width }),
+  setCompare: (compare) => set({ compare }),
   setMode: (mode) => set({ mode }),
   setMotifTokens: (motifTokens) => set({ motifTokens }),
 }));

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Columns3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The canvas's zoom, for what is drawn on it and measured in screen pixels (dragging an edge by 10 px on a canvas at 50% is 20 px
@@ -33,7 +34,16 @@ export function widthAfterDrag(start: number, dx: number, zoom: number): number 
 }
 
 // The sizes to choose from, above the canvas: Phone, Tablet, Laptop, Desktop, Auto, and a width to type. The one that is on is marked.
-export function BreakpointBar({ width, onChange }: { width: number | null; onChange: (width: number | null) => void }) {
+// With `compare` (a list of widths, or null for one preview) the bar also has Compare, which shows several sizes side by side; while it
+// is on, the sizes are switches for which are shown.
+export const COMPARE_DEFAULT = [375, 768, 1280];
+
+export function BreakpointBar({ width, onChange, compare, onCompare }: {
+  width: number | null;
+  onChange: (width: number | null) => void;
+  compare?: number[] | null;
+  onCompare?: (widths: number[] | null) => void;
+}) {
   const [text, setText] = useState(width === null ? "" : String(width));
   useEffect(() => { setText(width === null ? "" : String(width)); }, [width]);
   const commit = () => {
@@ -49,22 +59,40 @@ export function BreakpointBar({ width, onChange }: { width: number | null; onCha
       // The canvas pans when it is dragged; this is not part of it.
       onPointerDown={(e) => e.stopPropagation()}
     >
-      {BREAKPOINTS.map((b) => (
+      {BREAKPOINTS.filter((b) => !(compare && b.value === null)).map((b) => (
         <button
           key={b.label}
           type="button"
-          onClick={() => onChange(b.value)}
-          aria-pressed={width === b.value}
+          onClick={() => {
+            if (!compare || !onCompare) return onChange(b.value);
+            // Comparing: a size is switched on or off, in order of width, and one stays on.
+            const has = compare.includes(b.value as number);
+            if (has && compare.length === 1) return;
+            onCompare([...(has ? compare.filter((w) => w !== b.value) : [...compare, b.value as number])].sort((x, y) => x - y));
+          }}
+          aria-pressed={compare ? compare.includes(b.value as number) : width === b.value}
           aria-label={`Preview width: ${b.value ?? "Auto"}`}
           title={b.value === null ? "The width the view calls for" : `${b.label}: ${b.value} px wide`}
-          className={cn("flex items-baseline gap-1 rounded px-2 py-1 text-xs transition-colors", width === b.value ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary")}
+          className={cn("flex items-baseline gap-1 rounded px-2 py-1 text-xs transition-colors", (compare ? compare.includes(b.value as number) : width === b.value) ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary")}
         >
           {b.label}
           {b.value !== null && <span className="text-2xs tabular-nums opacity-70">{b.value}</span>}
         </button>
       ))}
-      <span className="mx-0.5 h-4 w-px bg-surface-border" />
-      <input
+      {compare === undefined || !onCompare ? null : (
+        <button
+          type="button"
+          onClick={() => onCompare(compare ? null : COMPARE_DEFAULT)}
+          aria-pressed={!!compare}
+          aria-label="Compare sizes"
+          title={compare ? "Back to one size" : "Show several sizes side by side"}
+          className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors", compare ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary")}
+        >
+          <Columns3 size={12} /> Compare
+        </button>
+      )}
+      {!compare && <span className="mx-0.5 h-4 w-px bg-surface-border" />}
+      {!compare && <input
         aria-label="Preview width"
         inputMode="numeric"
         placeholder="Auto"
@@ -73,8 +101,8 @@ export function BreakpointBar({ width, onChange }: { width: number | null; onCha
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur(); } }}
         className="h-6 w-14 rounded border border-transparent bg-transparent px-1 text-center text-2xs tabular-nums text-text-primary outline-none placeholder:text-text-tertiary hover:border-surface-border focus:border-accent/60"
-      />
-      <span className="pr-1.5 text-2xs text-text-tertiary">px</span>
+      />}
+      {!compare && <span className="pr-1.5 text-2xs text-text-tertiary">px</span>}
     </div>
   );
 }
