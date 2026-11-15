@@ -171,11 +171,16 @@ const check = (name, ok, detail = "") => {
 
   // ── Changing a block ─────────────────────────────────────────────────────
   const block = paper.locator(".md-block", { has: page.locator('iframe[title="Button preview"]') });
-  await block.hover();
-  await block.getByLabel("Preview shows").selectOption("single");
+  // A block's controls show while the pointer is over it. The page can move after the pointer got there (a preview loading, a block
+  // added), so the pointer is put back over the block until the control shows, and then the control is used.
+  const pick = async (box, label, option) => {
+    const control = box.getByLabel(label);
+    for (let i = 0; i < 100 && !(await control.isVisible()); i++) { await box.hover(); await page.waitForTimeout(100); }
+    await control.selectOption(option);
+  };
+  await pick(block, "Preview shows", "single");
   check("a preview can show one instead of every variant", await settle(async () => (await preview("Button").locator("#root button").count()) === 1));
-  await block.hover();
-  await block.getByLabel("Repository component").selectOption({ label: "Badge" });
+  await pick(block, "Repository component", { label: "Badge" });
   check("or another component", await settle(async () => (await page.locator('iframe[title="Badge preview"]').count()) === 1));
   await preview("Badge").locator("#root span.rounded-full").waitFor({ timeout: 60000 });
 
@@ -186,10 +191,8 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("menuitem", { name: "Component preview" }).click();
   const added = paper.locator(".md-block").nth(1);
   check("a block can be added to any page, for any imported component", (await added.count()) === 1);
-  await added.hover();
-  await added.getByLabel("Repository component").selectOption({ label: "Alert" });
-  await added.hover();
-  await added.getByLabel("Preview shows").selectOption("variants");
+  await pick(added, "Repository component", { label: "Alert" });
+  await pick(added, "Preview shows", "variants");
   check("and it runs", await settle(async () => (await page.locator('iframe[title="Alert preview"]').count()) === 1));
   await page.screenshot({ path: `${OUT}/docsr-own-page.png` });
 
