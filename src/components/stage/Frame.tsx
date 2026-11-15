@@ -55,6 +55,7 @@ export function BreakpointBar({ width, onChange, compare, onCompare }: {
   return (
     <div
       data-breakpoints
+      data-tour="sizes"
       className="pointer-events-auto flex items-center gap-0.5 rounded-md border border-surface-border bg-surface-raised p-0.5 shadow-sm"
       // The canvas pans when it is dragged; this is not part of it.
       onPointerDown={(e) => e.stopPropagation()}

@@ -2,7 +2,7 @@
 
 import { useShallow } from "zustand/react/shallow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, Layers, Loader2, Moon, MousePointer2, Palette, Play, Redo2, Sun, Undo2 } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, GitPullRequest, HelpCircle, Layers, Loader2, Moon, MousePointer2, Palette, Play, Redo2, Sun, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildGraph } from "@/lib/preview/graph";
 import { parseMotifKey } from "@/lib/edit/instrument";
@@ -25,6 +25,7 @@ import StageCanvas from "./StageCanvas";
 import { BREAKPOINTS, BreakpointBar, ZoomSync } from "./Frame";
 import PreviewFrame from "./PreviewFrame";
 import ElementMenu from "./ElementMenu";
+import Tour, { useTour } from "./Tour";
 import InsertPalette, { type PaletteItem } from "./InsertPalette";
 import { useCanvasActions } from "./useCanvasActions";
 import { useElementEdit } from "@/components/panels/useElementEdit";
@@ -217,6 +218,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   const onZoom = useCallback((z: number) => { zoomRef.current = z; setZoom(z); }, []);
 
   // Which element is selected, and whether clicking picks one.
+  const tour = useTour(rendered && mode === "edit");
   const selectedKey = editing && selection ? `${selection.path}|${selection.start}` : null;
 
   // An edit changes the source of some modules; the preview runs the new code without loading again.
@@ -411,6 +413,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           </button>
         )}
 
+        {mode === "edit" && <Tip label="Show the tour"><button onClick={tour.start} aria-label="Show the tour" className="tool-btn !h-7 !w-7"><HelpCircle size={13} /></button></Tip>}
         <button onClick={() => setDark(!dark)} className="tool-btn !h-7 !w-7" title={dark ? "Switch to light" : "Switch to dark"} aria-label={dark ? "Light theme" : "Dark theme"}>
           {dark ? <Moon size={13} /> : <Sun size={13} />}
         </button>
@@ -516,6 +519,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         )}
       </div>
       {ghost && <div className="pointer-events-none fixed z-[80] rounded bg-accent px-2 py-1 text-xs font-medium text-white shadow-lg" style={{ left: ghost.x + 12, top: ghost.y + 12 }}>{ghost.label}</div>}
+      {tour.open && mode === "edit" && rendered && <Tour onClose={tour.close} />}
       {menu && <ElementMenu point={menu} info={edit.info} canPaste={actions.canPaste()} actions={actions.act} onClose={() => setMenu(null)} />}
     </div>
   );
