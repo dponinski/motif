@@ -216,7 +216,8 @@ const check = (name, ok, detail = "") => {
   await reselect();
   await drag("corner", 60, 20);
   check("the corner changes the width and the height together", await settle(async () => (await px("div.rounded-lg", "width")) > before + 40 && (await px("div.rounded-lg", "height")) > 0));
-  const undoable = await page.getByRole("button", { name: "Undo" }).isEnabled();
+  // The page shows the new size while the handle is dragged; the edit is made when it is let go, a moment later (longer on a slow machine).
+  const undoable = await settle(async () => page.getByRole("button", { name: "Undo" }).isEnabled());
   await undo();
   const backToStart = await settle(async () => Math.abs((await px("div.rounded-lg", "width")) - before) <= 1);
   await reselect();
