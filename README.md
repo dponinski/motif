@@ -191,7 +191,7 @@ After a scan, **Import components** (Git panel or the repository view) adds the 
 
 ## Editing repository components
 
-Open a repository component and you are in **Design**, the mode you work in. The stage has four modes: **Design** (click an element to select it and change it), **Preview** (use the component: clicks reach it, and the right panel is its props), **Variants** (every variant side by side) and **Examples** (how the repository uses it).
+Open a repository component and you are in **Design**, the mode you work in. The stage has four modes: **Design** (click an element to select it and change it), **Preview** (use the component: clicks reach it, and the right panel is its props), **Variants** (every variant side by side, and a canvas to work on like Design: the element you click is picked in every variant, and one edit, an added element, a resize, a new class, changes them all) and **Examples** (how the repository uses it).
 
 **The frame.** The component sits in a labelled frame ("Banner · 640 × 110") that follows the light or dark theme. Above the canvas are the sizes designers think in (**Phone** 375, **Tablet** 768, **Laptop** 1024, **Desktop** 1280, **Auto**) and a width to type; the size that is on is marked. The frame's right edge can be dragged to any width, live. Scroll pans the canvas, Ctrl/Cmd and scroll zooms, and the chip at the bottom left zooms and fits.
 

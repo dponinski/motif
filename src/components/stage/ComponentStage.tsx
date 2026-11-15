@@ -176,7 +176,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   }, [ready, items, layout, dark, overridesCss]);
 
   // ── Editing ────────────────────────────────────────────────────────────────
-  const editing = mode === "edit";
+  // Design and Variants are both a canvas to work on: in Variants the same element is picked in every variant, and one edit changes them all.
+  const editing = mode === "edit" || mode === "variants";
   const selection = useEditStore((s) => s.selection);
   const revision = useEditStore((s) => s.revision);
   const canUndo = useEditStore((s) => s.index > 0);
@@ -361,7 +362,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
               onClick={() => setMode(id)}
               aria-pressed={mode === id}
               disabled={(id === "variants" && component.variants.length === 0) || (id === "examples" && examples.list.length === 0)}
-              title={id === "edit" ? "Select and change elements" : id === "playground" ? "Use the component: clicks reach it" : id === "variants" ? "Every variant side by side" : examples.loading ? "Looking for examples in the repository…" : examples.list.length ? "How the repository uses this component" : "No examples found in the repository's demo files"}
+              title={id === "edit" ? "Select and change elements" : id === "playground" ? "Use the component: clicks reach it" : id === "variants" ? "Every variant side by side: an edit changes them all" : examples.loading ? "Looking for examples in the repository…" : examples.list.length ? "How the repository uses this component" : "No examples found in the repository's demo files"}
               className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors disabled:opacity-40", mode === id ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}
             >
               <Icon size={11} /> {label}{id === "examples" && examples.list.length > 0 && <span className="text-text-tertiary"> {examples.list.length}</span>}
@@ -448,7 +449,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                 </div>
                 {editing && !selection && rendered && (
                   <p data-canvas-hint className="pointer-events-none absolute inset-x-0 bottom-4 text-center text-2xs text-text-tertiary">
-                    Click an element to style it · scroll to pan · Ctrl or ⌘ and scroll to zoom
+                    {mode === "variants" ? "Click an element to style it in every variant" : "Click an element to style it"} · scroll to pan · Ctrl or ⌘ and scroll to zoom
                   </p>
                 )}
                 <div className="pointer-events-none absolute inset-x-3 top-14 flex flex-col gap-2">

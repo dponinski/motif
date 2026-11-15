@@ -141,7 +141,7 @@ const TABS: { id: Tab; label: string; hint: string }[] = [
 ];
 
 export default function RepoComponentPanel({ component }: { component: LibraryComponent }) {
-  const editing = usePreviewStore((s) => s.mode === "edit");
+  const editing = usePreviewStore((s) => s.mode === "edit" || s.mode === "variants");
   const source = useLibraryStore((s) => s.source);
   const connection = useGitStore((s) => s.connection);
   const [tab, setTab] = useState<Tab>("design");
