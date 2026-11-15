@@ -2,6 +2,7 @@ import type { RepoToken, RepoTokenKind } from "../repo-scan/types";
 import { parseColor, rgbToOklab, toHex, type Rgba } from "../token-sync/color";
 import { normalizeShadow, parseLengthPx } from "../token-sync/values";
 import { PALETTE_COLOR, SCALE, type ClassGroup, type TokenNames, type TokenRole } from "./classes";
+import { makePlans, type MakePlans } from "./motif-tokens";
 
 // The repository's design tokens as the inspector needs them: which ones a control can offer, what each is worth
 // in each theme, and for a value that is not a token, the token it could be instead.
@@ -33,6 +34,8 @@ export interface TokenIndex {
   // The repository styles with plain CSS: every variable it has is a token, offered by its CSS name, and a length or
   // color written out is a value that could be one.
   css?: boolean;
+  // Whether a token made from a value on an element could be named by a class once synced, for colors, radii and spacing.
+  make?: MakePlans;
 }
 
 const ROLES: [RegExp, TokenRole][] = [
@@ -116,7 +119,7 @@ export function buildTokenIndex(
   }
 
   const names = (role: TokenRole) => new Set(byRole[role].map((c) => c.value));
-  return { themes: all, byRole, reset, spacingStep, tailwind, names: { color: names("color"), text: names("text"), shadow: names("shadow"), font: names("font") }, ...(css ? { css: true } : {}) };
+  return { themes: all, byRole, reset, spacingStep, tailwind, names: { color: names("color"), text: names("text"), shadow: names("shadow"), font: names("font") }, make: makePlans(tokens, tailwind), ...(css ? { css: true } : {}) };
 }
 
 // ── Values ────────────────────────────────────────────────────────────────────
@@ -286,7 +289,7 @@ export interface Suggestion {
 }
 
 // What is inside `[...]`, without a type hint (`[length:1rem]`, `[color:#fff]`), and anything after it (`/50`).
-function unwrapArbitrary(value: string): { inner: string; rest: string } | null {
+export function unwrapArbitrary(value: string): { inner: string; rest: string } | null {
   const m = value.match(/^\[(.*)\](.*)$/);
   if (!m) return null;
   return { inner: m[1].replace(/^[a-z-]+:(?!\/)/, "").replace(/_/g, " ").trim(), rest: m[2] };

@@ -19,6 +19,7 @@ export interface PreviewFrameProps {
   items: RenderItem[];
   layout: "single" | "grid" | "stack";
   overrides: string;
+  theme: string;
   editing: boolean;
   selectedKey: string | null;
   file: string;
@@ -63,9 +64,9 @@ export default function PreviewFrame(p: PreviewFrameProps) {
 
   const post = (message: ToPreview) => ref.current?.contentWindow?.postMessage(message, "*");
   useEffect(() => {
-    if (ready) post({ type: "render", id: ++renderId.current, items: p.items, layout: p.layout, dark: p.dark, overrides: p.overrides });
+    if (ready) post({ type: "render", id: ++renderId.current, items: p.items, layout: p.layout, dark: p.dark, overrides: p.overrides, theme: p.theme });
      
-  }, [ready, p.items, p.layout, p.dark, p.overrides]);
+  }, [ready, p.items, p.layout, p.dark, p.overrides, p.theme]);
   useEffect(() => { if (ready) post({ type: "zoom", zoom: p.zoom });   }, [ready, p.zoom]);
   // The preview is on a canvas: scrolling, pinching and Space over it move the canvas, not the page inside.
   useEffect(() => { if (ready) post({ type: "canvas", on: true });   }, [ready]);

@@ -17,6 +17,7 @@ import type { LibraryComponent } from "@/lib/preview/library";
 import type { GitConnection } from "@/store/git";
 import { useLibraryStore, type LibrarySource } from "@/store/library";
 import { ChoiceField, ColorField, RawHint, fieldStatus } from "./TokenField";
+import { useSaveToken } from "./useSaveToken";
 
 // The spacing controls, short: what each is for, since the section already says it is spacing.
 const SPACING_CAPTION: Record<string, string> = { p: "All sides", px: "Horizontal", py: "Vertical", m: "Margin" };
@@ -86,6 +87,7 @@ function Commit({ value, onCommit, label, list, multiline, placeholder }: { valu
 
 export default function ElementInspector({ component, source, connection, part = "design" }: { component: LibraryComponent; source: LibrarySource; connection: GitConnection; part?: "design" | "code" }) {
   const { selection, info, sheet, error, modifier, stateValue, scopeValue, chooseStateOnly, chooseScope, values, index, theme, run, derived } = useElementEdit(component, source, connection);
+  const saveToken = useSaveToken(source.repo, index);
   const [position, setPosition] = useState<InsertPosition>("last-child");
   const library = useLibraryStore((s) => s.components);
 
@@ -320,7 +322,7 @@ export default function ElementInspector({ component, source, connection, part =
                           )}
                         </span>
                         {control}
-                        <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} indent={false} />
+                        <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} save={saveToken(g, value, (v) => change(g, v))} indent={false} />
                       </div>
                     );
                   }
@@ -334,7 +336,7 @@ export default function ElementInspector({ component, source, connection, part =
                           </div>
                         ) : control}
                       </Field>
-                      <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} />
+                      <RawHint group={g} label={g.label} value={value} index={index} onUse={(v) => change(g, v)} save={saveToken(g, value, (v) => change(g, v))} />
                     </div>
                   );
                 })}

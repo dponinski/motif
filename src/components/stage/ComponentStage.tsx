@@ -105,6 +105,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
   // What Motif has changed in its tokens since the last sync, shown on the repository's own components.
   const motif = useTokenOverrides(source.repo);
   const overridesCss = motif.shown;
+  const themeCss = motif.theme;
 
   // The previews on the canvas: one, or several at different widths. What is sent to "the preview" goes to each of them.
   const frames = useRef(new Map<string, HTMLIFrameElement>());
@@ -499,6 +500,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                       items={items}
                       layout={layout}
                       overrides={overridesCss}
+                      theme={themeCss}
                       editing={editing}
                       selectedKey={selectedKey}
                       file={component.file}
