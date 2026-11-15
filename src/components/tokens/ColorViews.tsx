@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { Copy, GripVertical, Lock, Trash2 } from "lucide-react";
+import { CornerDownRight, Copy, GripVertical, Lock, Trash2, Unlink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { contrastRatio, gradeOf, hexOf } from "@/lib/tokens/contrast";
 import { cssName } from "@/lib/token-sync/doc";
 import { normalizeColor } from "@/lib/token-sync/color";
+import { dependentsOf, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
 import type { ColorToken, TokenTheme } from "@/store/design-system";
 import { CommitInput, InlineName } from "./fields";
 import type { Row } from "./rows";
@@ -18,6 +19,8 @@ import type { Drag } from "./drag";
 export interface ColorActions {
   rename: (id: string, name: string) => void;
   setColor: (id: string, themeId: string, text: string) => boolean;
+  // Makes the color, in a theme, the token with this key (null: the color it is now).
+  setAlias: (id: string, themeId: string, target: string | null) => boolean;
   duplicate: (ids: string[]) => void;
   remove: (ids: string[]) => void;
   toGroup: (ids: string[], group: string) => void;
@@ -36,9 +39,18 @@ export interface ColorCtx {
   setOpenId: (id: string | null) => void;
   // A repository is connected, so a token it doesn't have is worth marking.
   hasRepo: boolean;
+  // Every color of the set, for what a color can be (an alias) and what is it.
+  all: ColorToken[];
 }
 
 const valueIn = (c: ColorToken, themeId: string) => c.themeValues[themeId] ?? c.value;
+// "Light: gray-50 · Dark: gray-900" for the themes in which a color is another token.
+function aliasTitle(c: ColorToken, ctx: Pick<ColorCtx, "themes" | "all">): string {
+  return ctx.themes.filter((t) => c.themeAlias?.[t.id]).map((t) => {
+    const key = c.themeAlias![t.id];
+    return `${t.name}: ${ctx.all.find((x) => tokenKey(x) === key)?.name ?? key}`;
+  }).join(" · ");
+}
 const copy = (text: string) => { void navigator.clipboard?.writeText(text).catch(() => undefined); };
 
 export function Badges({ row, hasRepo }: { row: Row; hasRepo: boolean }) {
@@ -78,8 +90,37 @@ function Contrast({ value }: { value: string }) {
   return <span className="flex flex-wrap gap-1">{on("#ffffff", "white")}{on("#000000", "black")}</span>;
 }
 
+// In one theme: the token this color is, or a way to make it one.
+function AliasField({ token, theme, ctx }: { token: ColorToken; theme: TokenTheme; ctx: ColorCtx }) {
+  const target = token.themeAlias?.[theme.id];
+  const named = target ? ctx.all.find((c) => tokenKey(c) === target) : undefined;
+  const options = ctx.all.filter((c) => c.id !== token.id && !wouldLoop(ctx.all, token, theme.id, tokenKey(c)));
+  return (
+    <div className="flex items-center gap-1.5 pl-[3.75rem]" data-alias-field={theme.id}>
+      {target ? (
+        <>
+          <span className="flex min-w-0 items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent" title={`${theme.name} is the token ${named?.name ?? target}`} data-alias-chip>
+            <CornerDownRight size={10} aria-hidden /><span className="truncate">{named?.name ?? target}</span>
+          </span>
+          <select aria-label={`Token that ${token.name} is in ${theme.name}`} value={target} onChange={(e) => ctx.act.setAlias(token.id, theme.id, e.target.value)} className="w-5 flex-shrink-0 rounded border border-surface-border bg-surface-base text-2xs text-text-primary outline-none">
+            {options.map((c) => <option key={c.id} value={tokenKey(c)}>{c.name}</option>)}
+            {!options.some((c) => tokenKey(c) === target) && <option value={target}>{named?.name ?? target}</option>}
+          </select>
+          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${named?.name ?? target}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
+        </>
+      ) : (
+        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none">
+          <option value="">Make it another token…</option>
+          {options.map((c) => <option key={c.id} value={tokenKey(c)}>{c.name}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
 export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
   const token = row.token as ColorToken;
+  const used = dependentsOf(ctx.all, token);
   return (
     <div className="flex flex-col gap-2.5" data-color-editor>
       <div className="flex items-center gap-2">
@@ -96,6 +137,7 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
               <NativeColor value={value} label={`${theme.name} color picker`} onCommit={(hex) => ctx.act.setColor(row.id, theme.id, hex)} />
               <CommitInput value={value} label={`${theme.name} value of ${row.name}`} mono frame className="flex-1" onCommit={(t) => ctx.act.setColor(row.id, theme.id, t)} invalidHint="Not a color Motif can read" />
             </div>
+            <AliasField token={token} theme={theme} ctx={ctx} />
             <div className="pl-[3.75rem]"><Contrast value={value} /></div>
           </div>
         );
@@ -113,6 +155,11 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
         <div className="flex-1" />
         <button type="button" aria-label={`Delete ${row.name}`} onClick={() => { ctx.act.remove([row.id]); ctx.setOpenId(null); }} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-red-500/10 hover:text-red-400"><Trash2 size={10} /> Delete</button>
       </div>
+      {used.length > 0 && (
+        <p className="text-2xs text-text-tertiary" data-used-by>
+          Used by {used.map((c) => c.name).join(", ")}. If this is deleted they keep the color they are now.
+        </p>
+      )}
       {row.linked && <p className="text-2xs text-text-tertiary">Named by the repository, so it can&apos;t be renamed here.</p>}
     </div>
   );
@@ -142,6 +189,7 @@ function Swatch({ row, label, ctx }: { row: Row; label: string; ctx: ColorCtx })
           </button>
           <div className="mt-1 flex items-center gap-1">
             <span className="truncate text-2xs font-medium text-text-secondary" title={row.name}>{label}</span>
+            {token.themeAlias && <span title={aliasTitle(token, ctx)} data-alias-mark className="flex-shrink-0 text-accent"><CornerDownRight size={9} aria-label={`${row.name} is another token`} /></span>}
             {row.changed && <span aria-label="Changed" title="Changed in Motif since the last sync" className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500" />}
             {row.readonly && <Lock size={8} aria-label="Read-only" className="flex-shrink-0 text-text-tertiary" />}
           </div>
@@ -199,6 +247,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
               </Popover.Portal>
             </Popover.Root>
             <CommitInput value={value} label={`${theme.name} value of ${row.name}`} mono className="w-full" onCommit={(t) => ctx.act.setColor(row.id, theme.id, t)} invalidHint="Not a color Motif can read" />
+            {token.themeAlias?.[theme.id] && <span data-alias-chip title={`${theme.name} is the token ${token.themeAlias[theme.id]}`} className="flex flex-shrink-0 items-center gap-0.5 text-2xs text-accent"><CornerDownRight size={10} aria-hidden />{ctx.all.find((x) => tokenKey(x) === token.themeAlias![theme.id])?.name ?? token.themeAlias[theme.id]}</span>}
           </div>
         );
       })}

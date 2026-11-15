@@ -29,7 +29,7 @@ function searchText(kind: TokenKind, t: Token, themes: { id: string }[]): string
   switch (kind) {
     case "color": {
       const c = t as ColorToken;
-      return themes.map((th) => { const v = c.themeValues[th.id] ?? c.value; return `${hexOf(v)} ${v}`; }).join(" ");
+      return themes.map((th) => { const v = c.themeValues[th.id] ?? c.value; return `${hexOf(v)} ${v} ${c.themeAlias?.[th.id] ?? ""}`; }).join(" ");
     }
     case "spacing": return `${(t as SpacingToken).value}px`;
     case "radius": return `${(t as RadiusToken).value}px`;

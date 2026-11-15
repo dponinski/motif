@@ -67,7 +67,7 @@ const CSS = `:root {
   check("each shows its value for every theme", (await row("primary-600").innerText()).includes("#4f46e5") && (await row("primary-600").innerText()).includes("#818cf8"));
   check("a length shows in px, whatever it was written in", (await row("space-8").innerText()).includes("32px"));
   await dialog.locator("[data-notes] summary").click();
-  check("what was left out is said, with why", (await dialog.locator("[data-notes]").innerText()).includes("border: refers to another token (var())"));
+  check("what was left out is said, with why", (await dialog.locator("[data-notes]").innerText()).includes("border: refers to gray-200, which isn't a color"));
   check("and counted", (await dialog.locator("[data-plan-summary]").innerText()).includes("4 to add"));
   await page.screenshot({ path: `${OUT}/tokens-add-paste.png` });
 

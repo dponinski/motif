@@ -1,6 +1,7 @@
 import type { RepoAnalysis, RepoToken } from "../repo-scan/types";
 import { BASE, themeOfSelector } from "../repo-scan/tokens";
 import { formatLike } from "./color";
+import { aliasTarget } from "../tokens/alias";
 import type { RepoSnapshot, SyncDoc, SyncKind } from "./doc";
 import type { TokenChange } from "./merge";
 import { formatLength, writeShadow } from "./values";
@@ -46,6 +47,8 @@ function sampleOf(analysis: RepoAnalysis, kind: RepoToken["kind"]): string | und
 
 function writtenValue(change: TokenChange, analysis: RepoAnalysis, snapshot: RepoSnapshot): string {
   const after = change.after!;
+  // A color that is another token is written as that, whatever notation the repository uses for colors.
+  if (change.kind === "color" && aliasTarget(after) !== null) return after.trim();
   const original = snapshot.raw[change.name]?.[change.theme ?? snapshot.baseTheme];
   switch (change.kind) {
     case "color":

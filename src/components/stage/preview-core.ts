@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
 import { changedValues, tokenOverrides } from "@/lib/preview/overrides";
 import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
-import { readMotifTokens } from "@/lib/token-sync/doc";
+import { readMotifTokens, resolveInDoc } from "@/lib/token-sync/doc";
+import { aliasTarget } from "@/lib/tokens/alias";
 import { EMPTY_INDEX, buildTokenIndex, type TokenIndex } from "@/lib/edit/tokens";
 import { useDesignSystemStore } from "@/store/design-system";
 import { useGitStore } from "@/store/git";
@@ -106,7 +107,17 @@ export function useTokenIndex(repo: string | null): TokenIndex {
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
   return useMemo(() => {
     if (!analysis || !repo || analysis.repo !== repo) return EMPTY_INDEX;
-    const overrides = motifTokens && link && link.repo === repo ? changedValues(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base) : {};
+    let overrides: Record<string, Record<string, string>> = {};
+    if (motifTokens && link && link.repo === repo) {
+      const current = readMotifTokens({ colors, spacing, radii, shadows }, link);
+      overrides = changedValues(current, link.base);
+      // A color that is another token is shown as the color that comes to.
+      for (const [name, byTheme] of Object.entries(overrides)) {
+        for (const [theme, value] of Object.entries(byTheme)) {
+          if (aliasTarget(value) !== null) byTheme[theme] = resolveInDoc(current, name, theme, link.baseTheme) ?? value;
+        }
+      }
+    }
     // Without Tailwind the tokens are the repository's CSS variables, and a stylesheet's controls offer them by name.
     return buildTokenIndex(analysis.tokens, analysis.themes, analysis.stack.tailwindVersion, overrides, analysis.stack.tailwindVersion === null);
   }, [analysis, repo, link, motifTokens, colors, spacing, radii, shadows]);

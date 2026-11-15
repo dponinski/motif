@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { CornerDownRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { applyPlan, planDrafts, type Draft, type PlanItem } from "@/lib/tokens/drafts";
-import { parsePaste, type Parsed } from "@/lib/tokens/paste";
+import { knownOf, parsePaste, type Parsed } from "@/lib/tokens/paste";
 import { colorRamp, RAMP_STEPS, radiusScale, spacingScale, typeScale } from "@/lib/tokens/scale";
 import { hexOf } from "@/lib/tokens/contrast";
 import { snapshotTokens, useDesignSystemStore, type TokenKind, type TokenSet } from "@/store/design-system";
@@ -36,6 +36,7 @@ function describe(d: Draft, themes: TokenSet["themes"]): React.ReactNode {
             <span key={t.id} className="flex items-center gap-1" title={`${t.name}: ${v}`}>
               <span className="h-3.5 w-3.5 flex-shrink-0 rounded border border-black/15" style={{ backgroundColor: v }} />
               <span className="font-mono text-2xs text-text-secondary">{hexOf(v)}</span>
+              {d.aliases?.[t.id] && <span data-alias-chip className="flex items-center gap-0.5 text-2xs text-accent"><CornerDownRight size={9} aria-hidden />{d.aliases[t.id]}</span>}
             </span>
           ))}
         </span>
@@ -113,11 +114,12 @@ function PasteTab({ set, onDone }: { set: TokenSet; onDone: () => void }) {
   const [text, setText] = useState("");
   const [prefix, setPrefix] = useState("color");
   const [parsed, setParsed] = useState<Parsed | null>(null);
+  const colors = useDesignSystemStore((s) => s.colors);
   useEffect(() => {
     let stale = false;
-    const timer = setTimeout(() => { void parsePaste(text, set.themes, { prefix }).then((p) => { if (!stale) setParsed(p); }); }, 120);
+    const timer = setTimeout(() => { void parsePaste(text, set.themes, { prefix, known: knownOf(colors, set.id) }).then((p) => { if (!stale) setParsed(p); }); }, 120);
     return () => { stale = true; clearTimeout(timer); };
-  }, [text, prefix, set.themes]);
+  }, [text, prefix, set.themes, colors, set.id]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">

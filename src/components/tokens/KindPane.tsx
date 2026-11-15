@@ -5,7 +5,7 @@ import { ListPlus, Palette as PaletteIcon, Rows3, Search, Wand2 } from "lucide-r
 import { cn } from "@/lib/utils";
 import { filterItems, groupItems, nextName, sortForReading, uniqueName, type Only } from "@/lib/tokens/organize";
 import { normalizeColor } from "@/lib/token-sync/color";
-import { useDesignSystemStore, type TokenKind, type TokenSet } from "@/store/design-system";
+import { useDesignSystemStore, type ColorToken, type TokenKind, type TokenSet } from "@/store/design-system";
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
 import { AddRow, type AddField } from "./fields";
@@ -78,7 +78,8 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   };
   const colorCtx: ColorCtx = {
     themes: set.themes, shown, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo,
-    act: { ...common, setColor: (id, theme, text) => editTokens(() => ds().setColorText(id, theme, text)), toGroup: (ids, group) => { editTokens(() => ds().setTokenGroup(kind, ids, group)); } },
+    all: kind === "color" ? rows.map((r) => r.token as ColorToken) : [],
+    act: { ...common, setColor: (id, theme, text) => editTokens(() => ds().setColorText(id, theme, text)), setAlias: (id, theme, target) => editTokens(() => ds().setColorAlias(id, theme, target)), toGroup: (ids, group) => { editTokens(() => ds().setTokenGroup(kind, ids, group)); } },
   };
   const otherCtx: OtherCtx = {
     selection, drag, taken, hasRepo,
