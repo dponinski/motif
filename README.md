@@ -131,6 +131,45 @@ Preview deployments get their own address, so Google, Apple and GitHub sign-in w
 
 Tests that use a database run when `TEST_DATABASE_URL` points at an empty one (`TEST_DATABASE_URL=postgresql://user:pw@127.0.0.1:5432/motif_test npm test`) and are skipped without it.
 
+## Going live
+
+Everything here is tested against stand-ins (a fake GitHub, a fake OpenID provider, a mail sink), which can only be as right as what they were written from. Before relying on a deployment, check it against the real ones. Two commands do most of that; the rest is one real sign-in each.
+
+**`npm run doctor`** reads the environment the server runs with (the shell's, and `.env.local`) and asks each part whether it is accepted, without changing anything:
+
+```bash
+npm run doctor
+npm run doctor -- --send-to you@example.com    # also sends a real sign-in link and a real invitation
+```
+
+- **Database**: connects, shows the version, says whether the tables are there and at which step (the app brings them up to date when it starts), and whether the server's certificate is being checked.
+- **Who may sign in**: that `ALLOWED_EMAILS` isn't empty (empty means nobody) and holds addresses or `@domains`.
+- **APP_URL**: that it is the address the site is served at, and the exact callback addresses to register with each provider.
+- **Email** (sign-in links and team invitations use the same server): logs in to `SMTP_URL`, checks the sender, and with `--send-to` sends the two real messages so you can see them arrive (and whether they land in spam). Without `SMTP_URL`, invitations show their link to pass on instead.
+- **Google**: that Google describes itself and publishes keys, and, by offering the token endpoint your client id and secret with a code that can't be right, whether Google knows the pair (it answers *invalid grant* if it does and *invalid client* if not).
+- **Apple**: that the private key reads and signs the client secret, that the site serves Apple's domain file (below), and, in the same way, whether Apple accepts the Services ID, team and key together.
+- **GitHub App**: whether GitHub knows the client id and secret, that the app named by `GITHUB_APP_SLUG` exists, and that it has the permissions Motif needs.
+
+It exits with an error if something is wrong, so it can run after a deploy. What it can't know is whether a **redirect address** is registered with the provider: only the first real sign-in shows that, and the doctor prints the address to register.
+
+**The things that catch people out**
+
+- **Google**: on the OAuth consent screen, an app left in *Testing* only lets the test users you list sign in, and ends their access after 7 days. Set it to *In production*; Motif asks for nothing but `openid email profile`, which needs no review. The redirect URI is `APP_URL/api/auth/google/callback`.
+- **Apple**: needs a paid developer account and an https domain of your own (not `localhost`). On the Services ID, register the domain and the return URL `APP_URL/api/auth/apple/callback`, and Apple gives a file to download that proves the domain is yours: put it at `public/.well-known/apple-developer-domain-association.txt` in this repository and deploy, before pressing Verify. The key must be one made for *Sign in with Apple*; its `.p8` text is `APPLE_PRIVATE_KEY`. People who hide their email come back as a `@privaterelay.appleid.com` address, which no list can name, so they are told to use another way to sign in.
+- **Mail**: send from an address on a domain you control and set up for it (SPF and DKIM are in your mail provider's settings; without them links go to spam). `smtps://` is port 465, `smtp://` is 587 and starts TLS by itself. A password with symbols is percent-encoded in the URL.
+- **GitHub App**: the callback URL must be listed on the app (`APP_URL/api/github/callback`); the account permission **Email addresses: Read-only** is what lets people sign in to Motif with GitHub, and **Contents** and **Pull requests** (read and write) are what Sync needs. Install the app on the repositories that should be usable.
+
+**`npm run live:github`** runs Motif's own GitHub client against a real repository instead of the stand-in: it reads the repository, makes a branch of its own (`motif-live-check/…`), commits several files in one commit, checks that a write over a file that has moved on is refused as stale, opens a pull request, reads and edits it, and then closes the pull request and deletes the branch. Nothing is written to the default branch.
+
+```bash
+LIVE_GITHUB_REPO=owner/name LIVE_GITHUB_TOKEN=github_pat_... npm run live:github
+LIVE_GITHUB_PR=0 ...    # leaves out the pull request, which is what starts a CI run on the repository
+```
+
+Use a fine-grained token for that repository with *Contents* and *Pull requests* read and write, preferably a throwaway repository. The commits say `[skip ci]`.
+
+The last check is done by hand, once per way of signing in, in a private window: sign in, sign out, sign in again (it should be the same account), and for email links open the same link twice (the second time it says the link has expired or was already used). For teams: invite a second address, open the invitation in another browser, and sign in with that address.
+
 ## Starting from an empty repository
 
 A project doesn't need a repository that already has components or tokens. Connect any repository, empty or not, and Motif **reads it by itself** when the project is first opened (the scan, and the components found in it, which appear in the Components panel). A repository with no components lands on the **build screen**: where to start, with nothing created for you.

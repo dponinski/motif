@@ -14,7 +14,9 @@
     "e2e:db": "node e2e/run.js db",
     "tauri": "tauri",
     "desktop:dev": "concurrently \"next dev --turbopack\" \"tauri dev\"",
-    "desktop:build": "next build && tauri build"
+    "desktop:build": "next build && tauri build",
+    "live:github": "vitest run src/lib/github-live.test.ts",
+    "doctor": "node --no-warnings --experimental-transform-types --env-file-if-exists=.env.local scripts/doctor.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
