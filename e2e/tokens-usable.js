@@ -161,7 +161,6 @@ const check = (name, ok, detail = "") => {
   // The repository's tokens are linked to a Motif set.
   await componentsReady(page);
   await tokensLinked(page);
-  if (await gitOpen()) await nav("Source control");
 
   // ── Tokens are made, with names that don't say what they are ──────────────
   await nav("Tokens");

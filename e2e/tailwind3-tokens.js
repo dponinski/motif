@@ -155,8 +155,6 @@ const check = (name, ok, detail = "") => {
 
   // ── Reading a Tailwind 3 repository's tokens ──────────────────────────────
   await nav("Source control");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
   await tokensLinked(page);
 
   await nav("Tokens");

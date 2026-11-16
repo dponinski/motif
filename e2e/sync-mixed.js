@@ -2,7 +2,7 @@
 const { chromium } = require("playwright");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
-const { tokensLinked } = require("./support/git-panel");
+const { tokensLinked, openSourceControl } = require("./support/git-panel");
 const { createFake } = require("./support/fake-github");
 
 const { OUT } = require("./support/env");
@@ -85,9 +85,9 @@ const check = (name, ok, detail = "") => {
   await page.waitForTimeout(1800);
   const link = await page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].repo.tokenLink);
   check("the link has moved on to the merged tokens, with nothing staged", link.staged === null && link.base.primary.values.default === "#ff0000", JSON.stringify(link.base.primary));
-  await nav("Source control");
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  check("the Tokens dialog says the two sides agree", await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 }).then(() => true, async () => { console.log((await dialog.innerText()).slice(0, 400)); return false; }));
+  await openSourceControl(page);
+  await page.getByRole("button", { name: "Pull", exact: true }).click();
+  check("pulling says the two sides agree", await page.locator("[data-pull-notice]").getByText("Up to date.").waitFor({ timeout: 30000 }).then(() => true, () => false));
 
   check("no errors in the page's console", errors.length === 0, errors.join(" | "));
   await browser.close();

@@ -21,4 +21,11 @@ async function tokensLinked(page) {
   await page.waitForLoadState("networkidle").catch(() => {});
 }
 
-module.exports = { componentsReady, openSourceControl, tokensLinked };
+// Opens the panel's "Repository" details (the scan summary, the branch to scan, the report), which are closed until they are wanted.
+async function openDetails(page) {
+  const details = page.locator("[data-details]");
+  await details.waitFor({ timeout: 30000 });
+  if ((await details.getAttribute("open")) === null) await details.locator("summary").click();
+}
+
+module.exports = { componentsReady, openSourceControl, tokensLinked, openDetails };

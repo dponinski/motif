@@ -5,6 +5,7 @@ const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { gitData } = require("./support/git-data");
 const { syncNow } = require("./support/sync-helpers");
+const { openDetails } = require("./support/git-panel");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
@@ -267,11 +268,9 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   // ── Use it: scan and open a pull request ──────────────────────────────────
   check("the Git panel says who it is signed in as, instead of asking for a token", await (async () => { await nav("Source control"); return page.locator("[data-signed-in]").filter({ hasText: "Signed in with GitHub as ada" }).waitFor({ timeout: 20000 }).then(() => true, () => false); })());
   check("no token is asked for", (await page.getByLabel("Access token").count()) === 0);
-  await page.getByRole("button", { name: "Scan" }).click();
+  await openDetails(page);
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 60000 });
   check("the private repository is scanned with it", true);
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
   await nav("Source control");
   await nav("Components");
   const stage = page.frameLocator('iframe[title="Component preview"]');
@@ -297,7 +296,8 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   const refreshesBefore = oauth.refreshes.length;
   oauth.tokens.delete("ghu_1");
   await nav("Source control");
-  await page.getByRole("button", { name: "Rescan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 60000 });
   await settle(async () => oauth.refreshes.length === refreshesBefore + 1);
   check("a token GitHub refuses is renewed once and the request made again", oauth.refreshes.length === refreshesBefore + 1 && oauth.refreshes.at(-1) === "ghr_1" && usedTokens.includes("ghu_2"), JSON.stringify({ refreshes: oauth.refreshes, used: [...new Set(usedTokens)] }));
@@ -319,7 +319,8 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   // ── The sign-in ends ──────────────────────────────────────────────────────
   oauth.refresh.clear();
   for (const t of [...oauth.tokens]) oauth.tokens.delete(t);
-  await page.getByRole("button", { name: "Rescan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByRole("alert").filter({ hasText: /sign-in has expired/ }).waitFor({ timeout: 30000 });
   check("when GitHub refuses the refresh token the person is told the sign-in has ended", await page.getByRole("button", { name: "Sign in again" }).isVisible());
   check("and the cookie is gone", (await cookies()).length === 0);

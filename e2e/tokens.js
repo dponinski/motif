@@ -1,5 +1,6 @@
 const { seed } = require("./support/seed");
 const { gitData } = require("./support/git-data");
+const { openSourceControl } = require("./support/git-panel");
 const { syncNow } = require("./support/sync-helpers");
 const { chromium } = require("playwright");
 const crypto = require("crypto");
@@ -146,32 +147,25 @@ const check = (name, ok, detail = "") => {
     await page.goto("http://localhost:3000/editor/tok00001");
     await page.getByText("Layers", { exact: true }).waitFor();
   };
-  const openSync = async () => {
-    // The rail button toggles the panel, so only press it when the panel is closed.
-    if (!(await page.getByRole("button", { name: "Sync tokens" }).isVisible())) await nav("Source control");
-    await page.getByRole("button", { name: "Sync tokens" }).click();
-    await dialog.getByRole("button", { name: "Check" }).waitFor();
-  };
-  const closeSync = async () => { await page.keyboard.press("Escape"); await dialog.waitFor({ state: "hidden" }); };
+  const status = () => page.getByRole("status", { name: "Sync status" });
+  // The panel (opened when it isn't), with the tokens linked, then Pull.
+  const pull = async () => { await openSourceControl(page); await page.getByRole("button", { name: "Pull", exact: true }).click(); };
+  const upToDate = () => page.locator("[data-pull-notice]").getByText("Up to date.").waitFor({ timeout: 30000 });
   const lightId = (s, setName) => s.sets.find((x) => x.name === setName).themes.find((t) => t.name === "Light").id;
 
   // ── Connect ────────────────────────────────────────────────────────────────
-  await nav("Source control");
-  await page.getByText("Components and tokens").waitFor();
+  await openSourceControl(page);
 
   // ── Import: the repository's tokens come in with the first pull, with nothing pressed ──
-  await dialog.waitFor({ state: "hidden" }).catch(() => {});
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 60000 });
+  await status().getByText(/Nothing to sync/).waitFor({ timeout: 60000 });
   let ds = await designSystem();
   const set = ds.sets.find((s) => s.name === "acme/ds");
   check("a set is created with a Light and a Dark theme", !!set && set.themes.map((t) => t.name).join() === "Light,Dark");
   check("its tokens are imported", ds.colors.filter((c) => c.setId === set.id).length === 17 && ds.radii.filter((r) => r.setId === set.id).length === 4 && ds.shadows.filter((s) => s.setId === set.id).length === 2);
   const primary = ds.colors.find((c) => c.setId === set.id && c.name === "primary");
   check("colors are read into hex per theme, and grouped", /^#[0-9a-f]{6}$/.test(primary.themeValues[lightId(ds, "acme/ds")]) && primary.group === "primary");
-  check("a fresh import has nothing to send or receive", !(await dialog.getByText("Not in the repository yet").count()) && !(await dialog.getByText("Coming from the repository").count()));
+  check("a fresh import has nothing to send or receive", (await page.getByLabel("Token changes").count()) === 0 && (await page.locator("[data-behind-note]").count()) === 0);
   await page.screenshot({ path: `${OUT}/tokens-synced.png` });
-  await closeSync();
 
   // ── Edit in Motif → pull request ──────────────────────────────────────────
   await editMotif((state) => {
@@ -182,16 +176,12 @@ const check = (name, ok, detail = "") => {
     c.value = "#ff0000";
     state.radii.find((r) => r.setId === set.id && r.name === "radius-md").value = 10;
   });
-  await openSync();
-  await dialog.getByText("Not in the repository yet (2)").waitFor({ timeout: 30000 });
-  check("Motif's edits are listed as not in the repository yet", (await dialog.getByText("primary", { exact: true }).isVisible()) && (await dialog.getByText("radius-md", { exact: true }).isVisible()));
-  check("with no button to open a pull request of their own", (await dialog.getByRole("button", { name: "Create pull request" }).count()) === 0 && (await dialog.getByRole("button", { name: "Open Sync" }).isVisible()));
+  await openSourceControl(page);
+  await status().getByText(/2 token changes waiting to sync/).waitFor({ timeout: 30000 });
+  const changes = page.getByLabel("Token changes");
+  check("Motif's edits are listed as waiting, with no pull request of their own to open", (await changes.locator("li").filter({ hasText: /^primary/ }).count()) === 1 && (await changes.locator("li").filter({ hasText: /^radius-md/ }).count()) === 1 && (await page.getByRole("button", { name: "Create pull request" }).count()) === 0);
   await page.screenshot({ path: `${OUT}/tokens-changes.png` });
-  await closeSync();
-  check("nothing has been sent: Sync says two token changes are waiting", repos["acme/ds"].main && prs.length === 0 && await page.locator('nav button[title="Source control"]').count() === 1);
-  await page.locator('nav button[title="Source control"]').click();
-  await page.getByRole("status", { name: "Sync status" }).getByText(/2 token changes waiting to sync/).waitFor({ timeout: 15000 });
-  await page.getByLabel("Token changes").waitFor();
+  check("nothing has been sent", !!repos["acme/ds"].main && prs.length === 0);
   await syncNow(page, 1);
   const pr = prs[0];
   check("one branch and one pull request, from the working branch", prs.length === 1 && /^motif\/changes-/.test(pr.head) && pr.base === "main" && pr.title === "Changes from Motif");
@@ -210,7 +200,7 @@ const check = (name, ok, detail = "") => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     state.radii.find((r) => r.setId === set.id && r.name === "radius-sm").value = 5;
   });
-  await page.locator('nav button[title="Source control"]').click();
+  await openSourceControl(page);
   await page.getByRole("status", { name: "Sync status" }).getByText(/1 token change waiting to sync/).waitFor({ timeout: 15000 });
   await syncNow(page, 1);
   const edited2 = repos["acme/ds"][pr.head].get("src/styles/motif.css");
@@ -220,21 +210,17 @@ const check = (name, ok, detail = "") => {
   mergePr(1);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByText(/was merged/).first().waitFor({ timeout: 30000 });
-  await openSync();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 });
-  check("once merged, the two sides agree exactly (no false conflicts), and nothing is staged", !(await dialog.getByText(/changed in both places/).count()) && (await gitState()).tokenLink.staged === null);
-  await closeSync();
+  await pull();
+  await upToDate();
+  check("once merged, the two sides agree exactly (no false conflicts), and nothing is staged", (await page.getByRole("dialog").count()) === 0 && (await gitState()).tokenLink.staged === null);
 
   // ── Edit in the repository → pull ─────────────────────────────────────────
   const main = repos["acme/ds"].main;
   main.set("src/styles/motif.css", main.get("src/styles/motif.css").replace("--radius-lg: 0.75rem;", "--radius-lg: 1rem;").replace("--background: oklch(0.17 0.015 265);", "--background: oklch(0.2 0.015 265);"));
-  await openSync();
-  await dialog.getByText("Coming from the repository (2)").waitFor({ timeout: 30000 });
-  await dialog.getByRole("button", { name: "Apply to Motif" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
+  await pull();
+  await page.locator("[data-pull-notice]").getByText(/2 token changes from the repository/).waitFor({ timeout: 30000 });
   ds = await designSystem();
   check("the repository's changes arrive in Motif", ds.radii.find((r) => r.name === "radius-lg" && r.setId === set.id).value === 16 && ds.colors.find((c) => c.name === "background" && c.setId === set.id).themeValues[ds.sets.find((s) => s.id === set.id).themes.find((t) => t.name === "Dark").id] !== undefined);
-  await closeSync();
 
   // ── The same value changed on both sides ──────────────────────────────────
   main.set("src/styles/motif.css", main.get("src/styles/motif.css").replace("--success: oklch(0.56 0.14 155);", "--success: oklch(0.6 0.2 100);"));
@@ -245,30 +231,25 @@ const check = (name, ok, detail = "") => {
     c.themeValues[light] = "#00ff00";
     c.value = "#00ff00";
   });
-  await openSync();
+  await pull();
   await dialog.getByText("1 value changed in both places").waitFor({ timeout: 30000 });
   check("a clash shows both values", (await dialog.getByText("success · light").isVisible()) && (await dialog.getByText("#00ff00").first().isVisible()));
   await page.screenshot({ path: `${OUT}/tokens-conflict.png` });
   await dialog.getByRole("button", { name: /Repository/ }).click();
   await dialog.getByRole("button", { name: "Apply my choices" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
+  await dialog.waitFor({ state: "hidden" });
   ds = await designSystem();
   const success = ds.colors.find((c) => c.name === "success" && c.setId === set.id);
   check("choosing the repository's value puts it in Motif", success.themeValues[lightId(ds, "acme/ds")] !== "#00ff00");
-  await closeSync();
 
   // ── Deleting in Motif never deletes from the repository ───────────────────
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     state.colors = state.colors.filter((c) => !(c.setId === set.id && c.name === "ring"));
   });
-  await openSync();
-  await dialog.getByText(/1 token was deleted in Motif \(ring\) and will come back/).waitFor({ timeout: 30000 });
-  check("a token removed in Motif is flagged as one that will come back", !(await dialog.getByText("Going to the repository").count()));
-  await dialog.getByRole("button", { name: "Apply to Motif" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
+  await pull();
+  await page.locator("[data-pull-notice]").getByText(/token changes? from the repository/).waitFor({ timeout: 30000 });
   check("it is restored, and the repository still has it", (await designSystem()).colors.some((c) => c.name === "ring" && c.setId === set.id) && repos["acme/ds"].main.get("src/styles/motif.css").includes("--ring:"));
-  await closeSync();
 
   // ── A token without Pull requests access ──────────────────────────────────
   await project();
@@ -294,9 +275,8 @@ const check = (name, ok, detail = "") => {
   await page.getByText("Layers", { exact: true }).waitFor();
   await nav("Tokens");
   await page.getByRole("button", { name: "Repo sync" }).click();
-  await dialog.getByText(/Synced with acme\/ds on main/).waitFor({ timeout: 30000 });
-  check("the Tokens view opens the same dialog", true);
-  await closeSync();
+  await page.locator("[data-token-link]").waitFor({ timeout: 30000 });
+  check("the Tokens view opens the Source control panel, with the set linked to the repository", await page.locator("[data-token-link]").getByText(/acme\/ds/).first().isVisible());
 
   // ── A repository with no tokens ───────────────────────────────────────────
   await seed(page, "tok00002", { repo: "acme/bare", name: "Bare", extra: { tokens: {
@@ -307,14 +287,12 @@ const check = (name, ok, detail = "") => {
   await page.goto("http://localhost:3000/editor/tok00002");
   await page.getByText("Layers", { exact: true }).waitFor();
   await nav("Source control");
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  await dialog.getByText("This repository has no design tokens yet.").waitFor({ timeout: 30000 });
+  const tokensFile = page.locator("[data-tokens-file]");
+  await tokensFile.getByText("This repository has no design tokens yet.").waitFor({ timeout: 30000 });
   await page.screenshot({ path: `${OUT}/tokens-export.png` });
-  await dialog.getByRole("combobox", { name: "" }).last().selectOption({ label: /Global/.test("Global") ? (await dialog.locator("select option").allInnerTexts()).find((t) => t.startsWith("Global")) : "" }).catch(() => {});
-  await dialog.getByRole("button", { name: "Add to pull request" }).click();
-  await dialog.getByText(/Added \d+ tokens in src\/tokens\.css to your pull request/).waitFor({ timeout: 30000 });
+  await tokensFile.getByRole("button", { name: "Add to pull request" }).click();
+  await page.getByText(/Added \d+ tokens in src\/tokens\.css to your pull request/).waitFor({ timeout: 30000 });
   check("adding tokens to a repository that has none sends nothing yet", prs.length === 2);
-  await closeSync();
   await syncNow(page, 3);
   const exportPr = prs[2];
   const bare = repos["acme/bare"][exportPr.head];
@@ -325,9 +303,8 @@ const check = (name, ok, detail = "") => {
   mergePr(3);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByText(/was merged/).first().waitFor({ timeout: 30000 });
-  await nav("Source control");
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 });
+  await pull();
+  await upToDate();
   check("once merged, the new repository and the set agree", true);
 
   const real = errors.filter((e) => !/hydrat/i.test(e));

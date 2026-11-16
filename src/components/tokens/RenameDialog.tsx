@@ -42,7 +42,7 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
   const token = useMemo(() => analysis?.tokens.find((t) => t.name === repoName) ?? null, [analysis, repoName]);
 
   const names = token && to.trim() ? namesFor(token, to, analysis!.tokens) : null;
-  const problem = !token ? "This token isn't in the scan of the repository. Scan it again from the Git panel." : typeof names === "string" ? names : taken.includes(to.trim()) ? "A token of this set has that name" : null;
+  const problem = !token ? "This token isn't in the scan of the repository. Scan it again from Source control." : typeof names === "string" ? names : taken.includes(to.trim()) ? "A token of this set has that name" : null;
   const linked = !!link && link.repo === repoSlug(connection);
 
   const find = async () => {

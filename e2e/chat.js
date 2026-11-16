@@ -125,7 +125,8 @@ const check = (name, ok, detail = "") => {
 
   // The project's own tokens are in the set that is linked to the repository, as they are once it has been pulled and the tokens sent: the
   // link agrees with them, so nothing waits to be sent, and the repository was read already (so it isn't pulled again when opened).
-  const link = { repo: "acme/ds", branch: "main", setId: "set-global", themes: { default: "theme-default" }, baseTheme: "default", staged: null, syncedAt: 1,
+  // (A link to another branch than the one pull requests are made from isn't followed by a pull, and nothing waits for it.)
+  const link = { repo: "acme/ds", branch: "elsewhere", setId: "set-global", themes: { default: "theme-default" }, baseTheme: "default", staged: null, syncedAt: 1,
     base: { brand: { kind: "color", values: { default: "#123456" } }, gutter: { kind: "spacing", values: { default: "24" } } } };
   const analysis = { repo: "acme/ds", ref: "main", scannedAt: 1, stack: { framework: null, supported: true, typescript: true, bundler: null, styling: { primary: null, evidence: [] }, tailwindVersion: null, variantHelper: null, packages: [], entryFiles: [] },
     themes: ["default"], tokens: [], components: [], styleFiles: [], tailwindEntry: null, warnings: [], stats: { filesInRepo: 0, filesRead: 0, truncated: false } };
@@ -143,6 +144,10 @@ const check = (name, ok, detail = "") => {
   const aside = page.locator("aside").last();
   const gitOpen = async () => (await page.getByPlaceholder("owner/name").isVisible()) || (await page.getByText("Components and tokens").isVisible());
 
+  // The repository was read already (the project is seeded as if it had been), so its components come in with a pull.
+  await nav("Source control");
+  await page.getByRole("button", { name: "Pull", exact: true }).click();
+  await nav("Components");
   await componentsReady(page);
 
   // The pointer is moved off the preview first: a button under it would show its hover color.

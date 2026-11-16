@@ -1,4 +1,5 @@
 const { seed } = require("./support/seed");
+const { openDetails } = require("./support/git-panel");
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
@@ -96,15 +97,16 @@ const check = (name, ok, detail = "") => {
     await page.goto("http://localhost:3000/editor/" + id);
     await page.getByText("Layers", { exact: true }).waitFor();
     await nav("Source control");
+    await openDetails(page);
   };
 
   // ── Public repository, no token ────────────────────────────────────────────
   await connect("https://github.com/dponinski/motif-test-system.git");
-  await page.getByText("Components and tokens").waitFor();
   check("connects to a public repository without a token", await page.getByRole("link", { name: "dponinski/motif-test-system" }).isVisible());
-  check("saving is gated behind a token, scanning is not", (await page.getByRole("button", { name: "Add token" }).isVisible()) && (await page.getByRole("button", { name: "Scan" }).isVisible()) && true);
+  check("saving is gated behind a token, scanning is not", (await page.getByRole("button", { name: "Add token" }).isVisible()) && (await page.getByRole("button", { name: /^(Re)?scan$/i }).isVisible()) && true);
 
-  await page.getByRole("button", { name: "Scan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByText("25 tokens · 22 components").waitFor({ timeout: 30000 });
   const panel = page.locator("div.w-\\[300px\\]");
   check("stack summary", (await panel.getByText("React 19.3.1 · TypeScript · Vite").isVisible()) && (await panel.getByText("Tailwind CSS v4 · cva").isVisible()));
@@ -152,6 +154,7 @@ const check = (name, ok, detail = "") => {
   await page.goto("http://localhost:3000/editor/repo0001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await nav("Source control");
+  await openDetails(page);
   check("the last scan is kept across reloads", await page.getByText("25 tokens · 22 components").isVisible());
 
   // ── Adding a token ────────────────────────────────────────────────────────
@@ -162,25 +165,30 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("button", { name: "Add token" }).click();
   await page.getByLabel("Access token").waitFor({ state: "detached" });
   check("a bad token is rejected, a good one is accepted", true);
+  await openDetails(page);
   check("scan results survive adding a token", await page.getByText("25 tokens · 22 components").isVisible());
-  await page.getByRole("button", { name: "Rescan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.waitForTimeout(1500);
   check("scanning with a token reads files through the API", requests.some((r) => r.auth === "Bearer t" && r.url.includes("/git/trees/")));
 
   // ── Rate limit ────────────────────────────────────────────────────────────
   await connect("dponinski/motif-test-system");
-  await page.getByRole("button", { name: "Scan" }).waitFor();
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).waitFor();
   rateLimit = true;
   moved = true;
-  await page.getByRole("button", { name: "Scan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByText(/rate limit for requests without a token/).waitFor();
   check("hitting GitHub's anonymous rate limit says how to continue", true);
   rateLimit = false;
 
   // ── Hostile repository ────────────────────────────────────────────────────
   await connect("acme/evil");
-  await page.getByRole("button", { name: "Scan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
+  await openDetails(page);
   await page.getByRole("button", { name: "Open report" }).click();
   await page.getByText("Entry files").waitFor();
   await tab("Tokens");

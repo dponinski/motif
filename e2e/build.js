@@ -178,7 +178,7 @@ const check = (name, ok, detail = "") => {
   gh.merge(1);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.locator('nav button[title="Components"]').click();
-  check("once merged and read again, the repository has it, as an ordinary component", await settle(async () => (await page.locator("aside button[title*='src/components/Button.tsx']").count()) > 0, 30000) && (await page.locator("aside button[title*='src/components/Button.tsx']").first().innerText()).trim() === "Button", await page.locator("aside").last().innerText().catch(() => ""));
+  check("once merged and read again, the repository has it, as an ordinary component", await settle(async () => (await page.locator("aside button[title*='src/components/Button.tsx']").count()) > 0 && (await page.locator("aside button[title*='src/components/Button.tsx']").first().innerText()).trim() === "Button", 30000), await page.locator("aside").last().innerText().catch(() => ""));
   check("the component that was open stays open", await settle(async () => (await stage.locator(".button").count()) > 0, 30000));
   await stage.locator(".button").waitFor({ timeout: 60000 });
   check("and it runs from the repository now, styled the same", (await css(".button", "paddingTop")) === "8px" && (await css("h2", "color")) === "rgb(255, 255, 255)");

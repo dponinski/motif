@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
 
@@ -163,13 +164,9 @@ const check = (name, ok, detail = "") => {
   const gitOpen = async () => (await page.getByPlaceholder("owner/name").isVisible()) || (await page.getByText("Components and tokens").isVisible());
 
   await nav("Source control");
-  await report("the git panel", 2);
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
-  if (await gitOpen()) await nav("Source control");
+  await report("the source control panel", 2);
   await nav("Components");
+  await componentsReady(page);
   await rowFor("Button").click();
   await page.locator("iframe[title='Component preview']").waitFor({ timeout: 60000 });
   await page.waitForTimeout(500);

@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { openDetails } = require("./support/git-panel");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
@@ -146,9 +147,10 @@ const check = (name, ok, detail = "") => {
   check("and there is no prompt to scan", (await page.getByLabel("Scan and import components from acme/ds").count()) === 0);
   await page.screenshot({ path: `${OUT}/import-done.png` });
 
-  // ── It matches what the Git panel shows ──────────────────────────────────
+  // ── It matches what the Source control panel shows ───────────────────────
   await nav("Source control");
-  check("the Git panel has the same scan, and offers to re-import", await page.getByText(/tokens · 23 components/).isVisible() && await page.getByRole("button", { name: /Re-import components/ }).isVisible());
+  await openDetails(page);
+  check("the Source control panel has the same scan, and offers to rescan", await page.getByText(/tokens · 23 components/).isVisible() && await page.getByRole("button", { name: /^Rescan$/ }).isVisible());
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

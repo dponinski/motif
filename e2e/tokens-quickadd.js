@@ -162,8 +162,6 @@ const check = (name, ok, detail = "") => {
   // ── The repository's tokens, linked to a set ──────────────────────────────
   await componentsReady(page);
   await tokensLinked(page);
-  if (await gitOpen()) await nav("Source control");
-  await nav("Components");
 
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
   const field = (label) => aside.getByLabel(label, { exact: true });

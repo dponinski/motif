@@ -43,7 +43,7 @@ export default function ProjectOverview() {
     let live = true;
     host.isEmpty().then((e) => { if (live) setEmpty(e); }, () => { if (live) setEmpty(false); });
     return () => { live = false; };
-  // Asked again whenever the repository is read again (a first commit made from the Sync panel is followed by a read).
+  // Asked again whenever the repository is read again (a first commit made from Source control is followed by a read).
   }, [connection, none, host, analysis?.scannedAt]);
 
   const header = connection && (

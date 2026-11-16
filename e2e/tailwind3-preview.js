@@ -196,7 +196,6 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/tailwind3-edit.png` });
 
   // ── Motif's tokens show in it before they are synced ──────────────────────
-  await nav("Source control");
   await tokensLinked(page);
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();

@@ -46,7 +46,7 @@ export default function FirstCommit({ connection, onDone }: { connection: GitCon
       ) : (
         <div className="mt-3 flex flex-col items-start gap-2">
           <SignInButton />
-          <p className="text-2xs text-text-tertiary">Sign in with GitHub (or add an access token in the Git panel) to write to the repository.</p>
+          <p className="text-2xs text-text-tertiary">Sign in with GitHub (or add an access token in Source control) to write to the repository.</p>
         </div>
       )}
       {error && <p className="mt-2 text-xs text-red-400" role="alert">{error}</p>}

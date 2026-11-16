@@ -3,6 +3,7 @@ const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
 const { createFake } = require("./support/fake-github");
 const { syncNow } = require("./support/sync-helpers");
+const { openDetails, openSourceControl } = require("./support/git-panel");
 
 const { OUT } = require("./support/env");
 const APP = "http://localhost:3000";
@@ -55,13 +56,13 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("button", { name: /Add tokens/ }).click();
   await page.getByRole("button", { name: "Repo sync" }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Add to pull request" }).waitFor({ timeout: 20000 });
-  check("adding tokens needs no commit: the button is there, and no first-commit offer in the way", !(await dialog.getByRole("button", { name: "Add to pull request" }).isDisabled()) && (await dialog.locator("[data-first-commit]").count()) === 0);
-  await dialog.getByRole("button", { name: "Add to pull request" }).click();
-  await dialog.getByText(/Added 2 tokens in src\/styles\/tokens\.css to your pull request/).waitFor({ timeout: 30000 });
-  check("and says they are in the pull request, to be sent with Sync", repo.writes.length === 0 && repo.prs.length === 0);
+  const tokensFile = page.locator("[data-tokens-file]");
+  await tokensFile.getByRole("button", { name: "Add to pull request" }).waitFor({ timeout: 20000 });
+  check("adding tokens needs no commit: the button is there in the Source control panel", !(await tokensFile.getByRole("button", { name: "Add to pull request" }).isDisabled()));
+  await tokensFile.getByRole("button", { name: "Add to pull request" }).click();
+  await page.getByText(/Added 2 tokens in src\/styles\/tokens\.css to your pull request/).waitFor({ timeout: 30000 });
+  check("and says they are in the pull request, to be sent with Push", repo.writes.length === 0 && repo.prs.length === 0);
   await page.screenshot({ path: `${OUT}/empty-sync-before.png` });
-  await page.keyboard.press("Escape");
 
   // ── Adding Tailwind goes into the same pull request ───────────────────────
   await nav("Components");
@@ -106,8 +107,9 @@ const check = (name, ok, detail = "") => {
   gh.merge(1);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByText(/was merged/).first().waitFor({ timeout: 30000 });
-  await nav("Source control");
-  check("once merged and read again, the Git panel reads the repository as using Tailwind", await settle(async () => /Tailwind/i.test(await page.locator("body").innerText({ timeout: 2000 })), 15000));
+  await openSourceControl(page);
+  await openDetails(page);
+  check("once merged and read again, the Source control panel reads the repository as using Tailwind", await settle(async () => /Tailwind/i.test(await page.locator("body").innerText({ timeout: 2000 })), 15000));
   await page.screenshot({ path: `${OUT}/empty-after-framework.png` });
 
   // ── Reloading keeps the project ──────────────────────────────────────────
