@@ -246,7 +246,7 @@ const check = (name, ok, detail = "") => {
   repos["acme/ds"].main.set("src/components/Chip.tsx", 'import { cn } from "../lib/cn";\nexport interface ChipProps { tone?: "a" | "b"; }\nexport function Chip({ tone = "a" }: ChipProps) { return <i className={cn("p-1", tone === "a" && "bg-primary")}>x</i>; }');
   repos["acme/ds"].main.set("src/index.ts", repos["acme/ds"].main.get("src/index.ts") + '\nexport { Chip } from "./components/Chip";');
   repos["acme/ds"].main.set("src/components/Badge.tsx", repos["acme/ds"].main.get("src/components/Badge.tsx").replace("outline: \"border border-border text-foreground\",", 'outline: "border border-border text-foreground",\n        ghost: "bg-transparent",'));
-  await page.getByRole("button", { name: "Update from repository" }).click();
+  await page.getByRole("button", { name: "Pull from the repository" }).click();
   await page.getByText("1 new, 1 changed").waitFor({ timeout: 30000 });
   check("updating from the repository reports what is new and what changed", (await page.locator("aside button[title*='src/components/']").count()) === 23);
   await openRepoComponent("Chip");

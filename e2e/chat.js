@@ -122,7 +122,13 @@ const check = (name, ok, detail = "") => {
     route.fulfill({ status: out.status, contentType: out.type, headers: { "access-control-allow-origin": "*" }, body: out.body });
   });
 
-  await seed(page, "chat0001", { extra: { tokens: {
+  // The project's own tokens are in the set that is linked to the repository, as they are once it has been pulled and the tokens sent: the
+  // link agrees with them, so nothing waits to be sent, and the repository was read already (so it isn't pulled again when opened).
+  const link = { repo: "acme/ds", branch: "main", setId: "set-global", themes: { default: "theme-default" }, baseTheme: "default", staged: null, syncedAt: 1,
+    base: { brand: { kind: "color", values: { default: "#123456" } }, gutter: { kind: "spacing", values: { default: "24" } } } };
+  const analysis = { repo: "acme/ds", ref: "main", scannedAt: 1, stack: { framework: null, supported: true, typescript: true, bundler: null, styling: { primary: null, evidence: [] }, tailwindVersion: null, variantHelper: null, packages: [], entryFiles: [] },
+    themes: ["default"], tokens: [], components: [], styleFiles: [], tailwindEntry: null, warnings: [], stats: { filesInRepo: 0, filesRead: 0, truncated: false } };
+  await seed(page, "chat0001", { extra: { repo: { connection: { owner: "acme", repo: "ds", token: "t", defaultBranch: "main" }, analysis, tokenLink: link }, tokens: {
     sets: [{ id: "set-global", name: "Global", themes: [{ id: "theme-default", name: "Default" }], activeThemeId: "theme-default" }],
     colors: [{ id: "c1", name: "brand", value: "#123456", group: "base", setId: "set-global", themeValues: { "theme-default": "#123456" } }],
     typography: [], spacing: [{ id: "sp1", name: "gutter", value: 24, setId: "set-global" }], radii: [], shadows: [], components: [],
@@ -203,7 +209,7 @@ const check = (name, ok, detail = "") => {
   check("and changes its text", await settle(async () => (await stage.locator("#root h2").innerText()) === "Hello there"));
   check("the color is the repository's token", await settle(async () => (await stage.locator("#root p").evaluate((el) => getComputedStyle(el).color)) !== before.color));
   check("it says what was done, and the buttons are gone", (await page.locator("[data-outcome]").last().innerText()).includes("Applied 3 of 3 changes to Banner") && (await page.getByRole("button", { name: /Apply 3 changes/ }).count()) === 0);
-  check("the file counts as one changed file", (await page.locator('main button[aria-label="Sync"]').innerText()).includes("Sync (1)"));
+  check("the file counts as one changed file", (await page.locator('main button[aria-label="Sync"]').innerText()).includes("Sync (1)"), await page.locator('main button[aria-label="Sync"]').innerText());
 
   await page.getByLabel("Undo", { exact: true }).click();
   check("one undo takes all of it back", await settle(async () => (await fontSize()) === before.size && (await stage.locator("#root h2").innerText()) === "Hello" && (await stage.locator("#root p").evaluate((el) => getComputedStyle(el).color)) === before.color));
@@ -256,7 +262,7 @@ const check = (name, ok, detail = "") => {
   check("what was there is kept", tokens.colors.some((c) => c.name === "brand" && c.value === "#123456") && tokens.spacing.some((s) => s.name === "gutter" && s.value === 24));
   const added = tokens.colors.find((c) => c.name === "success-600");
   check("the new color is in the set with its dark value, and the others are added", added && added.themeValues["theme-default"] === "#16a34a" && added.value === "#16a34a" && tokens.spacing.some((s) => s.name === "pad" && s.value === 10) && tokens.radii.some((r) => r.name === "card" && r.value === 12), JSON.stringify(added));
-  check("existing tokens were not replaced", tokens.colors.length === 2 && tokens.spacing.length === 2 && !tokens.colors.some((c) => c.value === "#ff0000"));
+  check("existing tokens were not replaced", tokens.colors.length === 2 && tokens.spacing.length === 2 && !tokens.colors.some((c) => c.value === "#ff0000"), JSON.stringify({ colors: tokens.colors.map((c) => c.name), spacing: tokens.spacing.map((c) => c.name), sets: tokens.sets?.map((x) => x.name) }));
   await page.screenshot({ path: `${OUT}/chat-tokens.png` });
 
   // ── No component open ─────────────────────────────────────────────────────
