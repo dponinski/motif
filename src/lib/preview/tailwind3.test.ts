@@ -44,8 +44,15 @@ describe("a Tailwind 3 repository's page", () => {
     expect(Object.keys(data.externals).some((s) => isTailwind3Module(s))).toBe(false);
   });
 
-  it("can't be a page that has to run without Motif, which the engine file would be missing from", () => {
-    expect(() => buildSrcdoc({ graph, tailwindVersion: 3, runtimeUrl: "", nonce: "n", runtimeSource: "//" })).toThrow(/can't be exported/);
+  it("is carried with its stylesheet already built by a page that has to run without Motif, and then has no engine or config", () => {
+    expect(() => buildSrcdoc({ graph, tailwindVersion: 3, runtimeUrl: "", nonce: "n", runtimeSource: "//" })).toThrow(/built first/);
+    const html = buildSrcdoc({ graph, tailwindVersion: 3, runtimeUrl: "", nonce: "n0nce", runtimeSource: "//runtime", tailwind3Css: ".a{color:red}</style><b>" });
+    expect(html).toContain('<style id="motif-tw3">.a{color:red}<\\/style><b></style>');
+    expect(html).not.toContain("motif-tailwind3.js");
+    const data = JSON.parse(/<script type="application\/json" id="motif-data">([\s\S]*?)<\/script>/.exec(html)![1]);
+    expect(data.tailwind3).toBeNull();
+    expect(Object.keys(data.modules)).not.toContain("tailwind.config.js");
+    expect(Object.keys(data.modules)).toContain("src/components/Button.tsx");
   });
 
   it("finds the config nearest the root", () => {

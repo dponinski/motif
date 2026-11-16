@@ -649,6 +649,14 @@
             setTheme(message.theme);
             renderLast();
           }
+        } else if (message.type === 'tailwind3css') {
+          // The stylesheet as built for what is drawn now, once the page has settled: a page that runs without Motif carries it instead of the engine.
+          if (!tw3) { post({ type: 'tailwind3css', css: '' }); return; }
+          var settled = function () { return tw3.running ? new Promise(function (r) { setTimeout(r, 50); }).then(settled) : Promise.resolve(); };
+          Promise.resolve(tw3.ready).then(function () { return new Promise(function (r) { setTimeout(r, 150); }); }).then(settled).then(function () {
+            tw3.last = null;
+            return compileTw3();
+          }).then(settled).then(function () { post({ type: 'tailwind3css', css: tw3Style.textContent }); }, fail);
         } else if (message.type === 'modules') {
           // New code can need packages the page didn't start with; they are loaded before it runs. Messages are
           // handled one after another so a slow load can't be overtaken by the next edit.

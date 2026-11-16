@@ -29,7 +29,7 @@ function Body({ onClose }: { onClose: () => void }) {
 
   const dir = useMemo(() => componentDir(components), [components]);
   // The stack follows the changes in the editor: a Tailwind add-on in the pull request already counts.
-  const tailwind = (source ? source.tailwindVersion : analysis?.stack.tailwindVersion) === 4;
+  const tailwind = (source ? source.tailwindVersion : analysis?.stack.tailwindVersion) != null;
   const problem = name ? checkName(name, { components: components.map((c) => c.name), paths: [] }, dir) : null;
 
   const create = async (e: React.FormEvent) => {

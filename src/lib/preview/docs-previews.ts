@@ -20,12 +20,13 @@ export function previewMessage(component: RepoComponent, view: PreviewView): Ren
 
 // A page that runs by itself: it carries its own runtime and says what to show, so it works inside an exported
 // site as well as in Motif.
-export function previewPage(input: { graph: ModuleGraph; tailwindVersion: 3 | 4 | null; runtimeSource: string; component: RepoComponent; view: PreviewView }): string {
+export function previewPage(input: { graph: ModuleGraph; tailwindVersion: 3 | 4 | null; runtimeSource: string; component: RepoComponent; view: PreviewView; tailwind3Css?: string }): string {
   return buildSrcdoc({
     graph: input.graph,
     tailwindVersion: input.tailwindVersion,
     runtimeUrl: "",
     runtimeSource: input.runtimeSource,
+    tailwind3Css: input.tailwind3Css,
     nonce: newNonce(),
     initial: previewMessage(input.component, input.view),
   });

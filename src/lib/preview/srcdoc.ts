@@ -39,6 +39,9 @@ export interface SrcdocInput {
   // The runtime's own code, for a page that has to run without Motif being there (an exported docs site): it is
   // put in the page instead of being loaded from `runtimeUrl`.
   runtimeSource?: string;
+  // A Tailwind 3 page that doesn't build its own stylesheet: the stylesheet is already built (see `tailwind3Css` in the runtime), so it
+  // carries no engine and needs nothing from Motif's server. For a page that has to run without Motif (documentation, an exported site).
+  tailwind3Css?: string;
   // What to show when the page loads, for a page with no parent to ask it (a preview in an exported docs site).
   initial?: RenderMessage;
 }
@@ -61,9 +64,11 @@ export function csp(runtimeUrl: string | null, nonce: string): string {
   ].join("; ");
 }
 
-export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtimeSource, initial }: SrcdocInput): string {
-  // The Tailwind 3 engine is a file Motif serves, so a page that has to run without Motif (an exported docs site) can't have it.
-  if (tailwindVersion === 3 && runtimeSource !== undefined) throw new Error("Tailwind v3 repositories can't be exported as a page yet");
+export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtimeSource, initial, tailwind3Css }: SrcdocInput): string {
+  // The Tailwind 3 engine is a file Motif serves, so a page that has to run without Motif (an exported docs site) is given its stylesheet
+  // already built.
+  const built = tailwindVersion === 3 && tailwind3Css !== undefined;
+  if (tailwindVersion === 3 && runtimeSource !== undefined && !built) throw new Error("A Tailwind v3 page that runs without Motif needs its stylesheet built first");
 
   // What the Tailwind 3 bundle provides to a config is not loaded from the CDN.
   const specs = [...new Set([...ALWAYS, ...graph.bare])].filter((spec) => !(tailwindVersion === 3 && isTailwind3Module(spec)));
@@ -76,11 +81,15 @@ export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtime
   // Tailwind 3 has the page build it: the engine reads the stylesheet and the config and writes `motif-tw3` as the page changes.
   const styles = tailwindVersion === 4
     ? `<style type="text/tailwindcss">${style(css)}</style>`
+    : built
+    ? `<style id="motif-tw3">${style(tailwind3Css!)}</style>`
     : tailwindVersion === 3
     ? `<style id="motif-tw3"></style>`
     : graph.css.map((c) => `<style data-motif-css="${attr(c.path)}">${style(c.text)}</style>`).join("\n");
-  const tailwind3 = tailwindVersion === 3 ? { css: graph.css, config: graph.tailwindConfig } : null;
-  const data = { entry: graph.entry, modules: graph.modules, externals, tailwind3, initial: initial ?? null };
+  const tailwind3 = tailwindVersion === 3 && !built ? { css: graph.css, config: graph.tailwindConfig } : null;
+  // The config only builds the stylesheet, so a page with its stylesheet built doesn't carry it.
+  const modules = built && graph.tailwindConfig ? Object.fromEntries(Object.entries(graph.modules).filter(([path]) => path !== graph.tailwindConfig)) : graph.modules;
+  const data = { entry: graph.entry, modules, externals, tailwind3, initial: initial ?? null };
   const runtime = runtimeSource !== undefined
     ? `<script nonce="${nonce}">${runtimeSource.replace(/<\/script/gi, "<\\/script")}</script>`
     : `<script nonce="${nonce}" src="${attr(runtimeUrl)}"></script>`;
@@ -93,7 +102,7 @@ export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtime
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script type="importmap" nonce="${nonce}">${json(importMap)}</script>
 ${tailwindVersion === 4 ? `<script nonce="${nonce}" src="${TAILWIND_BROWSER}@4"></script>` : ""}
-${tailwindVersion === 3 ? `<script nonce="${nonce}" src="${attr(tailwind3Url(runtimeUrl))}"></script>` : ""}
+${tailwindVersion === 3 && !built ? `<script nonce="${nonce}" src="${attr(tailwind3Url(runtimeUrl))}"></script>` : ""}
 ${styles}
 <style id="motif-overrides"></style>
 </head>
