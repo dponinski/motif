@@ -14,7 +14,7 @@ import { useProjectsStore } from "@/store/projects";
 function readError(conn: GitConnection, err: unknown): string {
   const shared = useProjectsStore.getState().projects.some((p) => p.teamId && p.repo.connection?.owner === conn.owner && p.repo.connection.repo === conn.repo);
   const message = errorMessage(err);
-  const hint = shared && /not found/i.test(message) ? " This design system is shared with a team, and each person opens the repository with their own GitHub access: ask a team owner to give you access to it on GitHub, or add an access token in the Git panel." : "";
+  const hint = shared && /not found/i.test(message) ? " This design system is shared with a team, and each person opens the repository with their own GitHub access: ask a team owner to give you access to it on GitHub, or add an access token in Source control." : "";
   return message + hint;
 }
 

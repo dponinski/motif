@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
@@ -155,11 +156,7 @@ const check = (name, ok, detail = "") => {
 
   // ── The tokens screen before the repository is scanned ────────────────────
   // ── Scan the repository and link its tokens ───────────────────────────────
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
+  await componentsReady(page);
   await tokensLinked(page);
 
   await nav("Tokens");

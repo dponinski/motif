@@ -5,6 +5,7 @@ const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { gitData } = require("./support/git-data");
 const { syncNow } = require("./support/sync-helpers");
+const { openDetails } = require("./support/git-panel");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
@@ -265,14 +266,12 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   check("the private repository was reached with the account's token", usedTokens.includes("ghu_1"));
 
   // ── Use it: scan and open a pull request ──────────────────────────────────
-  check("the Git panel says who it is signed in as, instead of asking for a token", await (async () => { await nav("Git"); return page.locator("[data-signed-in]").filter({ hasText: "Signed in with GitHub as ada" }).waitFor({ timeout: 20000 }).then(() => true, () => false); })());
+  check("the Git panel says who it is signed in as, instead of asking for a token", await (async () => { await nav("Source control"); return page.locator("[data-signed-in]").filter({ hasText: "Signed in with GitHub as ada" }).waitFor({ timeout: 20000 }).then(() => true, () => false); })());
   check("no token is asked for", (await page.getByLabel("Access token").count()) === 0);
-  await page.getByRole("button", { name: "Scan" }).click();
+  await openDetails(page);
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 60000 });
   check("the private repository is scanned with it", true);
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
-  await nav("Git");
+  await nav("Source control");
   await nav("Components");
   const stage = page.frameLocator('iframe[title="Component preview"]');
   await page.locator("aside button[title*='src/']").filter({ hasText: /^Banner$/ }).click();
@@ -282,22 +281,23 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   const aside = page.locator("aside").last();
   await aside.getByLabel("Text size", { exact: true }).selectOption("2xl");
   await page.locator('main button[aria-label="Sync"]').click();
-  check("syncing is allowed without a typed token", !(await page.getByRole("button", { name: "Sync now" }).isDisabled()) && (await page.getByText(/needs you to sign in/).count()) === 0);
+  check("syncing is allowed without a typed token", (await settle(async () => !(await page.getByRole("button", { name: "Push" }).isDisabled()), 15000)) && (await page.getByText(/needs you to sign in/).count()) === 0);
   await syncNow(page, 1);
   check("and it is opened with the account's token", prs.length === 1 && prs[0].token === "ghu_1");
 
   // ── Reload: still signed in ───────────────────────────────────────────────
   await page.reload();
   await page.getByText("Layers", { exact: true }).waitFor();
-  await nav("Git");
+  await nav("Source control");
   check("a reload is still signed in, from the cookie", await page.locator("[data-signed-in]").filter({ hasText: "Signed in with GitHub as ada" }).isVisible());
-  await nav("Git");
+  await nav("Source control");
 
   // ── GitHub stops accepting the token ──────────────────────────────────────
   const refreshesBefore = oauth.refreshes.length;
   oauth.tokens.delete("ghu_1");
-  await nav("Git");
-  await page.getByRole("button", { name: "Rescan" }).click();
+  await nav("Source control");
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 60000 });
   await settle(async () => oauth.refreshes.length === refreshesBefore + 1);
   check("a token GitHub refuses is renewed once and the request made again", oauth.refreshes.length === refreshesBefore + 1 && oauth.refreshes.at(-1) === "ghr_1" && usedTokens.includes("ghu_2"), JSON.stringify({ refreshes: oauth.refreshes, used: [...new Set(usedTokens)] }));
@@ -319,7 +319,8 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   // ── The sign-in ends ──────────────────────────────────────────────────────
   oauth.refresh.clear();
   for (const t of [...oauth.tokens]) oauth.tokens.delete(t);
-  await page.getByRole("button", { name: "Rescan" }).click();
+  await openDetails(page);
+  await page.getByRole("button", { name: /^(Re)?scan$/i }).click();
   await page.getByRole("alert").filter({ hasText: /sign-in has expired/ }).waitFor({ timeout: 30000 });
   check("when GitHub refuses the refresh token the person is told the sign-in has ended", await page.getByRole("button", { name: "Sign in again" }).isVisible());
   check("and the cookie is gone", (await cookies()).length === 0);
@@ -331,7 +332,7 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   oauth.mode = "deny";
   await page.getByRole("button", { name: "Sign in with GitHub" }).first().click();
   await page.getByRole("alert").filter({ hasText: "GitHub sign-in was cancelled." }).waitFor({ timeout: 30000 });
-  check("cancelling at GitHub comes back with a message, and nobody signed in", (await cookies()).length === 0 && await page.getByRole("button", { name: "Sign in with GitHub" }).first().isVisible() && !page.url().includes("github_error"), page.url());
+  check("cancelling at GitHub comes back with a message, and nobody signed in", (await settle(async () => (await cookies()).length === 0 && (await page.getByRole("button", { name: "Sign in with GitHub" }).first().isVisible()) && !page.url().includes("github_error"), 8000)), page.url());
   await page.reload();
   check("the message is shown once", (await page.getByRole("alert").filter({ hasText: /\S/ }).count()) === 0);
 

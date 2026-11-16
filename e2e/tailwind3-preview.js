@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
@@ -160,13 +161,7 @@ const check = (name, ok, detail = "") => {
   const style = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
   const styled = async (selector, prop, want, ms = 15000) => settle(async () => (await style(selector, prop)) === want, ms);
 
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
-  if (await gitOpen()) await nav("Git");
-  await nav("Components");
+  await componentsReady(page);
 
   // ── It renders, styled by the repository's own config and stylesheet ──────
   await rowFor("Button").click();
@@ -201,7 +196,6 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/tailwind3-edit.png` });
 
   // ── Motif's tokens show in it before they are synced ──────────────────────
-  await nav("Git");
   await tokensLinked(page);
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();

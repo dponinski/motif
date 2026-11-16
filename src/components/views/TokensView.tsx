@@ -3,13 +3,13 @@
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState } from "react";
 import { X, Download, Upload, Palette, GitBranch, Layers, Undo2, Redo2 } from "lucide-react";
-import TokenSyncDialog from "@/components/git/TokenSyncDialog";
 import FrameworkDialog from "@/components/git/FrameworkDialog";
 import SetsSidebar from "@/components/tokens/SetsSidebar";
 import ImportPanel from "@/components/tokens/ImportPanel";
 import KindPane from "@/components/tokens/KindPane";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenKind } from "@/store/design-system";
+import { useNavRequest } from "@/store/nav";
 import { redoTokens, undoTokens, useTokenHistory } from "@/store/token-history";
 
 const TABS: { kind: TokenKind; label: string }[] = [
@@ -39,7 +39,6 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   const [kind, setKind] = useState<TokenKind>("color");
   const [showImport, setShowImport] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
   const [frameworkOpen, setFrameworkOpen] = useState(false);
   const canUndo = useTokenHistory((h) => h.past.length > 0);
   const canRedo = useTokenHistory((h) => h.future.length > 0);
@@ -69,7 +68,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
           <button onClick={() => undoTokens()} disabled={!canUndo} aria-label="Undo" title="Undo (Cmd/Ctrl+Z)" className={headerButton}><Undo2 size={12} /></button>
           <button onClick={() => redoTokens()} disabled={!canRedo} aria-label="Redo" title="Redo (Shift+Cmd/Ctrl+Z)" className={headerButton}><Redo2 size={12} /></button>
           <div className="mx-1 h-5 w-px bg-surface-border" />
-          <button onClick={() => setSyncOpen(true)} className={headerButton}><GitBranch size={11} /> Repo sync</button>
+          <button onClick={() => useNavRequest.getState().ask("git")} className={headerButton} title="Pull from the repository and push what is waiting"><GitBranch size={11} /> Repo sync</button>
           <button onClick={() => setFrameworkOpen(true)} className={headerButton}><Layers size={11} /> Add a framework</button>
           <button onClick={() => setShowImport(!showImport)} className={headerButton}><Upload size={11} /> Import</button>
           <button onClick={() => downloadText("tokens.json", exportTokens())} className={headerButton}><Download size={11} /> JSON</button>
@@ -132,7 +131,6 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <TokenSyncDialog open={syncOpen} onOpenChange={setSyncOpen} />
       <FrameworkDialog open={frameworkOpen} onOpenChange={setFrameworkOpen} />
     </div>
   );

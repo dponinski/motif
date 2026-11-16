@@ -393,9 +393,9 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         )}
         {(changed > 0 || work || tokenChanges > 0) && (
           <button
-            onClick={() => useNavRequest.getState().ask("sync")}
+            onClick={() => useNavRequest.getState().ask("git")}
             aria-label="Sync"
-            title={waiting > 0 ? `${waiting} file${waiting === 1 ? "" : "s"} waiting. Open the Sync panel.` : "Everything is in the pull request. Open the Sync panel."}
+            title={waiting > 0 ? `${waiting} file${waiting === 1 ? "" : "s"} waiting. Open Source control.` : "Everything is in the pull request. Open Source control."}
             className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors", waiting > 0 ? "bg-accent text-white hover:bg-accent/90" : "bg-surface-subtle text-text-secondary hover:bg-surface-border")}
           >
             <GitPullRequest size={11} /> {waiting > 0 ? `Sync (${waiting})` : "Synced"}
@@ -536,7 +536,7 @@ export default function ComponentStage() {
   if (!connection || repoSlug(connection) !== source.repo) {
     return (
       <Notice icon={<AlertTriangle size={20} className="text-amber-500" />} title={`Connect ${source.repo} to preview`}>
-        Previews are read from the repository when you open them. Connect it in the Git panel.
+        Previews are read from the repository when you open them. Connect it in Source control.
       </Notice>
     );
   }

@@ -129,7 +129,7 @@ export default function FrameworkDialog({ open, onOpenChange }: { open: boolean;
             <Dialog.Close className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary" aria-label="Close"><X size={13} /></Dialog.Close>
           </div>
           <div className="overflow-y-auto p-4">
-            {connection ? <Body connection={connection} onOpenSync={() => { onOpenChange(false); useNavRequest.getState().ask("sync"); }} /> : <p className="text-xs text-text-secondary">Connect a repository first.</p>}
+            {connection ? <Body connection={connection} onOpenSync={() => { onOpenChange(false); useNavRequest.getState().ask("git"); }} /> : <p className="text-xs text-text-secondary">Connect a repository first.</p>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

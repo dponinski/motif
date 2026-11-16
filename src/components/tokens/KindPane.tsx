@@ -184,7 +184,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
           <button key={id} type="button" aria-pressed={only === id} onClick={() => setOnly(id)} className={chip(only === id)}>{label}</button>
         ))}
         {!counted && hasRepo && rows.some((r) => r.linked) && (
-          <button type="button" disabled title="Scan the repository again (in the Git panel) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
+          <button type="button" disabled title="Scan the repository again (in Source control) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
         )}
         <div className="flex-1" />
         <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>

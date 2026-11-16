@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { seed } = require("./support/seed");
-const { tokensLinked } = require("./support/git-panel");
+const { tokensLinked, componentsReady, openDetails } = require("./support/git-panel");
 const { serve } = require("./support/fake-cdn");
 
 const { OUT } = require("./support/env");
@@ -110,22 +110,21 @@ const check = (name, ok, detail = "") => {
   const openRepoComponent = async (name) => { await rowFor(name).click(); await page.getByText(name, { exact: true }).first().waitFor(); };
 
   // ── Connect, scan, import ─────────────────────────────────────────────────
-  const gitOpen = async () => await page.getByText("Components and tokens").isVisible();
-  const openGit = async () => { if (!(await gitOpen())) await nav("Git"); };
-  const closeGit = async () => { if (await gitOpen()) await nav("Git"); };
+  const gitOpen = async () => await page.locator("[data-token-link], [data-details]").first().isVisible();
+  const openGit = async () => { if (!(await gitOpen())) await nav("Source control"); };
+  const closeGit = async () => { if (await gitOpen()) await nav("Source control"); };
   async function connectAndImport(repo) {
     const id = "prev000" + ++projectCount;
     await seed(page, id, { repo });
     await page.goto("http://localhost:3000/editor/" + id);
     await page.getByText("Layers", { exact: true }).waitFor();
-    await nav("Git");
-    await page.getByRole("button", { name: "Scan" }).click();
+    await componentsReady(page);
+    await nav("Source control");
+    await openDetails(page);
     await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-    await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-    await page.getByText(/Imported \d+ components/).waitFor();
   }
   await connectAndImport("acme/ds");
-  check("importing reports how many components were brought in", await page.getByText("Imported 22 components.").isVisible());
+  check("connecting reports how many components were brought in", await page.getByText(/22 components/).first().isVisible());
   await closeGit();
   await nav("Components");
   await page.getByText("Layers", { exact: true }).waitFor();
@@ -258,8 +257,6 @@ const check = (name, ok, detail = "") => {
   const dialog = page.getByRole("dialog");
   await openGit();
   await tokensLinked(page);
-  await closeGit();
-  await nav("Components");
   await openRepoComponent("Button");
   await page.getByRole("button", { name: "Preview", exact: true }).click();
   await stage.locator("#root button").waitFor({ timeout: 60000 });

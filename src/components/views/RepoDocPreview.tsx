@@ -22,7 +22,7 @@ export default function RepoDocPreview({ block }: { block: Block }) {
   const [holder, near] = useNearViewport();
 
   if (!component) return <p className="md-empty">{block.ref.name} isn&apos;t among the imported repository components.</p>;
-  if (!connected) return <p className="md-empty">Connect {source?.repo ?? "the repository"} in the Git panel to show {component.name} here.</p>;
+  if (!connected) return <p className="md-empty">Connect {source?.repo ?? "the repository"} in Source control to show {component.name} here.</p>;
   return (
     <div ref={holder}>
       {near ? <Live component={component} view={block.view} source={source} connection={connection} /> : <p className="md-empty">{component.name}</p>}

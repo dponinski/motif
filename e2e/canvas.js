@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
@@ -129,13 +130,7 @@ const check = (name, ok, detail = "") => {
   const settle = async (fn, ms = 10000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const gitOpen = async () => (await page.getByPlaceholder("owner/name").isVisible()) || (await page.getByText("Components and tokens").isVisible());
 
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
-  if (await gitOpen()) await nav("Git");
-  await nav("Components");
+  await componentsReady(page);
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
@@ -183,6 +178,7 @@ const check = (name, ok, detail = "") => {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 - 100, box.y + box.height / 2, { steps: 6 });
+  await settle(async () => (await frameWidth()) < 640);
   const during = await frameWidth();
   await page.mouse.up();
   check("dragging the right edge changes the width, live", during < 640 && Math.abs(during - Math.round(640 - 100 / z)) <= 3, `${during} at zoom ${z}`);

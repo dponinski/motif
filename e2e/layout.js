@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
@@ -130,13 +131,7 @@ const check = (name, ok, detail = "") => {
   const field = (label) => aside.getByLabel(label, { exact: true });
   const style = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
 
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
-  if (await gitOpen()) await nav("Git");
-  await nav("Components");
+  await componentsReady(page);
 
   // The footnote in the Banner is a plain element: not a flex container.
   await rowFor("Banner").click();

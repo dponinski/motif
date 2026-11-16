@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
@@ -154,11 +155,7 @@ const check = (name, ok, detail = "") => {
   const settle = async (fn, ms = 15000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
 
   // ── Scan the repository and link its tokens ───────────────────────────────
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
+  await componentsReady(page);
   await tokensLinked(page);
 
   await nav("Tokens");
@@ -204,14 +201,14 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/tokens-renamed.png` });
 
   // ── In the pull request ───────────────────────────────────────────────────
-  await page.locator('nav button[aria-label="Sync"]').click();
+  await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("status", { name: "Sync status" }).waitFor();
   const diff = async (file) => { await page.getByLabel(`Changes to ${file}`, { exact: true }).click(); const text = await page.getByLabel(`Diff of ${file}`, { exact: true }).innerText(); await page.getByLabel(`Changes to ${file}`, { exact: true }).click(); return text; };
   const button = await diff("src/components/Button.tsx");
   check("the changes list has the components and the stylesheet", /bg-brand/.test(button) && !/\+.*bg-primary(?![\w-])/.test(button), button.slice(0, 300));
   await page.screenshot({ path: `${OUT}/tokens-rename-sync.png` });
   check("the rename is among the changes, with no token changes besides it", (await page.getByRole("status", { name: "Sync status" }).innerText()).replace(/\s+/g, " ").includes("files waiting to sync") && (await page.getByText(/TOKEN CHANGES/i).count()) === 0);
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.waitForFunction(() => /In sync with pull request #\d+/.test(document.querySelector('[aria-label="Sync status"]')?.textContent ?? ""), null, { timeout: 30000 });
   const pushed = Object.keys(repos["acme/ds"]).filter((b) => b !== "main");
   check("Sync sends one branch", pushed.length === 1, pushed.join());

@@ -164,31 +164,28 @@ const check = (name, ok, detail = "") => {
   await primaryLight().waitFor();
   const first = await primaryLight().inputValue();
   check("a token has the repository's value", /^#[0-9a-f]{6}$/.test(first), first);
-  await nav("Git");
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  check("and the set is linked: the dialog says the two have the same tokens", await page.getByRole("dialog").getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 }).then(() => true, () => false));
-  await page.keyboard.press("Escape");
-  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  await nav("Source control");
+  check("and the set is linked: the panel says so", await page.locator("[data-token-link]").waitFor({ timeout: 30000 }).then(() => true, () => false));
 
   // ── The repository changes: Pull takes it in ──────────────────────────────
   const css = () => repos["acme/ds"].main.get("src/styles/motif.css");
   const edit = (to) => { repos["acme/ds"].main.set("src/styles/motif.css", css().replace(/--primary: [^;]+;/, `--primary: ${to};`)); moved++; };
   edit("oklch(0.6 0.2 30)");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  check("Pull says the repository has changed", await settle(async () => (await page.getByRole("button", { name: /^Pull/ }).innerText()).includes("the repository has changed")));
+  check("Pull says the repository has changed", await settle(async () => (await page.locator("[data-behind-note]").count()) === 1));
   await page.getByRole("button", { name: "Pull", exact: false }).first().click();
   check("a pull takes its change in, and says so", await settle(async () => ((await page.locator("[data-pull-notice]").innerText().catch(() => "")) ?? "").includes("token change")), await page.locator("[data-pull-notice]").innerText().catch(() => ""));
   await nav("Tokens");
   await page.getByRole("button", { name: "List", exact: true }).click().catch(() => {});
   check("the token has the repository's new value", await settle(async () => (await primaryLight().inputValue()) === "#de3e2d"), await primaryLight().inputValue());
-  check("and the button no longer says it has changed", (await (async () => { await nav("Git"); return page.getByRole("button", { name: /^Pull/ }).innerText(); })()).includes("the repository has changed") === false);
+  check("and no longer says the repository has changed", (await (async () => { await nav("Source control"); return page.locator("[data-behind-note]").count(); })()) === 0);
 
   // ── Changed in both places: Pull asks ─────────────────────────────────────
   await nav("Tokens");
   await primaryLight().fill("#ff0000");
   await primaryLight().press("Enter");
   edit("oklch(0.5 0.2 150)");
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Pull", exact: false }).first().click();
   const dialog = page.getByRole("dialog", { name: /changed in both places/ });
   await dialog.waitFor({ timeout: 30000 });

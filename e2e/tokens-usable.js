@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
@@ -158,13 +159,8 @@ const check = (name, ok, detail = "") => {
   const gitOpen = async () => (await page.getByPlaceholder("owner/name").isVisible()) || (await page.getByText("Components and tokens").isVisible());
 
   // The repository's tokens are linked to a Motif set.
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
+  await componentsReady(page);
   await tokensLinked(page);
-  if (await gitOpen()) await nav("Git");
 
   // ── Tokens are made, with names that don't say what they are ──────────────
   await nav("Tokens");
@@ -204,9 +200,9 @@ const check = (name, ok, detail = "") => {
   check("the spacing is offered too", (await padding.locator("option").allInnerTexts()).some((t) => t.trim().startsWith("gutter")), (await padding.locator("option").allInnerTexts()).slice(0, 12).join());
 
   // ── Sent with the other changes ───────────────────────────────────────────
-  await page.locator('nav button[aria-label="Sync"]').click();
+  await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("status", { name: "Sync status" }).waitFor();
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.waitForFunction(() => /In sync with pull request #\d+/.test(document.querySelector('[aria-label="Sync status"]')?.textContent ?? ""), null, { timeout: 40000 });
   const pushed = Object.keys(repos["acme/ds"]).filter((b) => b !== "main");
   const tree = repos["acme/ds"][pushed[0]];
