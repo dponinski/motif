@@ -119,6 +119,8 @@ interface DesignSystemStore {
 
   // Theme management
   addThemeToSet: (setId: string, name: string) => string;
+  // A new theme next to `themeId` with the same values (and tokens that are other tokens); returns its id.
+  duplicateTheme: (setId: string, themeId: string) => string;
   deleteThemeFromSet: (setId: string, themeId: string) => void;
   renameTheme: (setId: string, themeId: string, name: string) => void;
   setActiveTheme: (setId: string, themeId: string) => void;
@@ -233,6 +235,14 @@ export const snapshotTokens = (s: TokenData): TokenData => ({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// "Dark copy", then "Dark copy 2", for a theme made from "Dark" (names are compared without regard to case).
+export function copyName(name: string, taken: string[]): string {
+  const used = new Set(taken.map((n) => n.toLowerCase()));
+  const base = `${name} copy`;
+  if (!used.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) if (!used.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
+}
+
 function toKebab(name: string): string {
   return name.replace(/[^a-zA-Z0-9-]/g, "-").replace(/-+/g, "-").toLowerCase();
 }
@@ -312,6 +322,26 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           };
         });
         return themeId;
+      },
+
+      duplicateTheme: (setId, themeId) => {
+        const id = `theme-${nanoid(6)}`;
+        set((s) => {
+          const tokenSet = s.sets.find((st) => st.id === setId);
+          const source = tokenSet?.themes.find((t) => t.id === themeId);
+          if (!tokenSet || !source) return s;
+          const at = tokenSet.themes.findIndex((t) => t.id === themeId);
+          const name = copyName(source.name, tokenSet.themes.map((t) => t.name));
+          return {
+            sets: s.sets.map((st) => (st.id === setId ? { ...st, themes: [...st.themes.slice(0, at + 1), { id, name }, ...st.themes.slice(at + 1)] } : st)),
+            colors: s.colors.map((c) => {
+              if (c.setId !== setId) return c;
+              const alias = c.themeAlias?.[themeId];
+              return { ...c, themeValues: { ...c.themeValues, [id]: c.themeValues[themeId] ?? c.value }, ...(alias ? { themeAlias: { ...c.themeAlias, [id]: alias } } : {}) };
+            }),
+          };
+        });
+        return id;
       },
 
       deleteThemeFromSet: (setId, themeId) =>

@@ -2,11 +2,11 @@
 
 import { useShallow } from "zustand/react/shallow";
 import { useState } from "react";
-import { Plus, Trash2, X, Pencil, Check } from "lucide-react";
+import { Plus, Trash2, X, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenSet } from "@/store/design-system";
 
-// The sets of tokens, and the themes of the one that is open.
+// The sets of tokens. (The themes of the open set are managed in the bar over its colors.)
 export default function SetsSidebar({
   sets,
   activeSetId,
@@ -16,17 +16,14 @@ export default function SetsSidebar({
   activeSetId: string | null;
   onSelectSet: (id: string) => void;
 }) {
-  const { createSet, renameSet, deleteSet, addThemeToSet, deleteThemeFromSet, renameTheme, setActiveTheme } = useDesignSystemStore(
-    useShallow((s) => ({ createSet: s.createSet, renameSet: s.renameSet, deleteSet: s.deleteSet, addThemeToSet: s.addThemeToSet, deleteThemeFromSet: s.deleteThemeFromSet, renameTheme: s.renameTheme, setActiveTheme: s.setActiveTheme }))
+  const { createSet, renameSet, deleteSet } = useDesignSystemStore(
+    useShallow((s) => ({ createSet: s.createSet, renameSet: s.renameSet, deleteSet: s.deleteSet }))
   );
 
   const [addingSet, setAddingSet] = useState(false);
   const [newSetName, setNewSetName] = useState("");
   const [renamingSetId, setRenamingSetId] = useState<string | null>(null);
   const [renamingSetName, setRenamingSetName] = useState("");
-  const [addingThemeForSet, setAddingThemeForSet] = useState<string | null>(null);
-  const [newThemeName, setNewThemeName] = useState("");
-  const [renamingTheme, setRenamingTheme] = useState<{ setId: string; themeId: string; name: string } | null>(null);
 
   return (
     <div className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
@@ -84,82 +81,6 @@ export default function SetsSidebar({
                 </>
               )}
             </div>
-
-            {/* Themes for this set */}
-            {activeSetId === s.id && (
-              <div className="px-3 pb-2">
-                <p className="text-2xs text-text-tertiary mb-1.5 mt-0.5">Themes</p>
-                <div className="flex flex-wrap gap-1 mb-1">
-                  {s.themes.map((t) => (
-                    <div key={t.id} className="group/theme relative flex items-center">
-                      {renamingTheme?.themeId === t.id ? (
-                        <input
-                          className="bg-surface-subtle border border-accent rounded px-1.5 py-0.5 text-xs text-text-primary outline-none w-24"
-                          value={renamingTheme.name}
-                          onChange={(e) => setRenamingTheme({ ...renamingTheme, name: e.target.value })}
-                          onBlur={() => { renameTheme(s.id, t.id, renamingTheme.name.trim() || t.name); setRenamingTheme(null); }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { renameTheme(s.id, t.id, renamingTheme.name.trim() || t.name); setRenamingTheme(null); }
-                            if (e.key === "Escape") setRenamingTheme(null);
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <button
-                          onClick={() => setActiveTheme(s.id, t.id)}
-                          onDoubleClick={() => setRenamingTheme({ setId: s.id, themeId: t.id, name: t.name })}
-                          className={cn(
-                            "flex items-center gap-1 px-2 py-0.5 rounded text-xs border transition-colors",
-                            s.activeThemeId === t.id
-                              ? "bg-accent/15 border-accent/40 text-accent"
-                              : "border-surface-border text-text-secondary hover:border-accent/30 hover:text-text-primary"
-                          )}
-                        >
-                          {s.activeThemeId === t.id && <Check size={9} />}
-                          {t.name}
-                        </button>
-                      )}
-                      {s.themes.length > 1 && (
-                        <button
-                          onClick={() => deleteThemeFromSet(s.id, t.id)}
-                          className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full text-white opacity-0 group-hover/theme:opacity-100 flex items-center justify-center transition-opacity"
-                          title="Remove theme"
-                        >
-                          <X size={8} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {addingThemeForSet === s.id ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      className="flex-1 bg-surface-subtle border border-surface-border rounded px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-accent"
-                      placeholder="Theme name…"
-                      value={newThemeName}
-                      onChange={(e) => setNewThemeName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newThemeName.trim()) {
-                          addThemeToSet(s.id, newThemeName.trim());
-                          setNewThemeName(""); setAddingThemeForSet(null);
-                        }
-                        if (e.key === "Escape") { setAddingThemeForSet(null); setNewThemeName(""); }
-                      }}
-                      autoFocus
-                    />
-                    <button onClick={() => { setAddingThemeForSet(null); setNewThemeName(""); }} className="text-text-tertiary hover:text-text-primary"><X size={10} /></button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setAddingThemeForSet(s.id)}
-                    className="flex items-center gap-1 text-2xs text-text-tertiary hover:text-text-secondary transition-colors"
-                  >
-                    <Plus size={9} /> Add theme
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         ))}
 

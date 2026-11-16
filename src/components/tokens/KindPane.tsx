@@ -10,6 +10,7 @@ import { tokenKey } from "@/lib/tokens/alias-colors";
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
 import { AddRow, type AddField } from "./fields";
+import ThemeBar, { type ThemeShown } from "./ThemeBar";
 import AddTokensDialog from "./AddTokensDialog";
 import GroupedTokens from "./GroupedTokens";
 import BulkBar from "./BulkBar";
@@ -46,7 +47,9 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   const [only, setOnly] = useState<Only>("all");
   const [renaming, setRenaming] = useState<Row | null>(null);
   const [view, setView] = useStored<"palette" | "list">("motif-tokens-view", "palette");
-  const [themeId, setThemeId] = useState<string>("all");
+  const [themeChoice, setThemeChoice] = useState<ThemeShown>("all");
+  // A theme that was deleted is no longer shown.
+  const themeId: ThemeShown = set.themes.some((t) => t.id === themeChoice) ? themeChoice : "all";
   const [adding, setAdding] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [addMany, setAddMany] = useState(false);
@@ -167,9 +170,11 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
     <p className="px-6 py-10 text-center text-xs text-text-tertiary" data-no-match>Nothing matches{query ? ` “${query}”` : ""}.</p>
   );
 
-  const showTheme = colorsView && set.themes.length > 1;
+  // Showing a theme also makes it the set's open theme, which is the one a new theme starts as a copy of and the editor shows.
+  const showTheme = (id: ThemeShown) => { setThemeChoice(id); if (id !== "all") ds().setActiveTheme(set.id, id); };
   return (
     <>
+      {colorsView && <ThemeBar set={set} shown={themeId} onShow={showTheme} />}
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-surface-border px-4 py-2">
         <label className="relative">
           <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary" />
@@ -183,12 +188,6 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
         )}
         <div className="flex-1" />
         <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>
-        {showTheme && (
-          <select aria-label="Theme shown" value={themeId} onChange={(e) => setThemeId(e.target.value)} className="rounded border border-surface-border bg-surface-base px-1.5 py-1 text-xs text-text-secondary outline-none">
-            <option value="all">All themes</option>
-            {set.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        )}
         {colorsView && (
           <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5" role="group" aria-label="View">
             <button type="button" aria-pressed={view === "palette"} onClick={() => setView("palette")} className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs", view === "palette" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><PaletteIcon size={11} /> Palette</button>
