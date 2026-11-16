@@ -6,6 +6,7 @@ import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
 import { changedValues, channelForms, tailwind3Extend, tokenOverrides } from "@/lib/preview/overrides";
 import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import { readMotifTokens, resolveInDoc } from "@/lib/token-sync/doc";
+import { keyPrefixes } from "@/lib/token-sync/keys";
 import { motifOnlyTokens } from "@/lib/edit/motif-tokens";
 import type { RepoToken } from "@/lib/repo-scan/types";
 import { aliasTarget } from "@/lib/tokens/alias";
@@ -78,7 +79,7 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
   const analysis = useGitStore((s) => s.analysis);
   const motif = useMemo(
     () => (link && repo && link.repo === repo
-      ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes), analysis?.stack.tailwindVersion === 3 ? channelForms(analysis.tokens) : {})
+      ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, analysis ? { ...link, prefixes: keyPrefixes(analysis) } : link), link.base, link.baseTheme, Object.keys(link.themes), analysis?.stack.tailwindVersion === 3 ? channelForms(analysis.tokens) : {})
       : { css: "", changed: [] as string[] }),
     [link, repo, colors, spacing, radii, shadows, analysis]
   );
@@ -87,9 +88,9 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
   const theme = useMemo(() => {
     if (!analysis || !link || !repo || link.repo !== repo) return "";
     const version = analysis.stack.tailwindVersion;
-    if (version === 4) return motifOnlyTokens(readMotifTokens({ colors, spacing, radii, shadows }, link), analysis.tokens, 4).themeCss;
+    if (version === 4) return motifOnlyTokens(readMotifTokens({ colors, spacing, radii, shadows }, { ...link, prefixes: keyPrefixes(analysis) }), analysis.tokens, 4).themeCss;
     if (version !== 3) return "";
-    const extend = tailwind3Extend(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, analysis.tokens);
+    const extend = tailwind3Extend(readMotifTokens({ colors, spacing, radii, shadows }, { ...link, prefixes: keyPrefixes(analysis) }), link.base, link.baseTheme, analysis.tokens);
     return Object.keys(extend).length ? JSON.stringify(extend) : "";
   }, [analysis, link, repo, colors, spacing, radii, shadows]);
   return { ...motif, shown: motifTokens ? motif.css : "", theme: motifTokens ? theme : "" };
@@ -124,12 +125,12 @@ export function useTokenIndex(repo: string | null): TokenIndex {
     let overrides: Record<string, Record<string, string>> = {};
     let extra: RepoToken[] = [];
     if (link && link.repo === repo) {
-      const current = readMotifTokens({ colors, spacing, radii, shadows }, link);
+      const current = readMotifTokens({ colors, spacing, radii, shadows }, { ...link, prefixes: keyPrefixes(analysis) });
       // The tokens Motif has made and the repository hasn't got yet are offered like any other.
       extra = motifOnlyTokens(current, analysis.tokens, analysis.stack.tailwindVersion).tokens;
     }
     if (motifTokens && link && link.repo === repo) {
-      const current = readMotifTokens({ colors, spacing, radii, shadows }, link);
+      const current = readMotifTokens({ colors, spacing, radii, shadows }, { ...link, prefixes: keyPrefixes(analysis) });
       overrides = changedValues(current, link.base);
       // A color that is another token is shown as the color that comes to.
       for (const [name, byTheme] of Object.entries(overrides)) {

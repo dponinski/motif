@@ -2,6 +2,7 @@ import type { GitHost, RepoReader } from "../github";
 import type { RepoAnalysis } from "../repo-scan/types";
 import { readerSource } from "../repo-scan/source";
 import { applyDoc, cssName, readMotifTokens, readRepoTokens, type LinkShape, type RepoSnapshot, type SyncDoc, type TokenSlices } from "./doc";
+import { keyPrefixes } from "./keys";
 import { changesToRepo, describeChanges, mergeTokens, type TokenChange, type TokenMerge } from "./merge";
 import type { FileWrite } from "./pr";
 import { generateTokensCss } from "./write";
@@ -62,7 +63,7 @@ export function planSync(link: TokenLink, slices: TokenSlices, repo: RepoState):
 export function applyMerged(link: TokenLink, slices: TokenSlices, merged: SyncDoc, repo: RepoState, activeThemeId: string): { slices: TokenSlices; link: TokenLink } {
   return {
     slices: applyDoc(slices, link, merged, activeThemeId),
-    link: { ...link, base: repo.snapshot.doc, syncedAt: Date.now() },
+    link: { ...link, prefixes: keyPrefixes(repo.analysis), base: repo.snapshot.doc, syncedAt: Date.now() },
   };
 }
 
@@ -98,6 +99,17 @@ export function newTokensPath(analysis: RepoAnalysis): string {
   return dir ? `${dir}/${name}` : name;
 }
 
+// The link of a Motif set to a repository that has no tokens: one repository theme per Motif theme, named by the theme (the first is the base).
+export function linkShapeFor(set: { id: string; themes: { id: string; name: string }[] }): LinkShape {
+  const themes: Record<string, string> = {};
+  for (const theme of set.themes) {
+    let key = cssName(theme.name);
+    for (let n = 2; key in themes; n++) key = `${cssName(theme.name)}-${n}`;
+    themes[key] = theme.id;
+  }
+  return { setId: set.id, themes, baseTheme: Object.keys(themes)[0] ?? "default" };
+}
+
 export interface ExportPlan {
   link: Omit<TokenLink, "repo" | "branch" | "staged" | "syncedAt">;
   doc: SyncDoc;
@@ -117,14 +129,7 @@ export async function planExport(
   set: { id: string; themes: { id: string; name: string }[] },
   slices: TokenSlices
 ): Promise<ExportPlan> {
-  const themes: Record<string, string> = {};
-  for (const theme of set.themes) {
-    let key = cssName(theme.name);
-    for (let n = 2; key in themes; n++) key = `${cssName(theme.name)}-${n}`;
-    themes[key] = theme.id;
-  }
-  const baseTheme = Object.keys(themes)[0] ?? "default";
-  const link = { setId: set.id, themes, baseTheme, base: {} as SyncDoc };
+  const link = { ...linkShapeFor(set), prefixes: keyPrefixes(repo.analysis), base: {} as SyncDoc };
 
   const all = readMotifTokens(slices, link);
   // A name can only be one variable; later tokens that reuse it are left out.
@@ -141,7 +146,7 @@ export async function planExport(
 
   const tailwind = repo.analysis.stack.tailwindVersion === 4;
   const tokensPath = newTokensPath(repo.analysis);
-  const files: Record<string, FileWrite> = { [tokensPath]: { text: generateTokensCss(doc, { tailwind, baseTheme }), sha: null } };
+  const files: Record<string, FileWrite> = { [tokensPath]: { text: generateTokensCss(doc, { tailwind, baseTheme: link.baseTheme }), sha: null } };
 
   let imported = false;
   const entry = repo.analysis.tailwindEntry;

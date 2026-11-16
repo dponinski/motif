@@ -1,6 +1,7 @@
 import type { GitHost, RepoReader } from "../github";
 import { planExport, planSync, readRepoState, type TokenLink } from "../token-sync/flow";
 import { readMotifTokens, type SyncDoc, type TokenSlices } from "../token-sync/doc";
+import { keyPrefixes } from "../token-sync/keys";
 import { changesToRepo, describeChanges } from "../token-sync/merge";
 import { tokenSummary } from "../token-sync/pr";
 import { applyEdits, filesNeeded } from "../token-sync/write";
@@ -46,7 +47,7 @@ export async function stageTokens(input: {
   }
 
   const mine = readMotifTokens(slices, link);
-  const done = (files: string[]) => ({ ...link, staged: { doc: mine, paths: [...new Set([...(link.staged?.paths ?? []), ...files])] } });
+  const done = (files: string[]) => ({ ...link, prefixes: keyPrefixes(planned.analysis), staged: { doc: mine, paths: [...new Set([...(link.staged?.paths ?? []), ...files])] } });
 
   // A repository with no token files (a new design system, or the file was given up): the stylesheet is made.
   if (planned.analysis.tokens.length === 0) {

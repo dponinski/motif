@@ -123,6 +123,53 @@ describe("applyEdits: adding tokens", () => {
   });
 });
 
+describe("applyEdits: a new token in Tailwind 4 always gets a class", () => {
+  const V4 = '{"devDependencies":{"tailwindcss":"^4.0.0"}}';
+  const base = (changes: TokenChange[], files: Record<string, string>) => scan(files).then((a) => applyEdits(files, a, readRepoTokens(a.tokens, a.themes), changes));
+  const css = (out: Awaited<ReturnType<typeof base>>, path = "src/app.css") => out.files[path];
+
+  it("puts a color declared right in @theme into that block, named for its variable", async () => {
+    const files = { "package.json": V4, "src/app.css": '@import "tailwindcss";\n@theme {\n  --color-brand-500: #1d4ed8;\n}\n' };
+    const out = await base([change("color-sun", "color", "default", "added", "#ffcc00")], files);
+    expect(css(out)).toBe('@import "tailwindcss";\n@theme {\n  --color-brand-500: #1d4ed8;\n  --color-sun: #ffcc00;\n}\n');
+    expect(out.skipped).toEqual([]);
+  });
+
+  it("says only the base value is written for a color in @theme, which has no themes", async () => {
+    const files = { "package.json": V4, "src/app.css": '@import "tailwindcss";\n@theme {\n  --color-brand-500: #1d4ed8;\n}\n' };
+    const out = await base([change("color-sun", "color", "dark", "added", "#ffcc00")], files);
+    expect(out.skipped[0].reason).toMatch(/no themes/);
+  });
+
+  it("makes @theme inline for a color when the repository has variables but no Tailwind alias for them", async () => {
+    const files = { "package.json": V4, "src/app.css": '@import "tailwindcss";\n:root {\n  --bg: #ffffff;\n}\n.dark {\n  --bg: #000000;\n}\n' };
+    const out = await base([change("sun", "color", "light", "added", "#ffcc00"), change("sun", "color", "dark", "added", "#aa8800")], files);
+    expect(css(out)).toContain("  --sun: #ffcc00;");
+    expect(css(out)).toContain("  --sun: #aa8800;");
+    expect(css(out)).toMatch(/@theme inline \{\n\s+--color-sun: var\(--sun\);\n\}/);
+    expect((css(out).match(/--color-sun/g) ?? []).length).toBe(1);
+  });
+
+  it("makes an @theme block for a radius, a spacing and a shadow when there is none of their kind", async () => {
+    const files = { "package.json": V4, "src/app.css": '@import "tailwindcss";\n:root {\n  --bg: #ffffff;\n}\n' };
+    const out = await base([
+      change("radius-card", "radius", "default", "added", "10"),
+      change("spacing-gutter", "spacing", "default", "added", "12"),
+      change("shadow-lifted", "shadow", "default", "added", "0 4px 8px 0 #00000040"),
+    ], files);
+    const text = css(out);
+    expect(text).toMatch(/@theme \{\n\s+--radius-card: (0\.625rem|10px);/);
+    expect(text).toContain("--spacing-gutter:");
+    expect(text).toContain("--shadow-lifted:");
+    expect((text.match(/@theme/g) ?? []).length).toBe(1);
+    // Reading it back, each one is a token Tailwind gives a class.
+    const back = await scan({ ...files, "src/app.css": text });
+    for (const name of ["radius-card", "spacing-gutter", "shadow-lifted"]) {
+      expect(Object.values(back.tokens.find((t) => t.name === name)?.locations ?? {})[0]?.container).toBe("theme");
+    }
+  });
+});
+
 describe("generateTokensCss", () => {
   const doc: SyncDoc = {
     primary: { kind: "color", values: { light: "#4f46e5", dark: "#818cf8" } },

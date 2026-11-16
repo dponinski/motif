@@ -5,6 +5,7 @@ import { aliasTarget } from "../tokens/alias";
 import type { RepoSnapshot, SyncDoc, SyncKind } from "./doc";
 import type { TokenChange } from "./merge";
 import { addToConfig, editConfig, type ConfigAdd, type ConfigSet } from "./config-write";
+import { inTheme } from "./keys";
 import { formatLength, writeShadow } from "./values";
 
 export interface SkippedChange {
@@ -157,6 +158,15 @@ export async function applyEdits(
     return found;
   };
 
+  // The `@theme` block of a stylesheet, made at the end of it when there is none.
+  const ensureThemeAtRule = (root: Root, inline: boolean): AtRule => {
+    const existing = themeAtRule(root, inline);
+    if (existing) return existing;
+    const block = postcss.atRule({ name: "theme", params: inline ? "inline" : "", raws: { afterName: inline ? " " : "", between: " " } });
+    root.append(block);
+    return block;
+  };
+
   const append = (container: Container, prop: string, value: string) => container.append(postcss.decl({ prop, value }));
 
   const usesAliases = analysis.tokens.some((t) => t.kind === "color" && t.tailwind === `color-${t.name}` && t.locations && Object.values(t.locations).some((l) => l.container === "css-var"));
@@ -226,6 +236,21 @@ export async function applyEdits(
       continue;
     }
 
+    // In Tailwind 4 a new token always gets a class: where the repository keeps tokens of its kind, or in a block made for it.
+    const v4 = analysis.stack.tailwindVersion === 4;
+    // Colors the repository declares right in `@theme` (`--color-brand: #123`) are added there, with a value for the base theme only.
+    const directColor = v4 && change.kind === "color" && !existing && !usesAliases && inTheme(analysis.tokens, "color");
+    if (directColor) {
+      if (change.theme !== snapshot.baseTheme) { skipped.push({ name: change.name, theme: change.theme, reason: "A @theme block has no themes, so only a new color's base value is written" }); continue; }
+      const holder = analysis.tokens.find((t) => t.kind === "color" && Object.values(t.locations).some((l) => l.container === "theme"));
+      const where = holder && Object.values(holder.locations).find((l) => l.container === "theme")!.file;
+      const rootOfBlock = where ? rootOf(where) : null;
+      if (!where || !rootOfBlock) { skipped.push({ name: change.name, theme: change.theme, reason: `${where ?? "The stylesheet"} wasn't read` }); continue; }
+      append(ensureThemeAtRule(rootOfBlock, false), `--${change.name}`, writtenValue(change, analysis, snapshot));
+      touched.add(where);
+      continue;
+    }
+
     // Radius, spacing and shadows follow how the repository already declares tokens of their kind.
     const themeBlockToken = change.kind === "color" || existing ? undefined
       : analysis.tokens.find((t) => t.kind === KIND_OF[change.kind] && Object.values(t.locations).some((l) => l.container === "theme"));
@@ -238,12 +263,16 @@ export async function applyEdits(
       const block = themeAtRule(root, false);
       if (!block) { skipped.push({ name: change.name, theme: change.theme, reason: "There is no @theme block to add it to" }); continue; }
       append(block, `--${change.name}`, value);
+    } else if (v4 && change.kind !== "color" && !existing) {
+      // A radius, spacing or shadow in a repository with no `@theme` block of its kind: the block is made.
+      if (change.theme !== snapshot.baseTheme) { skipped.push({ name: change.name, theme: change.theme, reason: "A @theme block has no themes, so only a new token's base value is written" }); continue; }
+      append(ensureThemeAtRule(root, false), `--${change.name}`, value);
     } else {
       append(ensureThemeRule(root, change.theme!), `--${change.name}`, value);
-      if (change.kind === "color" && usesAliases && !existing && !aliased.has(change.name)) {
-        const inline = themeAtRule(root, true);
-        if (inline) { append(inline, `--color-${change.name}`, `var(--${change.name})`); aliased.add(change.name); }
-        else skipped.push({ name: change.name, theme: null, reason: "Added as a variable, but there is no @theme inline block to make it a Tailwind color" });
+      if (change.kind === "color" && (usesAliases || v4) && !existing && !aliased.has(change.name)) {
+        // The class comes from `@theme inline`, which is made when the repository has none.
+        append(ensureThemeAtRule(root, true), `--color-${change.name}`, `var(--${change.name})`);
+        aliased.add(change.name);
       }
     }
     touched.add(file);
