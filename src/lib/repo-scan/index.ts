@@ -195,7 +195,7 @@ export async function scanRepository(
     ...(options.tokensOnly ? {} : { tokenUsage: tokenUsage({ tokens, themes, tailwind: stack.tailwindVersion, sources: usageSources }) }),
     components,
     styleFiles: cssPaths,
-    tailwindEntry: cssFiles.find((f) => /@import\s+["']tailwindcss["']/.test(f.text))?.path ?? null,
+    tailwindEntry: cssFiles.find((f) => /@import\s+["']tailwindcss["']|@tailwind\s+base\b/.test(f.text))?.path ?? null,
     warnings: [...new Set(warnings)],
     stats: { filesInRepo: listing.paths.length, filesRead: reads, truncated: listing.truncated },
   };

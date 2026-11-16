@@ -8,6 +8,7 @@ const graph = (extra: Partial<ModuleGraph> = {}): ModuleGraph => ({
   css: [{ path: "src/app.css", text: '@import "tailwindcss";\n.a { color: red; }' }],
   deps: { react: "^19.3.1", "react-dom": "^19.3.1", clsx: "^2.1.1", "@radix-ui/react-dialog": "^1.1.2" },
   bare: ["clsx", "@radix-ui/react-dialog/sub"],
+  tailwindConfig: null,
   unsupported: [], warnings: [],
   ...extra,
 });
@@ -67,7 +68,7 @@ describe("buildSrcdoc", () => {
     const none = build(graph(), null);
     expect(none).not.toContain("tailwindcss/browser");
     expect(none).toContain('<style data-motif-css="src/app.css">@import');
-    expect(() => build(graph(), 3)).toThrow("Tailwind v3 repositories can't be previewed yet");
+    expect(build(graph(), 3)).toContain("motif-tailwind3.js");
   });
 
   it("loads the runtime and leaves a place for token overrides", () => {

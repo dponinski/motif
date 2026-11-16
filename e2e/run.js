@@ -14,7 +14,7 @@ const path = require("path");
 const { ROOT, APP_PORT, APP_URL } = require("./support/env");
 
 // Use the shared server.
-const SHARED = ["build", "canvas", "chat", "direct", "insert", "docs-repo", "docs", "edit", "empty", "import", "migrate", "persist", "preview", "projects", "props", "repo", "stage", "states", "structure", "sync-flow", "sync-mixed", "tokenpick", "tokens", "variants", "compare", "tour", "tokens-screen", "tokens-add", "tokens-alias", "tokens-quickadd", "tokens-usage", "tokens-rename", "tailwind3-tokens"];
+const SHARED = ["build", "canvas", "chat", "direct", "insert", "docs-repo", "docs", "edit", "empty", "import", "migrate", "persist", "preview", "projects", "props", "repo", "stage", "states", "structure", "sync-flow", "sync-mixed", "tokenpick", "tokens", "variants", "compare", "tour", "tokens-screen", "tokens-add", "tokens-alias", "tokens-quickadd", "tokens-usage", "tokens-rename", "tailwind3-tokens", "tailwind3-preview"];
 // Start a server of their own, with no database.
 const OWN = ["signin"];
 // Start a server of their own, and need PostgreSQL.
@@ -36,6 +36,8 @@ const up = () => fetch(APP_URL, { signal: AbortSignal.timeout(2000) }).then((r) 
 
 let server = null;
 async function startServer() {
+  // The preview's Tailwind 3 engine is a file made from the project's dependencies (npm run dev and build make it too).
+  require("child_process").execFileSync("node", ["scripts/build-tailwind3.mjs"], { cwd: ROOT, stdio: "inherit" });
   if (await up()) {
     if (process.env.E2E_REUSE) return;
     throw new Error(`Something is already serving ${APP_URL}. Stop it, or set E2E_REUSE=1 to use it.`);

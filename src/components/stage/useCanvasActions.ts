@@ -108,7 +108,7 @@ export function useCanvasActions(component: LibraryComponent, source: LibrarySou
   const insertItem = (item: PaletteItem, at?: { start: number; position: InsertPosition }) => attempt(async () => {
     const code = await readCode(component.file);
     if (code === null) return;
-    const sheet = source.tailwindVersion !== 4 && !!stylesheetOf(component.file, code);
+    const sheet = source.tailwindVersion === null && !!stylesheetOf(component.file, code);
     let place = at;
     if (!place && selection) place = { start: selection.start, position: VOID.has(info?.tag ?? "") ? "after" : "last-child" };
     if (!place) {

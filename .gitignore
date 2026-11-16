@@ -45,3 +45,4 @@ src-tauri/WixTools/
 # browser suites: screenshots and the fake CDN's packages
 /e2e/out/
 /e2e/cdn/node_modules/
+/public/motif-tailwind3.js

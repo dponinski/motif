@@ -1,6 +1,7 @@
 import type { ModuleGraph } from "./graph";
 import type { RenderMessage } from "./protocol";
 import { packageName } from "./graph";
+import { isTailwind3Module, tailwind3Url } from "./tailwind3";
 
 const ESM = "https://esm.sh";
 const TAILWIND_BROWSER = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser";
@@ -61,19 +62,25 @@ export function csp(runtimeUrl: string | null, nonce: string): string {
 }
 
 export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtimeSource, initial }: SrcdocInput): string {
-  if (tailwindVersion === 3) throw new Error("Tailwind v3 repositories can't be previewed yet");
+  // The Tailwind 3 engine is a file Motif serves, so a page that has to run without Motif (an exported docs site) can't have it.
+  if (tailwindVersion === 3 && runtimeSource !== undefined) throw new Error("Tailwind v3 repositories can't be exported as a page yet");
 
-  const specs = [...new Set([...ALWAYS, ...graph.bare])];
+  // What the Tailwind 3 bundle provides to a config is not loaded from the CDN.
+  const specs = [...new Set([...ALWAYS, ...graph.bare])].filter((spec) => !(tailwindVersion === 3 && isTailwind3Module(spec)));
   const externals = Object.fromEntries(specs.map((spec) => [spec, esmUrl(spec, graph.deps)]));
   const importMap = { imports: Object.fromEntries(ALWAYS.map((spec) => [spec, externals[spec]])) };
 
   const css = graph.css.map((c) => c.text).join("\n\n");
   // Tailwind compiles every stylesheet together, so they stay one element; otherwise each is its own, so an edit to one
   // stylesheet can replace just that one while the page is open.
+  // Tailwind 3 has the page build it: the engine reads the stylesheet and the config and writes `motif-tw3` as the page changes.
   const styles = tailwindVersion === 4
     ? `<style type="text/tailwindcss">${style(css)}</style>`
+    : tailwindVersion === 3
+    ? `<style id="motif-tw3"></style>`
     : graph.css.map((c) => `<style data-motif-css="${attr(c.path)}">${style(c.text)}</style>`).join("\n");
-  const data = { entry: graph.entry, modules: graph.modules, externals, initial: initial ?? null };
+  const tailwind3 = tailwindVersion === 3 ? { css: graph.css, config: graph.tailwindConfig } : null;
+  const data = { entry: graph.entry, modules: graph.modules, externals, tailwind3, initial: initial ?? null };
   const runtime = runtimeSource !== undefined
     ? `<script nonce="${nonce}">${runtimeSource.replace(/<\/script/gi, "<\\/script")}</script>`
     : `<script nonce="${nonce}" src="${attr(runtimeUrl)}"></script>`;
@@ -86,6 +93,7 @@ export function buildSrcdoc({ graph, tailwindVersion, runtimeUrl, nonce, runtime
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script type="importmap" nonce="${nonce}">${json(importMap)}</script>
 ${tailwindVersion === 4 ? `<script nonce="${nonce}" src="${TAILWIND_BROWSER}@4"></script>` : ""}
+${tailwindVersion === 3 ? `<script nonce="${nonce}" src="${attr(tailwind3Url(runtimeUrl))}"></script>` : ""}
 ${styles}
 <style id="motif-overrides"></style>
 </head>

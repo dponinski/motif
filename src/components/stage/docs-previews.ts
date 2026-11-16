@@ -24,7 +24,7 @@ export function previewPageFor(component: LibraryComponent, view: PreviewView, s
   const key = `${versionOf(source)}|${previewKey(component, view)}`;
   if (!pages.has(key)) {
     pages.set(key, (async () => {
-      if (source.tailwindVersion === 3) throw new Error("This repository uses Tailwind v3, which can't be previewed yet");
+      if (source.tailwindVersion === 3) throw new Error("Documentation pages can't show components of a Tailwind v3 repository yet");
       const graph = await cachedGraph(source, host, readerFor(source, host), component.file);
       if (graph.unsupported.length) throw new Error(graph.unsupported[0]);
       return previewPage({ graph, tailwindVersion: source.tailwindVersion, runtimeSource: await runtimeSource(), component, view });

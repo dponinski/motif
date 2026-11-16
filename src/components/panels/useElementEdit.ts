@@ -88,7 +88,7 @@ export function useElementEdit(component: LibraryComponent, source: LibrarySourc
         const next = code === null ? null : await analyze(selection.path, code, selection.start, values);
         // Styles that are in a stylesheet next to the component are edited there. (With Tailwind v4 the classes are.)
         let nextSheet: typeof sheet = null;
-        const sheetPath = code !== null && source.tailwindVersion !== 4 ? stylesheetOf(selection.path, code) : null;
+        const sheetPath = code !== null && source.tailwindVersion === null ? stylesheetOf(selection.path, code) : null;
         if (code !== null && sheetPath) {
           const text = await read(sheetPath);
           nextSheet = { path: sheetPath, text: text ?? "", exists: text !== null, code };

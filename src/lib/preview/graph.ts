@@ -3,6 +3,7 @@ import { Resolver, type FileModel } from "../repo-scan/model";
 import { isIgnoredPath, mapLimit, readerSource } from "../repo-scan/source";
 import { instrument } from "../edit/instrument";
 import { isJson, isScript, transformModule } from "./transform";
+import { findTailwindConfig, isTailwind3Module } from "./tailwind3";
 
 // Everything the sandbox needs to run one component: its module and the modules it imports, the global
 // stylesheets, and the packages to load from the CDN.
@@ -18,6 +19,8 @@ export interface ModuleGraph {
   entry: string;
   modules: Record<string, GraphModule>;
   css: { path: string; text: string }[];
+  // The Tailwind 3 config the page runs to build its stylesheet (a module of the graph), when the repository has one.
+  tailwindConfig: string | null;
   // Package name -> version range from the repository's package.json.
   deps: Record<string, string>;
   // Bare specifiers used, with subpaths ("react/jsx-runtime", "lucide-react").
@@ -147,7 +150,9 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
   const rawUrl = (path: string) =>
     `https://raw.githubusercontent.com/${input.repo}/${ref.split("/").map(encodeURIComponent).join("/")}/${path.split("/").map(encodeURIComponent).join("/")}`;
 
-  const starts = [entry, ...(input.extraEntries ?? [])];
+  // A Tailwind 3 page builds its stylesheet from the repository's config, which is run like any other module.
+  const tailwindConfig = input.tailwindVersion === 3 ? findTailwindConfig(paths) : null;
+  const starts = [entry, ...(input.extraEntries ?? []), ...(tailwindConfig ? [tailwindConfig] : [])];
   const queue: string[] = [...starts];
   const seen = new Set<string>(starts);
   const enqueue = (p: string) => { if (!seen.has(p)) { seen.add(p); queue.push(p); } };
@@ -187,6 +192,8 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
       const imports: Record<string, string | null> = {};
       for (const spec of model.sources) {
         if (!isLocal(spec)) {
+          // What the Tailwind 3 bundle provides to a config isn't a package to load.
+          if (path === tailwindConfig && isTailwind3Module(spec)) continue;
           if (NODE_BUILTINS.has(spec) || spec.startsWith("node:")) out.unsupported.push(`${path} uses Node's \`${spec}\`, which isn't available in a browser`);
           else if (packageName(spec) === "next") out.unsupported.push(`${path} imports \`${spec}\`; Next.js modules can't be previewed yet`);
           out.bare.push(spec);
@@ -253,7 +260,7 @@ export async function buildGraph(input: GraphInput): Promise<ModuleGraph> {
     if (!(name in deps)) deps[name] = versions[name] ?? "latest";
   }
 
-  return { entry, modules, css, deps, bare: [...bare].sort(), unsupported: [...unsupported], warnings: [...new Set(warnings)] };
+  return { entry, modules, css, tailwindConfig, deps, bare: [...bare].sort(), unsupported: [...unsupported], warnings: [...new Set(warnings)] };
 }
 
 // Reading files is the slow part of building a graph, and an edit builds one again, so what was read is kept.
