@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Copy, GripVertical, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
 import type { RadiusToken, ShadowToken, SpacingToken, TypographyToken } from "@/store/design-system";
@@ -26,6 +26,7 @@ export interface OtherCtx {
   act: OtherActions;
   taken: string[];
   hasRepo: boolean;
+  rename?: (row: Row) => void;
 }
 
 const number = (text: string) => { const n = parseFloat(text); return Number.isFinite(n) ? n : null; };
@@ -117,6 +118,9 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
         <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 focus-within:opacity-100 group-hover/row:opacity-100">
           {expandable && (
             <button type="button" aria-label={`${open ? "Close" : "Edit"} ${row.name}`} aria-expanded={open} onClick={() => setOpen(!open)} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary">{open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}</button>
+          )}
+          {row.linked && !row.readonly && ctx.rename && (
+            <button type="button" data-rename-open aria-label={`Rename ${row.name} in the repository`} title="Rename in the repository" onClick={() => ctx.rename!(row)} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Pencil size={10} /></button>
           )}
           <button type="button" aria-label={`Duplicate ${row.name}`} onClick={() => ctx.act.duplicate([row.id])} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /></button>
           <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-red-400/10 hover:text-red-400"><Trash2 size={10} /></button>

@@ -108,3 +108,18 @@ describe("exports", () => {
     expect(json.color.base.background.$value).toBe("{color.gray.gray-50}");
   });
 });
+
+describe("renaming a token the repository names", () => {
+  it("takes the new name, keeps what follows it, and refuses a name that is taken or a token that isn't the repository's", () => {
+    const [light] = themes();
+    useDesignSystemStore.setState((s) => ({ colors: [...s.colors, { id: "p", name: "primary", repoName: "primary", value: "#111111", group: "base", setId: SET, themeValues: { [light]: "#111111" } }] }));
+    store().setColorAlias(color("background").id, light, "primary");
+    expect(color("background").themeAlias).toEqual({ [light]: "primary" });
+    expect(store().renameRepoToken("color", "p", "surface")).toBe(true);
+    expect(color("surface")).toMatchObject({ name: "surface", repoName: "surface" });
+    expect(color("background").themeAlias).toEqual({ [light]: "surface" });
+    expect(color("background").themeValues[light]).toBe("#111111");
+    expect(store().renameRepoToken("color", "p", "gray-50")).toBe(false);
+    expect(store().renameRepoToken("color", color("gray-50").id, "x")).toBe(false);
+  });
+});
