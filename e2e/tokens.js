@@ -159,14 +159,10 @@ const check = (name, ok, detail = "") => {
   await nav("Git");
   await page.getByText("Components and tokens").waitFor();
 
-  // ── Import ────────────────────────────────────────────────────────────────
+  // ── Import: the repository's tokens come in with the first pull, with nothing pressed ──
+  await dialog.waitFor({ state: "hidden" }).catch(() => {});
   await page.getByRole("button", { name: "Sync tokens" }).click();
-  await dialog.getByText("23 tokens will be imported").waitFor({ timeout: 30000 });
-  check("import summary counts the tokens by kind and lists themes", await dialog.getByText("17 colors · 4 radius · 2 shadows · themes: light, dark").isVisible());
-  check("tokens Motif can't hold are listed, not silently dropped", await dialog.getByText("2 left out").isVisible());
-  await page.screenshot({ path: `${OUT}/tokens-import.png` });
-  await dialog.getByRole("button", { name: "Import into a new set" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
+  await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 60000 });
   let ds = await designSystem();
   const set = ds.sets.find((s) => s.name === "acme/ds");
   check("a set is created with a Light and a Dark theme", !!set && set.themes.map((t) => t.name).join() === "Light,Dark");

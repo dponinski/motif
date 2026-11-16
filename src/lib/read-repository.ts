@@ -15,6 +15,7 @@ export async function scanBranch(host: RepoReader, repo: string, branch: string)
 export async function readRepository(host: GitHost & RepoReader, connection: GitConnection, branch = connection.defaultBranch): Promise<RepoAnalysis> {
   const analysis = await scanBranch(host, repoSlug(connection), branch);
   useGitStore.getState().setAnalysis(analysis);
+  useGitStore.getState().setPulledSha(await host.getRef(branch).catch(() => null));
   useLibraryStore.getState().importComponents(analysis);
   return analysis;
 }

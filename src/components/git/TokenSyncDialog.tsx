@@ -36,7 +36,7 @@ function Value({ value }: { value: string | undefined }) {
   );
 }
 
-function ChangeList({ changes, label }: { changes: TokenChange[]; label: string }) {
+export function ChangeList({ changes, label }: { changes: TokenChange[]; label: string }) {
   const [all, setAll] = useState(false);
   const shown = all ? changes : changes.slice(0, 8);
   return (
@@ -68,7 +68,7 @@ function ChangeList({ changes, label }: { changes: TokenChange[]; label: string 
   );
 }
 
-function Conflicts({ conflicts, takeTheirs, onToggle }: { conflicts: TokenConflict[]; takeTheirs: Set<number>; onToggle: (i: number, theirs: boolean) => void }) {
+export function Conflicts({ conflicts, takeTheirs, onToggle }: { conflicts: TokenConflict[]; takeTheirs: Set<number>; onToggle: (i: number, theirs: boolean) => void }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-text-primary">{conflicts.length} value{conflicts.length === 1 ? "" : "s"} changed in both places</p>
@@ -330,6 +330,10 @@ function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSyn
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // A repository with no tokens is linked to the project's first set when it is pulled, with nothing in the pull request yet: the tokens
+  // file is put in the pull request from here (or at Sync, which does the same), and until then this is where to do it.
+  const awaitingExport = !!link && !link.staged && Object.keys(link.base).length === 0 && !!state && Object.keys(state.snapshot.doc).length === 0;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -352,7 +356,7 @@ function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSyn
       {loading && !state && <p className="flex items-center gap-2 text-xs text-text-tertiary"><Loader2 size={12} className="animate-spin" /> Reading the repository…</p>}
 
       {state && (
-        link
+        link && !awaitingExport
           ? <SyncSection link={link} state={state} connection={connection} onOpenSync={onOpenSync} notify={setNotice} />
           : Object.keys(state.snapshot.doc).length > 0
             ? <ImportSection state={state} repo={slug} branch={branch} onDone={setNotice} />

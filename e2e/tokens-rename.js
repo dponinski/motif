@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
 
@@ -158,15 +159,10 @@ const check = (name, ok, detail = "") => {
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
   await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
   await page.getByText(/Imported \d+ components/).waitFor();
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Import into a new set" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
-  await page.keyboard.press("Escape");
-  await dialog.waitFor({ state: "hidden" });
+  await tokensLinked(page);
 
   await nav("Tokens");
-  await page.getByText("acme/ds", { exact: true }).click();
+  await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
   await page.getByRole("tab", { name: /Colors/ }).click();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
@@ -224,7 +220,7 @@ const check = (name, ok, detail = "") => {
   check("with the token declared under its new name in every theme", /--brand:/.test(css) && !/(?<![\w-])--primary(?![\w-])/.test(css) && /--color-brand: var\(--brand\)/.test(css), css.split("\n").filter((l) => /brand|primary/.test(l)).slice(0, 6).join(" | "));
   check("the components use the class by its new name", /bg-brand/.test(tree.get("src/components/Button.tsx")) && ![...tree.entries()].some(([p, t]) => !p.endsWith(".md") && /(?<![\w-])(bg|text|ring|accent)-primary(?![\w-])/.test(t)));
   check("and every file that changed is one the rename plans", [...tree.entries()].every(([p, t]) => repos["acme/ds"].main.get(p) === t || /(?<![\w-])(--)?(brand|primary)(?![\w-])|-brand/.test(t)));
-  check("the token is not flagged as changed, nor made twice", await (async () => { await nav("Tokens"); await page.getByText("acme/ds", { exact: true }).click(); await page.getByRole("tab", { name: /Colors/ }).click(); return (await row("brand").locator("text=changed").count()) === 0 && (await row("brand").count()) === 1; })());
+  check("the token is not flagged as changed, nor made twice", await (async () => { await nav("Tokens"); await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click(); await page.getByRole("tab", { name: /Colors/ }).click(); return (await row("brand").locator("text=changed").count()) === 0 && (await row("brand").count()) === 1; })());
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

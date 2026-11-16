@@ -7,6 +7,7 @@ import LeftPanel from "./panels/LeftPanel";
 import RightPanel from "./panels/RightPanel";
 import AppNav, { type NavItem } from "./AppNav";
 import ActivityPanel from "./ActivityPanel";
+import PullConflicts from "./sync/PullConflicts";
 // What is only shown when its tab is opened is loaded then, not with the editor.
 const TokensView = dynamic(() => import("./views/TokensView"), { loading: () => null });
 const DocsView = dynamic(() => import("./views/DocsView"), { loading: () => null });
@@ -14,7 +15,7 @@ const RepoView = dynamic(() => import("./views/RepoView"), { loading: () => null
 import ComponentStage from "./stage/ComponentStage";
 import ProjectOverview from "./stage/ProjectOverview";
 import { useAutoRead } from "./stage/useReadRepository";
-import { useWorkWatcher } from "./work/useWork";
+import { useBehindWatcher, useWorkWatcher } from "./work/useWork";
 import { useStagedStack } from "./work/useStagedStack";
 import { useLibraryStore } from "@/store/library";
 import { useNavRequest } from "@/store/nav";
@@ -45,6 +46,8 @@ export default function Editor({ projectId }: { projectId: string }) {
   useAutoRead();
   // The pull request is checked now and then, and edited files that the repository has changed since are found.
   useWorkWatcher();
+  // Whether the repository has moved since it was read.
+  useBehindWatcher();
   // What the preview and new components build on follows the editor's changes (a Tailwind add-on that isn't merged yet).
   useStagedStack();
   // A component made here is in the list while its files are among the changes: undoing its creation, or sending it as a
@@ -103,6 +106,7 @@ export default function Editor({ projectId }: { projectId: string }) {
           </>
         )}
       </div>
+      <PullConflicts />
     </TipProvider>
   );
 }

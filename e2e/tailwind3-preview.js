@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
 
@@ -201,15 +202,9 @@ const check = (name, ok, detail = "") => {
 
   // ── Motif's tokens show in it before they are synced ──────────────────────
   await nav("Git");
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByText(/tokens will be imported/).waitFor({ timeout: 30000 });
-  await dialog.getByRole("button", { name: "Import into a new set" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
-  await page.keyboard.press("Escape");
-  await dialog.waitFor({ state: "hidden" });
+  await tokensLinked(page);
   await nav("Tokens");
-  await page.getByText("acme/ds", { exact: true }).click();
+  await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
   await page.getByRole("tab", { name: /Colors/ }).click();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Light value of danger", { exact: true }).waitFor();

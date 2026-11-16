@@ -2,6 +2,7 @@
 const { chromium } = require("playwright");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { tokensLinked } = require("./support/git-panel");
 const { createFake } = require("./support/fake-github");
 
 const { OUT } = require("./support/env");
@@ -41,10 +42,7 @@ const check = (name, ok, detail = "") => {
 
   // Link the repository's tokens to a Motif set.
   await nav("Git");
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  await dialog.getByRole("button", { name: "Import into a new set" }).click();
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 });
-  await page.keyboard.press("Escape");
+  await tokensLinked(page);
 
   // A component made here, and a token edited in Motif.
   await nav("Components");

@@ -48,6 +48,7 @@ export function applyPayload(project: Project, payload: ProjectPayload, info: Se
       tokenLink: keepStaged(payload.tokenLink, project.repo.tokenLink),
       // Where this device has got to with its pull request is its own, and goes with its unsent changes.
       work: sameRepo ? project.repo.work ?? null : null,
+      pulledSha: sameRepo ? project.repo.pulledSha ?? null : null,
     },
     library: sameRepo || (!was && !next) ? project.library : { source: null, components: [] },
     tokens: { ...emptyTokenData(), ...(payload.tokens as unknown as Partial<TokenData>) },

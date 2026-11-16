@@ -187,7 +187,7 @@ const check = (name, ok, detail = "") => {
   check("redo brings them back", await settle(async () => (await gap()) === "16px"));
 
   // ── Updating from the repository keeps what was edited ───────────────────
-  await page.getByRole("button", { name: "Update from repository" }).click();
+  await page.getByRole("button", { name: "Pull from the repository" }).click();
   await page.getByText("Up to date").waitFor({ timeout: 30000 });
   check("an update from the repository keeps the edits", (await prButton.innerText()).includes("Sync (1)") && await settle(async () => (await gap()) === "16px", 15000));
   check("and says nothing about the file being out of date", (await page.getByText(/has changed in the repository since you edited/).count()) === 0);
