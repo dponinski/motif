@@ -246,11 +246,12 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
   const linkedSetName = useDesignSystemStore((s) => s.sets.find((x) => x.id === link?.setId)?.name);
   const { busy: pulling, notice, behind } = usePullStatus();
   // A repository with no commits has nothing to start a branch from: the first commit is offered here, where sending happens.
-  const [empty, setEmpty] = useState(false);
+  // (Not known yet is null: nothing is pushed before it is.)
+  const [empty, setEmpty] = useState<boolean | null>(null);
   useEffect(() => {
     if (!connection) return;
     let alive = true;
-    host.isEmpty().then((e) => { if (alive) setEmpty(e); }, () => undefined);
+    host.isEmpty().then((e) => { if (alive) setEmpty(e); }, () => { if (alive) setEmpty(false); });
     return () => { alive = false; };
   }, [host, connection]);
   const { sync, updateBranch, canSend } = useWorkActions();
@@ -269,7 +270,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
 
   const slug = repoSlug(connection);
   const waitingCount = p.push.length + p.restore.length + tokenChanges.length;
-  const canPush = canSend && !runtime.syncing && !empty && (waitingCount > 0 || (!!work && !work.pr));
+  const canPush = canSend && !runtime.syncing && empty === false && (waitingCount > 0 || (!!work && !work.pr));
   const mustUpdate = status.reason === "behind";
   const awaitingExport = !!link && link.repo === slug && !link.staged && Object.keys(link.base).length === 0 && !!analysis && analysis.tokens.length === 0;
 

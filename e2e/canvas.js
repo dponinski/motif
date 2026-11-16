@@ -178,6 +178,7 @@ const check = (name, ok, detail = "") => {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 - 100, box.y + box.height / 2, { steps: 6 });
+  await settle(async () => (await frameWidth()) < 640);
   const during = await frameWidth();
   await page.mouse.up();
   check("dragging the right edge changes the width, live", during < 640 && Math.abs(during - Math.round(640 - 100 / z)) <= 3, `${during} at zoom ${z}`);
