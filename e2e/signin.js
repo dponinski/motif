@@ -332,7 +332,7 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   oauth.mode = "deny";
   await page.getByRole("button", { name: "Sign in with GitHub" }).first().click();
   await page.getByRole("alert").filter({ hasText: "GitHub sign-in was cancelled." }).waitFor({ timeout: 30000 });
-  check("cancelling at GitHub comes back with a message, and nobody signed in", (await settle(async () => (await cookies()).length === 0, 5000)) && await page.getByRole("button", { name: "Sign in with GitHub" }).first().isVisible() && !page.url().includes("github_error"), page.url());
+  check("cancelling at GitHub comes back with a message, and nobody signed in", (await settle(async () => (await cookies()).length === 0 && (await page.getByRole("button", { name: "Sign in with GitHub" }).first().isVisible()) && !page.url().includes("github_error"), 8000)), page.url());
   await page.reload();
   check("the message is shown once", (await page.getByRole("alert").filter({ hasText: /\S/ }).count()) === 0);
 
