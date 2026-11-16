@@ -75,7 +75,12 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
       // name reads as removed and the new one as added).
       const latest = useGitStore.getState().tokenLink;
       if (latest && latest.repo === link.repo) {
-        useGitStore.getState().setTokenLink({ ...latest, staged: { doc: readMotifTokens(tokenSlices(), latest), paths: [...new Set([...(latest.staged?.paths ?? []), ...Object.keys(plan.files)])] } });
+        // A rename of a token that was renamed before goes from the first name.
+        const earlier = Object.entries(latest.renamed ?? {}).find(([, r]) => r.to === token.name);
+        const renamed = { ...latest.renamed };
+        const origin = earlier ? earlier[0] : token.name;
+        renamed[origin] = { to: names.to, paths: [...new Set([...(earlier?.[1].paths ?? []), ...Object.keys(plan.files)])] };
+        useGitStore.getState().setTokenLink({ ...latest, renamed, staged: { doc: readMotifTokens(tokenSlices(), latest), paths: [...new Set([...(latest.staged?.paths ?? []), ...Object.keys(plan.files)])] } });
       }
       // What the scan says follows the rename, so the new name isn't taken for a token the repository doesn't have.
       const current = useGitStore.getState().analysis;

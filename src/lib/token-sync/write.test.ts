@@ -64,10 +64,13 @@ describe("applyEdits: changing values in place", () => {
     const gone = await applyEdits({ [CSS_PATH]: CSS }, analysis, snapshot, [change("nope", "color", "light", "changed", "#ff0000")]);
     expect(gone.skipped[0].reason).toBe("It is not in the repository any more");
 
-    const config = await scan({ "package.json": '{"dependencies":{"react":"^18","tailwindcss":"^3"}}', "tailwind.config.js": "module.exports = { theme: { extend: { colors: { brand: '#112233' } } } };" });
+    // A value written out in a Tailwind 3 config is changed in place; one that is computed there is not.
+    const text = "const brand = '#445566';\nmodule.exports = { theme: { extend: { colors: { brand: '#112233', ink: brand } } } };";
+    const config = await scan({ "package.json": '{"dependencies":{"react":"^18","tailwindcss":"^3"}}', "tailwind.config.js": text });
     const snap = readRepoTokens(config.tokens, config.themes);
-    const blocked = await applyEdits({}, config, snap, [change("color-brand", "color", "default", "changed", "#ffffff")]);
-    expect(blocked.skipped).toEqual([{ name: "color-brand", theme: "default", reason: "Defined in a Tailwind config file, which can't be edited yet" }]);
+    const edited = await applyEdits({ "tailwind.config.js": text }, config, snap, [change("color-brand", "color", "default", "changed", "#ffffff"), change("color-ink", "color", "default", "changed", "#000000")]);
+    expect(edited.files["tailwind.config.js"]).toBe(text.replace("'#112233'", "'#ffffff'"));
+    expect(edited.skipped).toEqual([{ name: "color-ink", theme: "default", reason: "Its value in the Tailwind config is computed, not written out, so Motif can't change it" }]);
   });
 });
 

@@ -36,6 +36,10 @@ export interface TokenLocation {
   file: string;
   line: number;
   container: TokenContainer;
+  // A Tailwind 3 config value that is a plain literal: the keys from `theme` (or from `theme.extend`) to it, so it can be found and
+  // changed in place. Absent when the value is computed (a const, a concatenation), which Motif doesn't change.
+  path?: string[];
+  inExtend?: boolean;
 }
 
 export interface RepoToken {
@@ -47,6 +51,11 @@ export interface RepoToken {
   locations: Record<string, TokenLocation>;
   // Tailwind name this token is exposed as, e.g. "color-primary" for bg-primary.
   tailwind: string | null;
+  // A color kept as bare channels in a CSS variable (`--primary: 222.2 47.4% 11.2%`) that a Tailwind 3 config wraps as
+  // `hsl(var(--primary))`: the function it is wrapped in. `values` are the channels as written.
+  channels?: "hsl" | "rgb";
+  // Where a Tailwind 3 config gives such a variable its class (`colors.primary.DEFAULT`), for renaming it.
+  mapping?: TokenLocation;
   file: string;
   line: number;
 }

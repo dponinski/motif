@@ -1,6 +1,7 @@
 import { TAILWIND_ROLES } from "../edit/tokens";
 import type { TokenRole } from "../edit/classes";
 import { eachClassWord } from "../repo-scan/usage";
+import { renameConfigEntry } from "../token-sync/config-write";
 import type { RepoToken } from "../repo-scan/types";
 
 // Renaming a token the repository names, everywhere it is named: its declarations (every theme, every file), the Tailwind mapping that
@@ -51,27 +52,34 @@ export interface Names {
   role: TokenRole | null;
   // The mapping `--color-primary: var(--primary)` exists, as a variable of its own (the token is not itself Tailwind's).
   mapped: boolean;
+  // Where a Tailwind 3 config gives the token its class, which is renamed along with it.
+  config: { file: string; path: string[]; inExtend: boolean } | null;
 }
 
 // Whether `to` can be the token's name, and if so what that changes. A string is the reason it can't.
 export function namesFor(token: RepoToken, to: string, tokens: RepoToken[]): Names | string {
   const name = to.trim();
   if (!RENAMABLE.has(token.kind)) return "Only colors, radii, spacing and shadows can be renamed";
-  if (Object.values(token.locations).some((l) => l.container === "config" || l.container === "json")) return "It is defined in a Tailwind config or a token JSON file, which Motif can't change yet";
+  if (Object.values(token.locations).some((l) => l.container === "json")) return "It is defined in a token JSON file, which Motif can't change yet";
+  // A Tailwind 3 config entry is changed in place when its key is written out; the entry that gives a variable its class is the token's.
+  const configLoc = token.mapping ?? Object.values(token.locations).find((l) => l.container === "config");
+  if (configLoc && !configLoc.path) return "Its value in the Tailwind config is computed, not written out, so Motif can't change it";
+  const config = configLoc ? { file: configLoc.file, path: configLoc.path!, inExtend: !!configLoc.inExtend } : null;
   if (!IDENT.test(name)) return "A name is letters, digits, dashes and underscores, starting with a letter";
   if (name === token.name) return "That is its name already";
   if (tokens.some((t) => t.name === name)) return "A token already has that name";
   const naming = namingOf(token);
-  if (!naming) return { from: token.name, to: name, tailwindFrom: null, tailwindTo: null, classFrom: null, classTo: null, role: null, mapped: false };
+  if (!naming) return { from: token.name, to: name, tailwindFrom: null, tailwindTo: null, classFrom: null, classTo: null, role: null, mapped: false, config: null };
   // The token is Tailwind's as it is written (`--color-primary` in @theme): the name keeps what makes it a color, a radius…
   if (token.tailwind === token.name) {
     if (!name.startsWith(naming.prefix) || name.length === naming.prefix.length) return `The name has to start with ${naming.prefix}, which is what gives Tailwind a class for it`;
-    return { from: token.name, to: name, tailwindFrom: token.tailwind, tailwindTo: name, classFrom: naming.value, classTo: name.slice(naming.prefix.length), role: naming.role, mapped: false };
+    return { from: token.name, to: name, tailwindFrom: token.tailwind, tailwindTo: name, classFrom: naming.value, classTo: name.slice(naming.prefix.length), role: naming.role, mapped: false, config };
   }
   // A variable that Tailwind is given under another name (`--primary` as `--color-primary`).
   if (naming.value !== token.name) return "Its classes are named in a way that doesn't follow its name, so it can't be renamed safely";
   if (tokens.some((t) => t.tailwind === `${naming.prefix}${name}`)) return "A token already has a class by that name";
-  return { from: token.name, to: name, tailwindFrom: token.tailwind, tailwindTo: `${naming.prefix}${name}`, classFrom: naming.value, classTo: name, role: naming.role, mapped: true };
+  // In Tailwind 3 the class is given by the config, not by a `--color-…` variable of its own.
+  return { from: token.name, to: name, tailwindFrom: token.tailwind, tailwindTo: `${naming.prefix}${name}`, classFrom: naming.value, classTo: name, role: naming.role, mapped: !token.mapping, config };
 }
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -143,6 +151,7 @@ export async function planRename(input: { token: RepoToken; to: string; tokens: 
   const ctx = context(names);
   const plan: RenamePlan = { files: {}, places: [], total: 0, unreadable: [] };
   // What can't be in a file that has the token in it, so most files are not read any further.
+  // The config is read whatever it says, since its entry is renamed by where it is.
   const needles = [`--${names.from}`, ...(names.classFrom ? [names.classFrom] : []), ...(names.mapped && names.tailwindFrom ? [`--${names.tailwindFrom}`] : [])];
   for (const [path, text] of Object.entries(input.files)) {
     if (!needles.some((n) => text.includes(n))) continue;
@@ -158,6 +167,18 @@ export async function planRename(input: { token: RepoToken; to: string; tokens: 
     plan.files[path] = result.text;
     plan.places.push({ path, n: result.n });
     plan.total += result.n;
+  }
+  // The entry of a Tailwind 3 config that gives the class its name (the text of the file is as renamed above, so the entry's value follows).
+  if (names.config && names.classFrom && names.classTo) {
+    const { file, path, inExtend } = names.config;
+    const text = plan.files[file] ?? input.files[file];
+    if (text === undefined) return { refused: `${file} wasn't read` };
+    const moved = await renameConfigEntry(text, file, { path, inExtend, classFrom: names.classFrom, classTo: names.classTo });
+    if ("refused" in moved) return moved;
+    plan.files[file] = moved.code;
+    const entry = plan.places.find((p) => p.path === file);
+    if (entry) entry.n++; else plan.places.push({ path: file, n: 1 });
+    plan.total++;
   }
   plan.places.sort((a, b) => b.n - a.n || a.path.localeCompare(b.path));
   return plan;

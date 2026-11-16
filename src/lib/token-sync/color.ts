@@ -162,6 +162,31 @@ export function formatLike(original: string, hex: string): string {
   return normalizeColor(text) === hex.toLowerCase() ? text : hex;
 }
 
+// A color as a CSS variable holds it when a config wraps the variable (`hsl(var(--primary))`): `222.2 47.4% 11.2%`, or `0 0 0` for rgb, with
+// as few digits as read back as exactly `hex`, in the separators of `original`. A color with transparency can't be said in channels, so
+// it is written without it.
+export function formatChannels(form: "hsl" | "rgb", hex: string, original = ""): string {
+  const c = parseColor(hex);
+  const comma = original.includes(",");
+  const join = (parts: (string | number)[]) => parts.join(comma ? ", " : " ");
+  if (!c) return hex;
+  if (form === "rgb") return join([c.r, c.g, c.b].map((n) => Math.round(n)));
+  const r = c.r / 255, g = c.g / 255, bl = c.b / 255;
+  const max = Math.max(r, g, bl), min = Math.min(r, g, bl), d = max - min;
+  const l = (max + min) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  let h = 0;
+  if (d !== 0) h = max === r ? ((g - bl) / d) % 6 : max === g ? (bl - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  const opaque = toHex({ ...c, a: 1 });
+  let text = "";
+  for (const digits of [0, 1, 2, 3]) {
+    text = join([trim(h, digits), `${trim(s * 100, digits)}%`, `${trim(l * 100, digits)}%`]);
+    if (normalizeColor(`hsl(${text})`) === opaque) return text;
+  }
+  return text;
+}
+
 function notate(original: string, hex: string): string {
   const c = parseColor(hex);
   const o = original.trim().toLowerCase();

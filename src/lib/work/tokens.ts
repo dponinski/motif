@@ -96,5 +96,7 @@ export const changedTokenNames = (withChanges: SyncDoc, base: SyncDoc) => Object
 export function advanceLink(link: TokenLink, touched: string[], merged: SyncDoc, now = Date.now()): TokenLink {
   const base = { ...link.base };
   for (const name of touched) if (merged[name]) base[name] = merged[name];
-  return { ...link, base, staged: null, syncedAt: now };
+  // What was renamed is renamed in the repository now.
+  for (const old of Object.keys(link.renamed ?? {})) delete base[old];
+  return { ...link, base, staged: null, renamed: undefined, syncedAt: now };
 }

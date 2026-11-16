@@ -23,9 +23,13 @@ describe("which tokens a repository can take", () => {
     // The fixture has no @theme block of spacing, so none could be added to.
     expect("reason" in plans.spacing).toBe(true);
   });
-  it("plain CSS takes anything, Tailwind 3 nothing", () => {
+  it("plain CSS takes anything", () => {
     expect(makePlans([], null).radius).toEqual({ prefix: "" });
+  });
+  it("Tailwind 3 takes a token where there is a config with tokens in it", async () => {
     expect("reason" in makePlans([], 3).color).toBe(true);
+    const v3 = await scanRepository(memorySource(loadFixture("motif-test-system-v3")), { repo: "a/b", ref: "main" }, { tokensOnly: true });
+    expect(makePlans(v3.tokens, 3)).toEqual({ color: { prefix: "" }, radius: { prefix: "radius-" }, spacing: { prefix: "spacing-" } });
   });
   it("a class value leaves out the prefix", () => {
     expect(classValueOf("radius-card", { prefix: "radius-" })).toBe("card");
