@@ -90,8 +90,8 @@ export function filesNeeded(analysis: RepoAnalysis): string[] {
 const KIND_OF: Record<SyncKind, RepoToken["kind"]> = { color: "color", radius: "radius", spacing: "spacing", shadow: "shadow" };
 
 // Where a Tailwind 3 config keeps each kind of token, and what the token's name starts with.
-const CONFIG_SECTION: Record<SyncKind, string> = { color: "colors", radius: "borderRadius", spacing: "spacing", shadow: "boxShadow" };
-const CONFIG_PREFIX: Record<SyncKind, string> = { color: "", radius: "radius-", spacing: "spacing-", shadow: "shadow-" };
+export const CONFIG_SECTION: Record<SyncKind, string> = { color: "colors", radius: "borderRadius", spacing: "spacing", shadow: "boxShadow" };
+export const CONFIG_PREFIX: Record<SyncKind, string> = { color: "", radius: "radius-", spacing: "spacing-", shadow: "shadow-" };
 
 // The Tailwind config the tokens are read from (and a new token is added to).
 export function configFile(analysis: RepoAnalysis): string | null {

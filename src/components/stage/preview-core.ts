@@ -3,7 +3,7 @@
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildGraph, type ModuleGraph } from "@/lib/preview/graph";
-import { changedValues, tokenOverrides } from "@/lib/preview/overrides";
+import { changedValues, channelForms, tailwind3Extend, tokenOverrides } from "@/lib/preview/overrides";
 import { buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import { readMotifTokens, resolveInDoc } from "@/lib/token-sync/doc";
 import { motifOnlyTokens } from "@/lib/edit/motif-tokens";
@@ -49,7 +49,6 @@ export function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, 
 
     (async () => {
       try {
-        if (source.tailwindVersion === 3) throw new Unsupported("This repository uses Tailwind v3, which can't be previewed yet");
         const paths = await loadTree(source, host);
         if (!graphs.has(graphKey)) graphs.set(graphKey, makeRef.current(paths));
         const graph = await graphs.get(graphKey)!;
@@ -76,15 +75,22 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
   const link = useGitStore((s) => s.tokenLink);
   const motifTokens = usePreviewStore((s) => s.motifTokens);
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
-  const motif = useMemo(
-    () => (link && repo && link.repo === repo ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes)) : { css: "", changed: [] as string[] }),
-    [link, repo, colors, spacing, radii, shadows]
-  );
-  // A Tailwind 4 preview has a class for a token the repository doesn't have only when told, in a stylesheet of its own.
   const analysis = useGitStore((s) => s.analysis);
+  const motif = useMemo(
+    () => (link && repo && link.repo === repo
+      ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, Object.keys(link.themes), analysis?.stack.tailwindVersion === 3 ? channelForms(analysis.tokens) : {})
+      : { css: "", changed: [] as string[] }),
+    [link, repo, colors, spacing, radii, shadows, analysis]
+  );
+  // A Tailwind 4 preview has a class for a token the repository doesn't have only when told, in a stylesheet of its own; a Tailwind 3
+  // preview, in entries of its config (which also carry the values the repository keeps there).
   const theme = useMemo(() => {
-    if (!analysis || !link || !repo || link.repo !== repo || analysis.stack.tailwindVersion !== 4) return "";
-    return motifOnlyTokens(readMotifTokens({ colors, spacing, radii, shadows }, link), analysis.tokens, 4).themeCss;
+    if (!analysis || !link || !repo || link.repo !== repo) return "";
+    const version = analysis.stack.tailwindVersion;
+    if (version === 4) return motifOnlyTokens(readMotifTokens({ colors, spacing, radii, shadows }, link), analysis.tokens, 4).themeCss;
+    if (version !== 3) return "";
+    const extend = tailwind3Extend(readMotifTokens({ colors, spacing, radii, shadows }, link), link.base, link.baseTheme, analysis.tokens);
+    return Object.keys(extend).length ? JSON.stringify(extend) : "";
   }, [analysis, link, repo, colors, spacing, radii, shadows]);
   return { ...motif, shown: motifTokens ? motif.css : "", theme: motifTokens ? theme : "" };
 }

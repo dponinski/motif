@@ -21,7 +21,8 @@ export interface RenderMessage {
   dark: boolean;
   // CSS appended after the repository's own, used to show Motif's token values.
   overrides: string;
-  // Tailwind 4 `@theme` lines that give classes to tokens Motif has and the repository hasn't: a stylesheet Tailwind reads with the rest.
+  // What gives classes to tokens Motif has and the repository hasn't, or values it has changed that the repository keeps in its config.
+  // Tailwind 4: `@theme` lines, a stylesheet Tailwind reads with the rest. Tailwind 3: JSON of entries for the config's `theme.extend`.
   theme?: string;
 }
 

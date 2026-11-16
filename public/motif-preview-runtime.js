@@ -19,6 +19,8 @@
 
     function external(spec) {
       var found = externals[spec];
+      // A Tailwind 3 config's packages come with the engine (motif-tailwind3.js), not from the CDN.
+      if (!found && typeof window !== 'undefined' && window.motifTailwind3 && window.motifTailwind3.modules && hasOwn.call(window.motifTailwind3.modules, spec)) found = window.motifTailwind3.modules[spec];
       if (!found) throw new Error('The package "' + spec + '" was not loaded');
       return found;
     }
@@ -101,6 +103,67 @@
         }
         if (themeStyle.textContent !== css) themeStyle.textContent = css;
       }
+      // Tailwind 3 has no browser build, so the page builds its stylesheet itself with the engine Motif serves: the repository's stylesheet
+      // (its `@tailwind` and `@apply`), its config as the page runs it, and as content the code of the modules and the page as it is.
+      // It builds again, a moment after the page changes, only when what it reads has.
+      var tw3 = data.tailwind3 && window.motifTailwind3 ? { css: data.tailwind3.css.slice(), config: data.tailwind3.config, extend: null, source: null, last: null, timer: 0, running: false, again: false, first: false } : null;
+      var tw3Style = document.getElementById('motif-tw3');
+      var isPlain = function (v) { return v !== null && typeof v === 'object' && !Array.isArray(v); };
+      function mergeDeep(a, b) {
+        var out = isPlain(a) ? Object.assign({}, a) : {};
+        Object.keys(b).forEach(function (k) { out[k] = isPlain(b[k]) && isPlain(out[k]) ? mergeDeep(out[k], b[k]) : b[k]; });
+        return out;
+      }
+      // The repository's config, with the values Motif has changed laid over `theme.extend` (which wins over `theme`, as in a real build).
+      function tw3Config() {
+        var loaded = tw3.config ? registry.require(tw3.config) : {};
+        var base = loaded && loaded.__esModule && 'default' in loaded ? loaded.default : loaded;
+        var config = Object.assign({}, base);
+        if (!tw3.extend) return config;
+        var theme = Object.assign({}, config.theme);
+        var extend = Object.assign({}, theme.extend);
+        Object.keys(tw3.extend).forEach(function (section) {
+          var patch = tw3.extend[section];
+          var have = extend[section];
+          extend[section] = typeof have === 'function'
+            ? function (o) { return mergeDeep(have(o), patch); }
+            : mergeDeep(have, patch);
+        });
+        theme.extend = extend;
+        config.theme = theme;
+        return config;
+      }
+      function tw3Source() {
+        if (tw3.source === null) tw3.source = Object.keys(data.modules).map(function (path) { return data.modules[path].code; }).join('\n');
+        return tw3.source;
+      }
+      function compileTw3() {
+        // `dark` is always a class the page may have (the preview's dark theme sets it on <html>), so the repository's `.dark { ... }` isn't
+        // left out as unused.
+        var html = tw3Source() + '\n' + rootElement.innerHTML + '\ndark';
+        var css = tw3.css.map(function (c) { return c.text; }).join('\n\n');
+        var key = css + '\0' + JSON.stringify(tw3.extend) + '\0' + html;
+        if (key === tw3.last) return Promise.resolve();
+        if (tw3.running) { tw3.again = true; return Promise.resolve(); }
+        tw3.running = true;
+        return Promise.resolve().then(function () { return window.motifTailwind3.compile({ css: css, config: tw3Config(), html: html }); }).then(function (out) {
+          if (tw3Style.textContent !== out) tw3Style.textContent = out;
+          tw3.last = key;
+        }).catch(function (error) {
+          // The same input would fail again, so it isn't tried until something changes.
+          tw3.last = key;
+          fail(error);
+        }).then(function () {
+          tw3.running = false;
+          if (tw3.again) { tw3.again = false; scheduleTw3(); }
+        });
+      }
+      function scheduleTw3() {
+        if (!tw3) return;
+        clearTimeout(tw3.timer);
+        tw3.timer = setTimeout(compileTw3, 60);
+      }
+      if (tw3) new MutationObserver(scheduleTw3).observe(rootElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
       var root = createRoot(rootElement);
       var h = React.createElement;
       var errorStyle = { color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: 12, margin: 0, font: '12px/1.5 ui-monospace, monospace', whiteSpace: 'pre-wrap', maxWidth: 480 };
@@ -573,8 +636,19 @@
           document.documentElement.classList.toggle('dark', !!message.dark);
           document.documentElement.style.colorScheme = message.dark ? 'dark' : 'light';
           overrides.textContent = message.overrides || '';
-          setTheme(message.theme);
-          renderLast();
+          if (tw3) {
+            // Tailwind 3: the entries of the config's `theme.extend` that Motif has changed or added.
+            try { tw3.extend = message.theme ? JSON.parse(message.theme) : null; } catch (e) { tw3.extend = null; }
+            // The first render waits for a stylesheet, so a page isn't shown (and measured) before it has one.
+            if (!tw3.first) {
+              tw3.first = true;
+              tw3.ready = compileTw3();
+            }
+            tw3.ready.then(function () { renderLast(); scheduleTw3(); });
+          } else {
+            setTheme(message.theme);
+            renderLast();
+          }
         } else if (message.type === 'modules') {
           // New code can need packages the page didn't start with; they are loaded before it runs. Messages are
           // handled one after another so a slow load can't be overtaken by the next edit.
@@ -591,11 +665,20 @@
             Object.assign(data.modules, message.modules);
             // A fresh registry runs the changed modules again; the old one is dropped.
             registry = createRegistry(data, externals);
+            if (tw3) { tw3.source = null; scheduleTw3(); }
             renderLast();
           }).catch(fail);
         } else if (message.type === 'css') {
           // A stylesheet that is already on the page has its text replaced; a new one is added before the overrides.
           var files = message.files || {};
+          if (tw3) {
+            Object.keys(files).forEach(function (path) {
+              var one = tw3.css.filter(function (c) { return c.path === path; })[0];
+              if (one) one.text = files[path]; else tw3.css.push({ path: path, text: files[path] });
+            });
+            scheduleTw3();
+            return;
+          }
           Object.keys(files).forEach(function (path) {
             var found = null;
             document.querySelectorAll('style[data-motif-css]').forEach(function (el) {
