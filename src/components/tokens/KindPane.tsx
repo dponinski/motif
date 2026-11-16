@@ -13,6 +13,7 @@ import { AddRow, type AddField } from "./fields";
 import AddTokensDialog from "./AddTokensDialog";
 import GroupedTokens from "./GroupedTokens";
 import BulkBar from "./BulkBar";
+import RenameDialog from "./RenameDialog";
 import { ListBody, ListHead, PaletteBody, type ColorCtx } from "./ColorViews";
 import { OtherBody, type OtherCtx } from "./OtherViews";
 import { useRows, type Row } from "./rows";
@@ -43,6 +44,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   const hasRepo = useGitStore((s) => !!(s.tokenLink || s.analysis));
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<Only>("all");
+  const [renaming, setRenaming] = useState<Row | null>(null);
   const [view, setView] = useStored<"palette" | "list">("motif-tokens-view", "palette");
   const [themeId, setThemeId] = useState<string>("all");
   const [adding, setAdding] = useState<string | null>(null);
@@ -80,12 +82,12 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
     remove: (ids: string[]) => { editTokens(() => ds().deleteTokens(kind, ids)); selection.clear(); },
   };
   const colorCtx: ColorCtx = {
-    themes: set.themes, shown, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo,
+    themes: set.themes, shown, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo, rename: setRenaming,
     all: kind === "color" ? rows.map((r) => r.token as ColorToken) : [],
     act: { ...common, setColor: (id, theme, text) => editTokens(() => ds().setColorText(id, theme, text)), setAlias: (id, theme, target) => editTokens(() => ds().setColorAlias(id, theme, target)), toGroup: (ids, group) => { editTokens(() => ds().setTokenGroup(kind, ids, group)); } },
   };
   const otherCtx: OtherCtx = {
-    selection, drag, taken, hasRepo,
+    selection, drag, taken, hasRepo, rename: setRenaming,
     act: {
       ...common,
       update: (row: Row, patch: Record<string, unknown>) => editTokens(() => {
@@ -221,6 +223,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
         onClear={selection.clear}
       />
 
+      <RenameDialog row={renaming} kind={kind} taken={taken} onClose={() => setRenaming(null)} />
       <AddTokensDialog open={addMany} onOpenChange={setAddMany} set={set} kind={kind} />
       {colorsView && view === "list" && rows.length > 0 && <ListHead ctx={colorCtx} />}
       <GroupedTokens

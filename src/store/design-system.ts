@@ -149,6 +149,9 @@ interface DesignSystemStore {
   // Arranging tokens. Each takes the kind of token and the ids; the screen makes each one step of its undo.
   // A token the repository names can't be renamed here: the repository's name is what Sync matches it by.
   renameToken: (kind: TokenKind, id: string, name: string) => boolean;
+  // A token the repository names takes the name the repository will have for it (the files are changed by the rename that stages them),
+  // and the colors that are it follow. False when it isn't one of the repository's, or another token of its set has that name.
+  renameRepoToken: (kind: TokenKind, id: string, to: string) => boolean;
   setTokenGroup: (kind: TokenKind, ids: string[], group: string) => void;
   moveTokensToSet: (kind: TokenKind, ids: string[], setId: string) => void;
   duplicateTokens: (kind: TokenKind, ids: string[]) => string[];
@@ -449,6 +452,18 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           const next = withList(kind, listOf(s, kind).map((t) => (t.id === id ? { ...t, name: clean } : t))) as Partial<TokenData>;
           // Colors that are this one stay it under its new name.
           return (kind === "color" ? { ...next, colors: renameAlias(next.colors!, token.setId, tokenKey(token as ColorToken), tokenKey({ name: clean })) } : next) as never;
+        });
+        return true;
+      },
+
+      renameRepoToken: (kind, id, to) => {
+        const token = listOf(get(), kind).find((t) => t.id === id);
+        if (!token || !token.repoName || !to) return false;
+        if (listOf(get(), kind).some((t) => t.id !== id && t.setId === token.setId && tokenKey(t) === to)) return false;
+        const from = token.repoName;
+        set((s) => {
+          const next = withList(kind, listOf(s, kind).map((t) => (t.id === id ? { ...t, name: to, repoName: to } : t))) as Partial<TokenData>;
+          return (kind === "color" ? { ...next, colors: renameAlias(next.colors!, token.setId, from, to) } : next) as never;
         });
         return true;
       },

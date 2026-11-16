@@ -38,7 +38,8 @@ export interface TokenIndex {
   make?: MakePlans;
 }
 
-const ROLES: [RegExp, TokenRole][] = [
+// How a token's Tailwind name says what it is: `color-primary` is the color `primary`, `radius-md` the radius `md`.
+export const TAILWIND_ROLES: [RegExp, TokenRole][] = [
   [/^color-(.+)$/, "color"],
   [/^spacing-(.+)$/, "spacing"],
   [/^radius-(.+)$/, "radius"],
@@ -100,7 +101,7 @@ export function buildTokenIndex(
       spacingStep = lengthPx(resolve(raw(token, base) ?? "", base)) ?? spacingStep;
       continue;
     }
-    const found = ROLES.map(([re, role]) => [token.tailwind!.match(re)?.[1], role] as const).find(([value]) => value);
+    const found = TAILWIND_ROLES.map(([re, role]) => [token.tailwind!.match(re)?.[1], role] as const).find(([value]) => value);
     if (!found) continue;
     const [value, role] = found as [string, TokenRole];
     if (value === "*") {

@@ -58,7 +58,7 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
       const repoName = (t as { repoName?: string }).repoName;
       const key = repoName ?? cssName(t.name);
       // Only a token the repository has can be looked for in its code, and only once a scan has counted.
-      const counted = analysis?.tokenUsage && repoName ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
+      const counted = analysis?.tokenUsage && repoName && analysis.tokens.some((x) => x.name === key) ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
       const use = counted ? { ...counted, components: [...new Set(counted.files.flatMap((f) => componentsIn.get(f) ?? []))] } : null;
       return {
         id: t.id, kind, name: t.name, group: (t as { group?: string }).group || DEFAULT_GROUP,

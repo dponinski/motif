@@ -39,6 +39,8 @@ export interface ColorCtx {
   setOpenId: (id: string | null) => void;
   // A repository is connected, so a token it doesn't have is worth marking.
   hasRepo: boolean;
+  // Opens the rename of a token the repository names (everywhere it is used).
+  rename?: (row: Row) => void;
   // Every color of the set, for what a color can be (an alias) and what is it.
   all: ColorToken[];
 }
@@ -175,7 +177,14 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
           Used by {used.map((c) => c.name).join(", ")}. If this is deleted they keep the color they are now.
         </p>
       )}
-      {row.linked && <p className="text-2xs text-text-tertiary">Named by the repository, so it can&apos;t be renamed here.</p>}
+      {row.linked && (
+        <p className="text-2xs text-text-tertiary">
+          Named by the repository.{" "}
+          {ctx.rename && !row.readonly
+            ? <button type="button" data-rename-open onClick={() => { ctx.setOpenId(null); ctx.rename!(row); }} className="text-accent underline-offset-2 hover:underline">Rename in repository…</button>
+            : "It is defined where Motif can't change it yet, so it can't be renamed here."}
+        </p>
+      )}
     </div>
   );
 }
