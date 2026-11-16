@@ -36,7 +36,7 @@ function Value({ value }: { value: string | undefined }) {
   );
 }
 
-function ChangeList({ changes, label }: { changes: TokenChange[]; label: string }) {
+export function ChangeList({ changes, label }: { changes: TokenChange[]; label: string }) {
   const [all, setAll] = useState(false);
   const shown = all ? changes : changes.slice(0, 8);
   return (
@@ -68,7 +68,7 @@ function ChangeList({ changes, label }: { changes: TokenChange[]; label: string 
   );
 }
 
-function Conflicts({ conflicts, takeTheirs, onToggle }: { conflicts: TokenConflict[]; takeTheirs: Set<number>; onToggle: (i: number, theirs: boolean) => void }) {
+export function Conflicts({ conflicts, takeTheirs, onToggle }: { conflicts: TokenConflict[]; takeTheirs: Set<number>; onToggle: (i: number, theirs: boolean) => void }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-text-primary">{conflicts.length} value{conflicts.length === 1 ? "" : "s"} changed in both places</p>

@@ -1,4 +1,5 @@
 const { seed } = require("./support/seed");
+const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { syncNow } = require("./support/sync-helpers");
 const { chromium } = require("playwright");
@@ -149,10 +150,7 @@ const check = (name, ok, detail = "") => {
   const openSync = async () => {
     // The rail button toggles the panel, so only press it when the panel is closed.
     if (!(await page.getByRole("button", { name: "Sync tokens" }).isVisible())) await nav("Git");
-    await page.getByRole("button", { name: "Sync tokens" }).click();
-    await dialog.getByRole("button", { name: "Check" }).waitFor();
-  };
-  const closeSync = async () => { await page.keyboard.press("Escape"); await dialog.waitFor({ state: "hidden" }); };
+    await tokensLinked(page); await dialog.waitFor({ state: "hidden" }); };
   const lightId = (s, setName) => s.sets.find((x) => x.name === setName).themes.find((t) => t.name === "Light").id;
 
   // ── Connect ────────────────────────────────────────────────────────────────

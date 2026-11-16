@@ -15,6 +15,7 @@ import { useReadRepository } from "@/components/stage/useReadRepository";
 import { changedFiles, editLog, useEditStore, type Base } from "@/store/edit";
 import { NO_CONNECTION, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
+import { usePullStatus } from "@/store/pull";
 import { useWorkRuntime } from "@/store/work";
 
 const REFRESH_EVERY = 60_000;
@@ -254,3 +255,25 @@ export function useWorkWatcher() {
     return () => { alive = false; };
   }, [host, connection, key]);
 }
+
+// Whether the repository's default branch has moved since it was read (a merge, someone else's push): looked at now and then and when the
+// page is looked at again, with one request. Pull is what takes it in.
+export function useBehindWatcher() {
+  const connection = useGitStore((s) => s.connection);
+  const host = useGitHost(connection ?? NO_CONNECTION);
+  const pulledSha = useGitStore((s) => s.pulledSha ?? null);
+  useEffect(() => {
+    if (!connection || pulledSha === null) { usePullStatus.getState().set({ behind: false }); return; }
+    let alive = true;
+    const check = async () => {
+      const head = await host.getRef(connection.defaultBranch).catch(() => null);
+      if (alive && head) usePullStatus.getState().set({ behind: head !== useGitStore.getState().pulledSha });
+    };
+    void check();
+    const timer = setInterval(() => void check(), REFRESH_EVERY);
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [host, connection, pulledSha]);
+}
+

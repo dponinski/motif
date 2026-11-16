@@ -3,40 +3,33 @@
 import { useState } from "react";
 import { Boxes, Loader2, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { describeUpdate } from "@/lib/preview/library";
-import { scanBranch } from "@/lib/read-repository";
 import type { Support } from "@/lib/repo-scan/types";
-import { NO_CONNECTION, repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { repoSlug, useGitStore } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
-import { errorMessage, useGitHost } from "@/components/git/hooks";
+import { usePullRepository } from "@/components/stage/useReadRepository";
+import { usePullStatus } from "@/store/pull";
 import { useNavRequest } from "@/store/nav";
 import NewComponentDialog from "@/components/stage/NewComponentDialog";
 
 const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
 const DOT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
 
-function UpdateButton({ connection, onResult }: { connection: GitConnection; onResult: (text: string, ok: boolean) => void }) {
-  const host = useGitHost(connection);
-  const source = useLibraryStore((s) => s.source)!;
-  const [busy, setBusy] = useState(false);
+function UpdateButton({ onResult }: { onResult: (text: string, ok: boolean) => void }) {
+  const pull = usePullRepository();
+  const busy = usePullStatus((s) => s.busy);
+  const behind = usePullStatus((s) => s.behind);
 
   const update = async () => {
-    setBusy(true);
-    try {
-      const analysis = await scanBranch(host, source.repo, source.branch);
-      const summary = useLibraryStore.getState().updateComponents(analysis);
-      useGitStore.getState().setAnalysis(analysis);
-      onResult(describeUpdate(summary), true);
-    } catch (err) {
-      onResult(errorMessage(err), false);
-    } finally {
-      setBusy(false);
-    }
+    const outcome = await pull();
+    const notice = usePullStatus.getState().notice;
+    if (notice) onResult(notice.text, notice.ok);
+    else if (outcome) onResult("Up to date.", true);
   };
 
   return (
-    <button onClick={update} disabled={busy} className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50" title="Update from the repository" aria-label="Update from repository">
+    <button onClick={update} disabled={busy} className="relative rounded p-1 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50" title={behind ? "The repository has changed: pull" : "Pull from the repository"} aria-label="Pull from the repository">
       {busy ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+      {behind && !busy && <span className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-accent" data-behind />}
     </button>
   );
 }
@@ -45,10 +38,9 @@ function UpdateButton({ connection, onResult }: { connection: GitConnection; onR
 // Components panel where they will appear. (The Git panel has the same, with the scan report and the branch.)
 function ImportPrompt() {
   const connection = useGitStore((s) => s.connection);
-  const analysis = useGitStore((s) => s.analysis);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
-  const host = useGitHost(connection ?? NO_CONNECTION);
+  const pull = usePullRepository();
 
   // A project always has its repository; this is only here for the moment before it is loaded.
   if (!connection) return null;
@@ -57,20 +49,11 @@ function ImportPrompt() {
   const run = async () => {
     setBusy(true);
     setMessage(null);
-    try {
-      // A scan made in the Git panel is used as it is; otherwise the default branch is scanned.
-      let result = analysis?.repo === slug ? analysis : null;
-      if (!result) {
-        result = await scanBranch(host, slug, connection.defaultBranch);
-        useGitStore.getState().setAnalysis(result);
-      }
-      const n = useLibraryStore.getState().importComponents(result);
-      if (n === 0) setMessage({ text: `No React components were found in ${slug}${result.stack.framework ? "" : ". It may not be a React project, or its components may be private (a private repository needs an access token)"}.`, ok: false });
-    } catch (err) {
-      setMessage({ text: errorMessage(err), ok: false });
-    } finally {
-      setBusy(false);
-    }
+    const outcome = await pull();
+    setBusy(false);
+    const status = usePullStatus.getState().notice;
+    if (!outcome) setMessage({ text: status?.text ?? "The repository couldn't be read.", ok: false });
+    else if (useLibraryStore.getState().components.length === 0) setMessage({ text: `No React components were found in ${slug}${outcome.analysis.stack.framework ? "" : ". It may not be a React project, or its components may be private (a private repository needs an access token or a sign-in with GitHub)"}.`, ok: false });
   };
 
   return (
@@ -107,7 +90,7 @@ export default function RepoComponentsSection() {
         <Boxes size={12} className="flex-shrink-0 text-text-tertiary" />
         <span className="flex-1 truncate text-xs font-medium text-text-secondary" title={`${source.repo} · ${source.branch}`}>Repository</span>
         <button onClick={() => setCreating(true)} className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary" title="New component" aria-label="New component"><Plus size={12} /></button>
-        {connection && repoSlug(connection) === source.repo && <UpdateButton connection={connection} onResult={(text, ok) => setStatus({ text, ok })} />}
+        {connection && repoSlug(connection) === source.repo && <UpdateButton onResult={(text, ok) => setStatus({ text, ok })} />}
       </div>
       <NewComponentDialog open={creating} onOpenChange={setCreating} />
       {status && <p className={cn("flex-shrink-0 px-3 py-1 text-2xs", status.ok ? "text-text-tertiary" : "text-red-400")} role="status">{status.text}</p>}

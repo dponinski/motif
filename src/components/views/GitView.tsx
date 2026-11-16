@@ -2,7 +2,7 @@
 
 import { useShallow } from "zustand/react/shallow";
 import { useState } from "react";
-import { Boxes, Loader2, Palette, ScanSearch } from "lucide-react";
+import { ArrowDown, Boxes, Loader2, Palette, ScanSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clientFor, errorMessage, useBranches, useCanSend, useGitHost } from "@/components/git/hooks";
 import { SignInButton } from "@/components/git/AccountControls";
@@ -13,10 +13,29 @@ import { importable } from "@/lib/preview/library";
 import { useLibraryStore } from "@/store/library";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import TokenSyncDialog from "@/components/git/TokenSyncDialog";
+import { usePullRepository } from "@/components/stage/useReadRepository";
+import { usePullStatus } from "@/store/pull";
 
 const btnPrimary = "h-7 px-3 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const btnSecondary = "h-7 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const fieldLabel = "text-2xs text-text-tertiary";
+
+// ── Pull ──────────────────────────────────────────────────────────────────────
+
+// Reads the repository again and takes what it has into Motif: its components, and its tokens (merged with the ones here).
+function PullSection() {
+  const pull = usePullRepository();
+  const { busy, notice, behind } = usePullStatus();
+  return (
+    <div className="flex flex-col gap-2">
+      <button className={cn(btnPrimary, "relative")} onClick={() => void pull()} disabled={busy} aria-label="Pull">
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <ArrowDown size={12} />}
+        Pull{behind && !busy ? " (the repository has changed)" : ""}
+      </button>
+      {notice && <p className={cn("text-2xs leading-relaxed", notice.ok ? "text-text-tertiary" : "text-red-400")} role="status" data-pull-notice>{notice.text}</p>}
+    </div>
+  );
+}
 
 // ── Read the repository ───────────────────────────────────────────────────────
 
@@ -162,6 +181,7 @@ function Connected({ connection, onOpenReport }: { connection: GitConnection; on
       >
         {repoSlug(connection)}
       </a>
+      <PullSection />
       <ScanSection connection={connection} host={host} initialBranch={connection.defaultBranch} onOpenReport={onOpenReport} />
       {!canSend && (
         <>

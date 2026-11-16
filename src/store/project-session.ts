@@ -20,10 +20,10 @@ export function loadProject(project: Project) {
 }
 
 export function snapshotProject(): ProjectData {
-  const { connection, analysis, tokenLink, work } = useGitStore.getState();
+  const { connection, analysis, tokenLink, work, pulledSha } = useGitStore.getState();
   const { source, components, drafts } = useLibraryStore.getState();
   return {
-    repo: { connection, analysis, tokenLink, work },
+    repo: { connection, analysis, tokenLink, work, pulledSha },
     library: { source, components, drafts },
     tokens: snapshotTokens(useDesignSystemStore.getState()),
     docs: useDocsStore.getState().pages,

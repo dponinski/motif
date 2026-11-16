@@ -24,6 +24,8 @@ export interface RepoState {
   tokenLink: TokenLink | null;
   // The working branch and pull request the project's unsent changes go to (lib/work/sync.ts). Only on this device.
   work?: WorkState | null;
+  // The commit the default branch was at when the repository was last read, to tell when it has moved. Only on this device.
+  pulledSha?: string | null;
 }
 
 interface GitStore extends RepoState {
@@ -31,6 +33,7 @@ interface GitStore extends RepoState {
   setAnalysis: (analysis: RepoAnalysis | null) => void;
   setTokenLink: (link: TokenLink | null) => void;
   setWork: (work: WorkState | null) => void;
+  setPulledSha: (sha: string | null) => void;
   load: (state: RepoState) => void;
 }
 
@@ -39,11 +42,13 @@ export const useGitStore = create<GitStore>()((set) => ({
   analysis: null,
   tokenLink: null,
   work: null,
+  pulledSha: null,
   connect: (connection) => set({ connection }),
   setAnalysis: (analysis) => set({ analysis }),
   setTokenLink: (tokenLink) => set({ tokenLink }),
   setWork: (work) => set({ work }),
-  load: ({ connection, analysis, tokenLink, work }) => set({ connection, analysis, tokenLink, work: work ?? null }),
+  setPulledSha: (pulledSha) => set({ pulledSha }),
+  load: ({ connection, analysis, tokenLink, work, pulledSha }) => set({ connection, analysis, tokenLink, work: work ?? null, pulledSha: pulledSha ?? null }),
 }));
 
 export const repoSlug = (c: Pick<GitConnection, "owner" | "repo">) => `${c.owner}/${c.repo}`;

@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { seed } = require("./support/seed");
+const { tokensLinked } = require("./support/git-panel");
 const { serve } = require("./support/fake-cdn");
 
 const { OUT } = require("./support/env");
@@ -256,11 +257,7 @@ const check = (name, ok, detail = "") => {
   // ── Motif's own token changes show up in the previews ─────────────────────
   const dialog = page.getByRole("dialog");
   await openGit();
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  await dialog.getByRole("button", { name: "Import into a new set" }).click({ timeout: 30000 });
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor();
-  await page.keyboard.press("Escape");
-  await dialog.waitFor({ state: "hidden" });
+  await tokensLinked(page);
   await closeGit();
   await nav("Components");
   await openRepoComponent("Button");
