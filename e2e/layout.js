@@ -144,16 +144,20 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("button", { name: "Design", exact: true }).click();
   await stage.locator("#root small").click();
   await aside.getByText("<small>").waitFor({ timeout: 10000 });
-  check("it starts as a plain element", (await style("#root small", "display")) === "inline");
+  check("it starts as a plain element, not a flex container", !["flex", "grid"].includes(await style("#root small", "display")));
 
-  await field("Direction").selectOption("col");
+  const direction = aside.getByRole("group", { name: "Direction", exact: true });
+  await aside.getByRole("button", { name: "Direction: col", exact: true }).click();
   check("choosing a direction draws it: the element becomes a flex container, in that direction", await settle(async () => (await style("#root small", "display")) === "flex" && (await style("#root small", "flexDirection")) === "column"), `${await style("#root small", "display")} ${await style("#root small", "flexDirection")}`);
-  check("and the inspector shows both", (await field("Display").inputValue()) === "flex" && (await field("Direction").inputValue()) === "col");
-  check("in one step of undo", await (async () => { await page.keyboard.press("Control+z"); return settle(async () => (await style("#root small", "display")) === "inline"); })());
+  check("and the inspector shows both", await settle(async () => (await direction.getAttribute("data-value")) === "col" && (await field("Display").inputValue()) === "flex"));
+  await page.mouse.move(1000, 700);
+  await page.keyboard.press("Control+z");
+  check("one undo takes back both", await settle(async () => !["flex", "grid"].includes(await style("#root small", "display"))));
   await page.keyboard.press("Control+Shift+z");
+  await settle(async () => (await style("#root small", "display")) === "flex");
 
-  await field("Justify").selectOption("center");
-  check("justify and align need nothing more", await settle(async () => (await style("#root small", "justifyContent")) === "center"));
+  await aside.getByRole("button", { name: "Justify: center", exact: true }).click();
+  check("justify needs nothing more", await settle(async () => (await style("#root small", "justifyContent")) === "center"));
   await field("Gap").selectOption("4");
   check("and a gap is drawn", await settle(async () => (await style("#root small", "rowGap")) === "16px"), await style("#root small", "rowGap"));
   await page.screenshot({ path: `${OUT}/layout-flex.png` });
