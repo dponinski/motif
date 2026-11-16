@@ -30,6 +30,7 @@ export default function AppNav({
   const runtime = useWorkRuntime(useShallow((s) => ({ refreshed: s.refreshed, syncing: s.syncing, error: s.error, tokenNote: s.tokenNote, stale: s.stale })));
   const tokens = useTokenChanges().length;
   const behind = usePullStatus((s) => s.behind);
+  const pulling = usePullStatus((s) => s.busy);
   const guest = useAuth((s) => !!s.user?.guest);
   const status = useMemo(() => statusOf({
     changed: changedFiles({ history, index, bases }).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })),
@@ -69,6 +70,7 @@ export default function AppNav({
           onClick={() => setActiveNav(activeNav === item.id ? null : item.id)}
           title={item.id === "git" ? "Source control" : item.label}
           aria-label={item.id === "git" ? "Source control" : undefined}
+          data-pulling={item.id === "git" && pulling ? "true" : undefined}
           className={cn(
             "w-10 h-10 flex items-center justify-center transition-colors",
             (activeNav === "repo" ? "git" : activeNav) === item.id

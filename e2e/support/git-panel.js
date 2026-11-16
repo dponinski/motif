@@ -1,8 +1,10 @@
 // The repository is pulled when a project is opened: its components are in the list and its tokens are a set linked to it, with nothing pressed.
 
 // Waits for the components of the repository to be in the Components panel (which is open when the project is).
+// The pull (components, then tokens) has finished too: the rail's Source control button says while one is going on.
 async function componentsReady(page) {
   await page.locator("aside button[title*='src/']").first().waitFor({ timeout: 90000 });
+  await page.locator('nav button[title="Source control"]:not([data-pulling])').waitFor({ timeout: 90000 });
 }
 
 // Opens Source control (when it isn't) and waits for it to say the tokens are linked to the repository; leaves it open.
