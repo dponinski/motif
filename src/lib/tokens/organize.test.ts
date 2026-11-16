@@ -71,6 +71,12 @@ describe("searching", () => {
     expect(filterItems(items, "", "unsynced").map((i) => i.name)).toEqual(["brand"]);
     expect(filterItems(items, "", "readonly").map((i) => i.name)).toEqual(["fixed"]);
   });
+  it("filters the colors that differ between themes, and the ones that don't", () => {
+    const colors = [item("bg", { differs: true }), item("brand", { differs: false }), item("line")];
+    expect(filterItems(colors, "", "differs").map((i) => i.name)).toEqual(["bg"]);
+    expect(filterItems(colors, "", "same").map((i) => i.name)).toEqual(["brand", "line"]);
+    expect(filterItems(colors, "br", "same").map((i) => i.name)).toEqual(["brand"]);
+  });
 });
 
 describe("names", () => {

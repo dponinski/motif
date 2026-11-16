@@ -43,6 +43,49 @@ describe("a theme made from another", () => {
   });
 });
 
+describe("copying colors between themes", () => {
+  it("gives the colors in one theme the color they have in the other, and only those", () => {
+    const [light, dark] = themes();
+    store().copyThemeColors([color("bg").id], light.id, dark.id);
+    expect(color("bg").themeValues[dark.id]).toBe("#ffffff");
+    expect(color("bg").themeValues[light.id]).toBe("#ffffff");
+    expect(color("fg").themeValues[dark.id]).toBe("#111111");
+  });
+
+  it("takes an alias along, and the color it comes to", () => {
+    const [light, dark] = themes();
+    store().setColorAlias(color("fg").id, light.id, "bg");
+    store().copyThemeColors([color("fg").id], light.id, dark.id);
+    expect(color("fg").themeAlias?.[dark.id]).toBe("bg");
+    expect(color("fg").themeValues[dark.id]).toBe(color("bg").themeValues[dark.id]);
+  });
+
+  it("makes a color that was an alias the plain color it is, when the other theme has none", () => {
+    const [light, dark] = themes();
+    store().setColorAlias(color("fg").id, dark.id, "bg");
+    store().copyThemeColors([color("fg").id], light.id, dark.id);
+    expect(color("fg").themeAlias?.[dark.id]).toBeUndefined();
+    expect(color("fg").themeValues[dark.id]).toBe("#111111");
+  });
+
+  it("is a step of undo, and does nothing to the same theme", () => {
+    const [light, dark] = themes();
+    editTokens(() => store().copyThemeColors([color("bg").id], light.id, dark.id));
+    expect(color("bg").themeValues[dark.id]).toBe("#ffffff");
+    undoTokens();
+    expect(color("bg").themeValues[dark.id]).toBe("#000000");
+    editTokens(() => store().copyThemeColors([color("bg").id], light.id, light.id));
+    expect(color("bg").themeValues[light.id]).toBe("#ffffff");
+  });
+
+  it("keeps the color that is shown in step with the open theme", () => {
+    const [light, dark] = themes();
+    store().setActiveTheme(SET, dark.id);
+    store().copyThemeColors([color("bg").id], light.id, dark.id);
+    expect(color("bg").value).toBe("#ffffff");
+  });
+});
+
 describe("themes and undo", () => {
   it("makes adding, renaming, copying and deleting a theme a step each", () => {
     const [, dark] = themes();

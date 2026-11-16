@@ -52,9 +52,9 @@ export function groupItems<T extends { name: string; group: string }>(items: T[]
   return order.map((group) => ({ group, items: sortForReading(by.get(group)!) }));
 }
 
-export type Only = "all" | "changed" | "unsynced" | "readonly" | "unused";
+export type Only = "all" | "changed" | "unsynced" | "readonly" | "unused" | "differs" | "same";
 
-export interface Searchable { name: string; group: string; text: string; linked: boolean; changed: boolean; readonly: boolean; unused?: boolean }
+export interface Searchable { name: string; group: string; text: string; linked: boolean; changed: boolean; readonly: boolean; unused?: boolean; differs?: boolean }
 
 // What the search box and the filter chips leave: a token whose name, group or value has the typed words in it (every word).
 export function filterItems<T extends Searchable>(items: T[], query: string, only: Only): T[] {
@@ -64,6 +64,8 @@ export function filterItems<T extends Searchable>(items: T[], query: string, onl
     if (only === "unsynced" && t.linked) return false;
     if (only === "readonly" && !t.readonly) return false;
     if (only === "unused" && !t.unused) return false;
+    if (only === "differs" && !t.differs) return false;
+    if (only === "same" && t.differs) return false;
     if (words.length === 0) return true;
     const hay = `${t.name} ${t.group} ${t.text}`.toLowerCase();
     return words.every((w) => hay.includes(w));

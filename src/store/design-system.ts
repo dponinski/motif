@@ -168,6 +168,8 @@ interface DesignSystemStore {
   // Makes a color, in one theme, the token `target` (the key of another color of its set), or with null makes it the color it
   // is now. False when the other token isn't there or would lead back to this one.
   setColorAlias: (id: string, themeId: string, target: string | null) => boolean;
+  // Makes the colors, in the theme `to`, what they are in the theme `from` (a color that is another token there is that token here).
+  copyThemeColors: (ids: string[], from: string, to: string) => void;
   // Puts the tokens back as they were (for undo and redo).
   replaceTokenData: (data: TokenData) => void;
 
@@ -603,6 +605,21 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           }), s.sets),
         }));
         return true;
+      },
+
+      copyThemeColors: (ids, from, to) => {
+        if (from === to) return;
+        set((s) => ({
+          colors: refreshAliases(s.colors.map((c) => {
+            if (!ids.includes(c.id)) return c;
+            const themeValues = { ...c.themeValues, [to]: c.themeValues[from] ?? c.value };
+            const target = c.themeAlias?.[from];
+            // An alias goes along unless it would lead back to the color itself in the other theme: then it is the color it is.
+            const alias = target && !wouldLoop(s.colors, c, to, target) ? { ...c.themeAlias, [to]: target } : withoutKey(c.themeAlias, to);
+            const tokenSet = s.sets.find((st) => st.id === c.setId);
+            return { ...c, themeValues, value: tokenSet?.activeThemeId === to ? themeValues[to] : c.value, themeAlias: alias };
+          }), s.sets),
+        }));
       },
 
       replaceTokenData: (data) =>

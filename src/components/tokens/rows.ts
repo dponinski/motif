@@ -28,6 +28,8 @@ export interface Row {
   use: { n: number; files: string[]; components: string[] } | null;
   // Known to be used nowhere the scan looks (class names and var() in components and stylesheets).
   unused: boolean;
+  // A color that is not the same color in every theme of its set.
+  differs: boolean;
 }
 
 function searchText(kind: TokenKind, t: Token, themes: { id: string }[]): string {
@@ -66,6 +68,7 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
       return {
         id: t.id, kind, name: t.name, group: (t as { group?: string }).group || DEFAULT_GROUP,
         text: searchText(kind, t, themes), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
+        differs: kind === "color" && themes.length > 1 && new Set(themes.map((th) => { const c = t as ColorToken; return hexOf(c.themeValues[th.id] ?? c.value).toLowerCase(); })).size > 1,
       };
     }),
     [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes]

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { CornerDownRight, Copy, FolderInput, Layers, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, CornerDownRight, Copy, FolderInput, Layers, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Row } from "./rows";
 import type { TokenSet, TokenTheme } from "@/store/design-system";
@@ -54,12 +54,52 @@ function AliasPopover({ alias, count, onDone, className }: { alias: AliasBulk; c
   );
 }
 
+// Making the picked colors, in one theme, what they are in another.
+export interface CopyThemeBulk {
+  themes: TokenTheme[];
+  apply: (from: string, to: string) => void;
+}
+
+function CopyThemePopover({ copy, count, onDone, className }: { copy: CopyThemeBulk; count: number; onDone: (note: string) => void; className: string }) {
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState(copy.themes[0].id);
+  const [to, setTo] = useState(copy.themes[1]?.id ?? copy.themes[0].id);
+  const name = (id: string) => copy.themes.find((t) => t.id === id)?.name ?? "";
+  const go = () => {
+    copy.apply(from, to);
+    setOpen(false);
+    onDone(`${name(to)} now has ${name(from)}'s ${count === 1 ? "color" : `${count} colors`}.`);
+  };
+  const select = "min-w-0 flex-1 rounded border border-surface-border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent";
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild><button type="button" className={className}><ArrowRightLeft size={12} /> Copy between themes…</button></Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="start" sideOffset={4} aria-label="Copy between themes" className="z-50 w-64 rounded-lg border border-surface-border bg-surface-raised p-3 shadow-xl">
+          <p className="mb-2 text-xs text-text-secondary">Give {count} color{count === 1 ? "" : "s"} in one theme the color they have in another.</p>
+          <div className="flex flex-col gap-1.5">
+            <label className="flex items-center gap-2 text-2xs text-text-tertiary"><span className="w-10 flex-shrink-0">From</span>
+              <select aria-label="Copy from theme" value={from} onChange={(e) => setFrom(e.target.value)} className={select}>{copy.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            </label>
+            <label className="flex items-center gap-2 text-2xs text-text-tertiary"><span className="w-10 flex-shrink-0">Into</span>
+              <select aria-label="Copy into theme" value={to} onChange={(e) => setTo(e.target.value)} className={select}>{copy.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+            </label>
+          </div>
+          <button type="button" disabled={from === to} onClick={go} className="mt-3 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Copy</button>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 // What can be done to the tokens that are picked: put them in a group or another set, copy them, take them away.
 export default function BulkBar({
-  picked, groups, sets, setId, alias, onGroup, onSet, onDuplicate, onDelete, onClear,
+  picked, groups, sets, setId, alias, copy, onGroup, onSet, onDuplicate, onDelete, onClear,
 }: {
   // For colors: making them other tokens.
   alias?: AliasBulk;
+  // For colors of a set with more than one theme: copying one theme's colors into another.
+  copy?: CopyThemeBulk;
   picked: Row[];
   groups: string[];
   sets: TokenSet[];
@@ -137,6 +177,7 @@ export default function BulkBar({
       )}
 
       {alias && <AliasPopover alias={alias} count={picked.length} className={button} onDone={(refused) => setAliasNote(refused > 0 ? `${refused} couldn't be made one: it would lead back to the token itself` : "Done")} />}
+      {copy && <CopyThemePopover copy={copy} count={picked.length} className={button} onDone={setAliasNote} />}
       <button type="button" onClick={onDuplicate} className={button}><Copy size={12} /> Duplicate</button>
       <button
         type="button"
