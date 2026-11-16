@@ -88,7 +88,7 @@ export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown:
       <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Themes</span>
       <div role="group" aria-label="Theme shown" className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5">
         {set.themes.length > 1 && (
-          <button type="button" aria-pressed={shown === "all"} onClick={() => onShow("all")} title="Show every theme side by side" className={cn("rounded px-2 py-1 text-xs", shown === "all" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>All</button>
+          <button type="button" aria-label="All themes" aria-pressed={shown === "all"} onClick={() => onShow("all")} title="Show every theme side by side" className={cn("rounded px-2 py-1 text-xs", shown === "all" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>All</button>
         )}
         {set.themes.map((t) => renaming === t.id ? (
           <NameField key={t.id} initial={t.name} label={`Name of ${t.name}`} taken={taken(t.id)} onCancel={() => setRenaming(null)} onDone={(name) => { editTokens(() => ds().renameTheme(set.id, t.id, name)); setRenaming(null); }} />

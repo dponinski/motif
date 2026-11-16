@@ -52,7 +52,7 @@ const extra = {
   await bar.getByRole("button", { name: "Dark", exact: true }).click();
   check("a theme shown alone leaves only its column", await settle(async () => (await page.getByLabel("Light value of background", { exact: true }).count()) === 0 && (await value("Dark")) === "#0b0b0f"));
   check("and is the one pressed", (await pressed()).join() === "Dark");
-  await bar.getByRole("button", { name: "All", exact: true }).click();
+  await bar.getByRole("button", { name: "All themes", exact: true }).click();
   check("All shows both again", await settle(async () => (await page.getByLabel("Light value of background", { exact: true }).count()) === 1));
   const history = () => page.getByRole("button", { name: "Undo", exact: true }).isDisabled();
   check("switching themes is not an edit to undo", await history());
@@ -86,7 +86,7 @@ const extra = {
   // ── Duplicating ───────────────────────────────────────────────────────────
   await menu("Dark", "Duplicate");
   check("a theme is duplicated next to the original, and the copy is shown", await settle(async () => (await segments()).join() === "Light,Dark,Dark copy,Sepia" && (await pressed()).join() === "Dark copy" && (await value("Dark copy")) === "#0b0b0f"), `${await segments()}`);
-  await bar.getByRole("button", { name: "All", exact: true }).click();
+  await bar.getByRole("button", { name: "All themes", exact: true }).click();
 
   // ── Deleting ──────────────────────────────────────────────────────────────
   await menu("Dark copy", "Delete");
