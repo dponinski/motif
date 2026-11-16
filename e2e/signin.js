@@ -281,7 +281,7 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   const aside = page.locator("aside").last();
   await aside.getByLabel("Text size", { exact: true }).selectOption("2xl");
   await page.locator('main button[aria-label="Sync"]').click();
-  check("syncing is allowed without a typed token", !(await page.getByRole("button", { name: "Push" }).isDisabled()) && (await page.getByText(/needs you to sign in/).count()) === 0);
+  check("syncing is allowed without a typed token", (await settle(async () => !(await page.getByRole("button", { name: "Push" }).isDisabled()), 15000)) && (await page.getByText(/needs you to sign in/).count()) === 0);
   await syncNow(page, 1);
   check("and it is opened with the account's token", prs.length === 1 && prs[0].token === "ghu_1");
 
