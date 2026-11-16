@@ -52,7 +52,8 @@ export default function AppNav({
       <Link
         href="/"
         title="Back to projects"
-        className="w-10 h-10 flex items-center justify-center border-b border-surface-border hover:bg-surface-subtle transition-colors flex-shrink-0"
+        data-bar
+        className="w-10 h-bar flex items-center justify-center border-b border-surface-border hover:bg-surface-subtle transition-colors flex-shrink-0"
       >
         <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
           <span className="text-white text-xs font-bold leading-none">M</span>

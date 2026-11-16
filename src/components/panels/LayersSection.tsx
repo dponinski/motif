@@ -170,7 +170,7 @@ export default function LayersSection() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-tour="layers">
-      <div className="flex h-9 flex-shrink-0 items-center gap-1.5 border-b border-surface-border px-3">
+      <div data-bar className="flex h-bar flex-shrink-0 items-center gap-1.5 border-b border-surface-border px-3">
         <Layers size={12} className="text-text-tertiary" />
         <span className="text-xs font-medium text-text-secondary">Layers</span>
       </div>

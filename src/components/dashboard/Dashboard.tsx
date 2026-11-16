@@ -201,7 +201,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-surface-base text-text-primary select-none">
       <AccountNotices />
       <AuthDialog />
-      <header className="flex items-center justify-between h-12 px-6 border-b border-surface-border-subtle">
+      <header data-bar className="flex items-center justify-between h-bar px-6 border-b border-surface-border-subtle">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center flex-shrink-0">
             <span className="text-white text-[11px] font-bold leading-none">M</span>

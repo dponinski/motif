@@ -103,7 +103,7 @@ export default function RepoComponentsSection() {
 
   return (
     <div className="flex flex-shrink-0 flex-col border-b border-surface-border" style={{ maxHeight: "260px" }}>
-      <div className="flex h-9 flex-shrink-0 items-center gap-1.5 border-b border-surface-border px-3">
+      <div data-bar className="flex h-bar flex-shrink-0 items-center gap-1.5 border-b border-surface-border px-3">
         <Boxes size={12} className="flex-shrink-0 text-text-tertiary" />
         <span className="flex-1 truncate text-xs font-medium text-text-secondary" title={`${source.repo} · ${source.branch}`}>Repository</span>
         <button onClick={() => setCreating(true)} className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-primary" title="New component" aria-label="New component"><Plus size={12} /></button>

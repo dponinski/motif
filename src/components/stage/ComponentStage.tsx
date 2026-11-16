@@ -361,7 +361,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   return (
     <div className="flex h-full flex-col bg-surface-base">
-      <div className="flex h-10 flex-shrink-0 items-center gap-3 border-b border-surface-border bg-surface-raised px-3">
+      <div data-bar className="flex h-bar flex-shrink-0 items-center gap-3 border-b border-surface-border bg-surface-raised px-3">
         <span className="text-sm font-medium text-text-primary">{component.name}</span>
         <a href={githubUrl} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-1 truncate font-mono text-2xs text-text-tertiary hover:text-text-secondary">
           {component.file}:{component.line} <ExternalLink size={9} className="flex-shrink-0" />
