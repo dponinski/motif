@@ -16,6 +16,10 @@ export interface TokenLink extends LinkShape {
   // waiting is the difference between this (or, before anything is staged, `base`) and Motif's tokens. Cleared when the
   // pull request is merged or one of the files is given up. Only a hint for the status; Sync plans from the real state.
   staged?: { doc: SyncDoc; paths: string[] } | null;
+  // Tokens of the repository that were renamed in Motif, by their old name, with the files that carry the rename (changes of the
+  // editor). The old name is gone on purpose: it is not a token Motif deleted, to be brought back. Cleared when the pull request is
+  // merged, or when the files are given up.
+  renamed?: Record<string, { to: string; paths: string[] }>;
   syncedAt: number;
 }
 
@@ -37,10 +41,21 @@ export interface SyncPlan {
   toRepo: TokenChange[];
 }
 
+// A document without the tokens that were renamed away (while Motif has them under their new names).
+function withoutRenamed(doc: SyncDoc, link: TokenLink, mine: SyncDoc): SyncDoc {
+  const gone = Object.entries(link.renamed ?? {}).filter(([old, r]) => !(old in mine) && r.to in mine).map(([old]) => old);
+  if (gone.length === 0) return doc;
+  const out = { ...doc };
+  for (const old of gone) delete out[old];
+  return out;
+}
+
 export function planSync(link: TokenLink, slices: TokenSlices, repo: RepoState): SyncPlan {
   const mine = readMotifTokens(slices, link);
-  const merge = mergeTokens(link.base, mine, repo.snapshot.doc);
-  return { merge, toMotif: describeChanges(mine, merge.merged), toRepo: changesToRepo(merge.merged, repo.snapshot.doc) };
+  // A token that was renamed isn't one Motif deleted (which would be brought back), nor one the repository still has to be given.
+  const theirs = withoutRenamed(repo.snapshot.doc, link, mine);
+  const merge = mergeTokens(withoutRenamed(link.base, link, mine), mine, theirs);
+  return { merge, toMotif: describeChanges(mine, merge.merged), toRepo: changesToRepo(merge.merged, theirs) };
 }
 
 // Takes the merged tokens into Motif and records the repository as the new common ancestor.

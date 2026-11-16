@@ -17,6 +17,8 @@ fs.mkdirSync(OUT, { recursive: true });
 
 // The design system the suites read as the repository's components.
 const FIXTURE = path.join(ROOT, "src", "lib", "repo-scan", "fixtures", "motif-test-system");
+// The same design system on Tailwind 3 (a tailwind.config.js, and colors kept as HSL channels in CSS variables).
+const FIXTURE_V3 = path.join(ROOT, "src", "lib", "repo-scan", "fixtures", "motif-test-system-v3");
 
 // PostgreSQL, for the suites of accounts, sync and teams: a role that can create databases (to make one for the run), and the
 // role the app connects as, which owns it.
@@ -25,4 +27,4 @@ const DB_APP_URL = process.env.E2E_DB_APP_URL ?? "postgresql://motif:motifpw@127
 const DB_APP_ROLE = new URL(DB_APP_URL).username;
 const psql = (db, q) => execFileSync("psql", [`${DB_ADMIN_URL}/${db}`, "-At", "-v", "ON_ERROR_STOP=1", "-c", q]).toString().trim();
 
-module.exports = { ROOT, APP_PORT, APP_PORT_OWN, APP_URL: `http://localhost:${APP_PORT}`, APP_URL_OWN: `http://localhost:${APP_PORT_OWN}`, OUT, FIXTURE, DB_ADMIN_URL, DB_APP_URL, DB_APP_ROLE, psql };
+module.exports = { ROOT, APP_PORT, APP_PORT_OWN, APP_URL: `http://localhost:${APP_PORT}`, APP_URL_OWN: `http://localhost:${APP_PORT_OWN}`, OUT, FIXTURE, FIXTURE_V3, DB_ADMIN_URL, DB_APP_URL, DB_APP_ROLE, psql };

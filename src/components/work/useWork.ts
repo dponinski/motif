@@ -47,6 +47,12 @@ export function discardChanges(paths: string[]) {
   // Token files that are given up are no longer what Motif's tokens were written to: they are waiting again.
   const link = useGitStore.getState().tokenLink;
   if (link?.staged && paths.some((p) => link.staged!.paths.includes(p))) useGitStore.getState().setTokenLink({ ...link, staged: null });
+  // A rename whose files are given up isn't staged any more (Motif's token keeps the new name until it is renamed back).
+  const after = useGitStore.getState().tokenLink;
+  if (after?.renamed) {
+    const kept = Object.fromEntries(Object.entries(after.renamed).filter(([, r]) => !r.paths.some((p) => paths.includes(p))));
+    if (Object.keys(kept).length !== Object.keys(after.renamed).length) useGitStore.getState().setTokenLink({ ...after, renamed: Object.keys(kept).length ? kept : undefined });
+  }
   useEditStore.getState().discard(paths);
   useLibraryStore.getState().dropDrafts(paths);
 }

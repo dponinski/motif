@@ -23,8 +23,14 @@ export function makePlans(tokens: RepoToken[], tailwind: 3 | 4 | null): MakePlan
   // Without Tailwind a token is a variable, and a stylesheet's controls name it with `var()`.
   if (tailwind === null) return { color: { prefix: "" }, radius: { prefix: "" }, spacing: { prefix: "" } };
   if (tailwind === 3) {
-    const reason = "This repository's tokens are in a Tailwind 3 config, which Motif can't add to yet";
-    return { color: { reason }, radius: { reason }, spacing: { reason } };
+    // A new token is an entry in the config's `theme.extend` (and for a color the repository keeps as channels, a variable too), so
+    // there has to be a config with tokens in it to follow.
+    const hasConfig = tokens.some((t) => t.mapping?.path || Object.values(t.locations).some((l) => l.container === "config" && l.path));
+    if (!hasConfig) {
+      const reason = "This repository has no Tailwind config with tokens that Motif can add to";
+      return { color: { reason }, radius: { reason }, spacing: { reason } };
+    }
+    return { color: { prefix: "" }, radius: { prefix: "radius-" }, spacing: { prefix: "spacing-" } };
   }
   return {
     color: usesColorAliases(tokens) ? { prefix: "" } : { reason: "This repository doesn't give Tailwind its colors through @theme inline, so no class could name a new one" },

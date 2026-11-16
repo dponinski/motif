@@ -164,3 +164,88 @@ describe("reading the code to rename in", () => {
     expect(reads).toBe(0);
   });
 });
+
+describe("renaming in a Tailwind 3 repository", async () => {
+  const FILES3 = loadFixture("motif-test-system-v3");
+  const before3 = await scan(FILES3);
+  const named = (name: string, a = before3) => a.tokens.find((t) => t.name === name)!;
+  const rename3 = async (from: string, to: string) => {
+    const plan = await planRename({ token: named(from), to, tokens: before3.tokens, files: FILES3 });
+    if ("refused" in plan) throw new Error(plan.refused);
+    return { plan, files: { ...FILES3, ...plan.files } };
+  };
+
+  it("a color shared with its foreground: the variable, the config entry and the classes move, the foreground stays", async () => {
+    const { plan, files } = await rename3("primary", "brand");
+    const after = await scan(files);
+    expect(plan.unreadable).toEqual([]);
+    expect(after.tokens.map((t) => t.name).sort()).toEqual(before3.tokens.map((t) => (t.name === "primary" ? "brand" : t.name)).sort());
+    expect(named("brand", after)).toMatchObject({ kind: "color", channels: "hsl", tailwind: "color-brand", values: named("primary").values });
+    expect(after.tokenUsage!.brand.n).toBe(before3.tokenUsage!.primary.n);
+    expect(after.tokenUsage!["primary-foreground"]).toEqual(before3.tokenUsage!["primary-foreground"]);
+    const config = files["tailwind.config.js"];
+    expect(config).toContain('        primary: {\n          foreground: "hsl(var(--primary-foreground))",\n        },\n        brand: "hsl(var(--brand))",');
+    for (const [path, text] of Object.entries(files)) {
+      expect(text, path).not.toMatch(/(?<![\w-])--primary(?![\w-])/);
+      if (!path.endsWith(".md")) expect(text, path).not.toMatch(/(?<![\w-])(bg|text|border|ring|accent|outline)-primary(?![\w-])/);
+    }
+  });
+  it("a radius: its key in the config and its classes", async () => {
+    const { files } = await rename3("radius-md", "radius-control");
+    const after = await scan(files);
+    expect(files["tailwind.config.js"]).toContain('        control: "0.5rem",');
+    expect(named("radius-control", after).values).toEqual({ light: "0.5rem" });
+    expect(after.tokenUsage!["radius-control"].n).toBe(before3.tokenUsage!["radius-md"].n);
+  });
+  it("a foreground keeps its group, and can't leave it", async () => {
+    const { files } = await rename3("primary-foreground", "primary-fg");
+    expect(files["tailwind.config.js"]).toContain('          fg: "hsl(var(--primary-fg))",');
+    const refused = await planRename({ token: named("primary-foreground"), to: "brand-foreground", tokens: before3.tokens, files: FILES3 });
+    expect(refused).toEqual({ refused: "It is foreground in the primary group of the config, so its name has to keep starting with primary-" });
+  });
+  it("what sync makes of it: no conflict, nothing to send, nothing revived or made twice", async () => {
+    const link: LinkShape = { setId: "s", themes: { light: "t-l", dark: "t-d" }, baseTheme: "light" };
+    const snapshot = readRepoTokens(before3.tokens, before3.themes);
+    const motif = applyDoc({ colors: [], spacing: [], radii: [], shadows: [] }, link, snapshot.doc, "t-l");
+    const renamed = { ...motif, colors: motif.colors.map((c) => (c.name === "primary" ? { ...c, name: "brand", repoName: "brand" } : c)) };
+    const { files } = await rename3("primary", "brand");
+    const overlay = await scan(files);
+    const theirs = readRepoTokens(overlay.tokens, overlay.themes).doc;
+    const merge = mergeTokens(snapshot.doc, readMotifTokens(renamed, link), theirs);
+    expect(merge.conflicts).toEqual([]);
+    expect(merge.restored).toEqual([]);
+    expect(Object.keys(merge.merged)).toContain("brand");
+    expect(Object.keys(merge.merged)).not.toContain("primary");
+    expect(changesToRepo(merge.merged, theirs)).toEqual([]);
+  });
+});
+
+describe("planning a sync, against the repository as it is, after a rename that is staged", async () => {
+  const { planSync } = await import("../token-sync/flow");
+  const link = (renamed: boolean) => ({
+    repo: "a/b", branch: "main", setId: "s", themes: { light: "t-l", dark: "t-d" }, baseTheme: "light",
+    base: readRepoTokens(before.tokens, before.themes).doc, staged: null, syncedAt: 0,
+    ...(renamed ? { renamed: { primary: { to: "brand", paths: ["src/styles/motif.css"] } } } : {}),
+  });
+  const state = () => {
+    const snapshot = readRepoTokens(before.tokens, before.themes);
+    const slices = applyDoc({ colors: [], spacing: [], radii: [], shadows: [] }, link(false), snapshot.doc, "t-l");
+    const renamed = { ...slices, colors: slices.colors.map((c) => (c.name === "primary" ? { ...c, name: "brand", repoName: "brand" } : c)) };
+    renamed.colors.push({ id: "n", name: "accent-2", repoName: undefined, value: "#123456", group: "base", setId: "s", themeValues: { "t-l": "#123456", "t-d": "#123456" } });
+    return { renamed, repo: { analysis: before, snapshot } };
+  };
+  it("without knowing of the rename, the old name is a token Motif deleted, to be brought back", () => {
+    const { renamed, repo } = state();
+    expect(planSync(link(false), renamed, repo).merge.restored).toEqual(["primary"]);
+  });
+  it("knowing of it, nothing is brought back and only what changed besides is sent", () => {
+    const { renamed, repo } = state();
+    const plan = planSync(link(true), renamed, repo);
+    expect(plan.merge.restored).toEqual([]);
+    expect(plan.merge.conflicts).toEqual([]);
+    expect(plan.toMotif).toEqual([]);
+    // The renamed token is in the repository under its new name (in the staged files), so it is not "sent" as an addition by the plan against
+    // the repository as it is: that is a rename, made by the files.
+    expect(plan.toRepo.map((c) => c.name).sort()).toEqual(["accent-2", "accent-2", "brand", "brand"]);
+  });
+});

@@ -83,6 +83,12 @@ export function buildTokenIndex(
       return value === undefined ? fallback?.trim() ?? whole : resolve(value, theme, depth + 1);
     });
 
+  // A token's value, as the color or length it is (bare channels, `222.2 47.4% 11.2%`, are the color of the function a config wraps them in).
+  const own = (t: RepoToken, theme: string) => {
+    const text = resolve(raw(t, theme) ?? "", theme);
+    return t.channels && text ? `${t.channels}(${text})` : text;
+  };
+
   const byRole = emptyRoles();
   const reset = new Set<TokenRole>();
   let spacingStep = 4;
@@ -93,7 +99,7 @@ export function buildTokenIndex(
       // Without Tailwind there is no utility to name a token by: it is its variable, `var(--primary)`.
       const role = KIND_ROLE[token.kind];
       if (!role || byRole[role].some((c) => c.value === token.name)) continue;
-      byRole[role].push({ value: token.name, name: token.name, values: Object.fromEntries(all.map((theme) => [theme, resolve(raw(token, theme) ?? "", theme)])), file: token.file, line: token.line });
+      byRole[role].push({ value: token.name, name: token.name, values: Object.fromEntries(all.map((theme) => [theme, own(token, theme)])), file: token.file, line: token.line });
       continue;
     }
     if (!token.tailwind) continue;
@@ -108,12 +114,15 @@ export function buildTokenIndex(
       if ((raw(token, base) ?? "").trim() === "initial") reset.add(role);
       continue;
     }
+    // A Tailwind 3 config that sets a section outside `theme.extend` has replaced Tailwind's own values for it.
+    const first = Object.values(token.locations)[0];
+    if (first?.container === "config" && first.path && first.inExtend === false) reset.add(role);
     // `--text-lg--line-height` goes with `--text-lg`; it is not a size of its own.
     if (value.includes("--") || byRole[role].some((c) => c.value === value)) continue;
     byRole[role].push({
       value,
       name: token.name,
-      values: Object.fromEntries(all.map((theme) => [theme, resolve(raw(token, theme) ?? "", theme)])),
+      values: Object.fromEntries(all.map((theme) => [theme, own(token, theme)])),
       file: token.file,
       line: token.line,
     });
@@ -185,6 +194,8 @@ const defaultPx = (role: TokenRole, value: string, index: TokenIndex): number | 
   return null;
 };
 
+const V4_ONLY: Partial<Record<TokenRole, string[]>> = { radius: ["xs"], shadow: ["2xs", "xs"] };
+
 export interface Choice {
   value: string;
   // What it is worth, to show beside the name: "8px", "#4f46e5".
@@ -220,7 +231,9 @@ export function choicesFor(group: ClassGroup, index: TokenIndex, theme: string):
   if (!role) return { tokens: [], scale: (group.options ?? []).map((value) => ({ value, hint: null, swatch: null, token: false })) };
   const tokens = index.byRole[role].map((c) => ({ value: c.value, ...describe(role, valueIn(c, theme)), token: true }));
   const taken = new Set(tokens.map((t) => t.value));
-  const defaults = index.reset.has(role) && role !== "spacing" ? [] : group.options ?? [];
+  // What Tailwind 3 doesn't have: `rounded-xs`, `shadow-xs` and `shadow-2xs` came with 4 (its `sm` sizes are 4's `xs`).
+  const available = (group.options ?? []).filter((v) => !(index.tailwind === 3 && V4_ONLY[role]?.includes(v)));
+  const defaults = index.reset.has(role) && role !== "spacing" ? [] : available;
   const scale = defaults
     .filter((value) => !taken.has(value))
     .map((value) => {

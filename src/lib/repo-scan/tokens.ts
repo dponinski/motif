@@ -1,7 +1,7 @@
 import { keyName, lineOf, nameOf, parseModule, staticString, unwrap, type AnyNode } from "./ast";
 import { isColorValue } from "./summary";
 import { aliasTarget } from "../tokens/alias";
-import type { RepoToken, RepoTokenKind, TokenContainer } from "./types";
+import type { RepoToken, RepoTokenKind, TokenContainer, TokenLocation } from "./types";
 
 export const BASE = "base";
 
@@ -42,8 +42,8 @@ function kindOf(name: string, value: string): RepoTokenKind {
   return isColorValue(value) ? "color" : "other";
 }
 
-function put(acc: TokenAccumulator, token: { name: string; theme: string; value: string; file: string; line: number; container: TokenContainer; tailwind?: string | null; kind?: RepoTokenKind }) {
-  const location = { file: token.file, line: token.line, container: token.container };
+function put(acc: TokenAccumulator, token: { name: string; theme: string; value: string; file: string; line: number; container: TokenContainer; tailwind?: string | null; kind?: RepoTokenKind; path?: string[]; inExtend?: boolean }) {
+  const location: TokenLocation = { file: token.file, line: token.line, container: token.container, ...(token.path ? { path: token.path, inExtend: !!token.inExtend } : {}) };
   const existing = acc.tokens.get(token.name);
   if (existing) {
     existing.values[token.theme] = token.value;
@@ -130,10 +130,10 @@ export async function scanCss(files: TokenFile[], acc: TokenAccumulator, warning
 // ── Tailwind v3 config ────────────────────────────────────────────────────────
 
 const V3_SECTIONS: Record<string, RepoTokenKind> = {
-  colors: "color", borderRadius: "radius", boxShadow: "shadow", fontFamily: "font", spacing: "spacing",
+  colors: "color", borderRadius: "radius", boxShadow: "shadow", fontFamily: "font", spacing: "spacing", fontSize: "other",
 };
 const V3_PREFIX: Record<string, string> = {
-  colors: "color", borderRadius: "radius", boxShadow: "shadow", fontFamily: "font", spacing: "spacing",
+  colors: "color", borderRadius: "radius", boxShadow: "shadow", fontFamily: "font", spacing: "spacing", fontSize: "text",
 };
 
 function literalValue(node: AnyNode | null, consts: Map<string, AnyNode>): string | null {
@@ -149,7 +149,7 @@ function literalValue(node: AnyNode | null, consts: Map<string, AnyNode>): strin
   return null;
 }
 
-function objectOf(node: AnyNode | null, consts: Map<string, AnyNode>, depth = 0): AnyNode | null {
+export function objectOf(node: AnyNode | null, consts: Map<string, AnyNode>, depth = 0): AnyNode | null {
   const n = unwrap(node);
   if (!n || depth > 4) return null;
   if (n.type === "ObjectExpression") return n;
@@ -158,17 +158,11 @@ function objectOf(node: AnyNode | null, consts: Map<string, AnyNode>, depth = 0)
   return null;
 }
 
-const property = (obj: AnyNode, name: string) =>
+export const property = (obj: AnyNode, name: string) =>
   (obj.properties as AnyNode[]).find((p) => p.type === "ObjectProperty" && keyName(p) === name)?.value as AnyNode | undefined;
 
-export async function scanTailwindConfig(file: TokenFile, acc: TokenAccumulator, warnings: string[]): Promise<void> {
-  let ast;
-  try {
-    ast = await parseModule(file.text, file.path);
-  } catch {
-    warnings.push(`Could not read ${file.path}`);
-    return;
-  }
+// The `theme` object of a Tailwind config, and the consts of the file it may be built from.
+export function configTheme(ast: { program: { body: unknown[] } }): { theme: AnyNode | null; consts: Map<string, AnyNode> } {
   const consts = new Map<string, AnyNode>();
   let exported: AnyNode | null = null;
   for (const stmt of ast.program.body as AnyNode[]) {
@@ -183,34 +177,51 @@ export async function scanTailwindConfig(file: TokenFile, acc: TokenAccumulator,
     }
   }
   const config = objectOf(exported, consts);
-  const theme = config && objectOf(property(config, "theme") ?? null, consts);
+  return { theme: config && objectOf(property(config, "theme") ?? null, consts), consts };
+}
+
+export async function scanTailwindConfig(file: TokenFile, acc: TokenAccumulator, warnings: string[]): Promise<void> {
+  let ast;
+  try {
+    ast = await parseModule(file.text, file.path);
+  } catch {
+    warnings.push(`Could not read ${file.path}`);
+    return;
+  }
+  const { theme, consts } = configTheme(ast);
   if (!theme) return;
 
-  const collect = (section: AnyNode | null, key: string) => {
+  const collect = (section: AnyNode | null, key: string, inExtend: boolean) => {
     const root = objectOf(section, consts);
     if (!root) return;
-    const visit = (obj: AnyNode, path: string[]) => {
+    const visit = (obj: AnyNode, path: string[], keys: string[]) => {
       for (const prop of obj.properties as AnyNode[]) {
         if (prop.type !== "ObjectProperty") continue;
         const k = keyName(prop);
         if (k === null) continue;
         const next = k === "DEFAULT" ? path : [...path, k];
+        const at = [...keys, k];
         const value = prop.value as AnyNode;
         const nested = unwrap(value)?.type === "ObjectExpression" ? unwrap(value)! : null;
-        if (nested) { visit(nested, next); continue; }
-        const text = literalValue(value, consts);
+        if (nested) { visit(nested, next, at); continue; }
+        // A size can come with its line height: `sm: ["0.875rem", { lineHeight: "1.25rem" }]` is 0.875rem.
+        const first = key === "fontSize" && unwrap(value)?.type === "ArrayExpression" ? ((unwrap(value)!.elements as AnyNode[])[0] ?? null) : null;
+        const text = literalValue(first ?? value, consts);
         if (text === null || next.length === 0) continue;
         const name = `${V3_PREFIX[key]}-${next.join("-")}`;
-        put(acc, { name, theme: BASE, value: text, file: file.path, line: lineOf(prop), container: "config", tailwind: name, kind: V3_SECTIONS[key] });
+        // Only a value written out as a literal can be changed in place; one built from a const or by joining strings can't.
+        const written = unwrap(value);
+        const plain = written?.type === "StringLiteral" || written?.type === "NumericLiteral" || (written?.type === "TemplateLiteral" && (written.expressions as AnyNode[]).length === 0);
+        put(acc, { name, theme: BASE, value: text, file: file.path, line: lineOf(prop), container: "config", tailwind: name, kind: V3_SECTIONS[key], ...(plain ? { path: [key, ...at], inExtend } : {}) });
       }
     };
-    visit(root, []);
+    visit(root, [], []);
   };
 
   const extend = objectOf(property(theme, "extend") ?? null, consts);
   for (const key of Object.keys(V3_SECTIONS)) {
-    collect(property(theme, key) ?? null, key);
-    if (extend) collect(property(extend, key) ?? null, key);
+    collect(property(theme, key) ?? null, key, false);
+    if (extend) collect(property(extend, key) ?? null, key, true);
   }
 }
 
@@ -250,6 +261,13 @@ export function scanTokenJson(file: TokenFile, acc: TokenAccumulator, warnings: 
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
+// What a CSS variable holds when it is the channels of a color (`222.2 47.4% 11.2%`, `0 0 0`), by the function a config wraps it in.
+export const CHANNELS = {
+  hsl: /^\s*-?[\d.]+(?:deg)?[\s,]+[\d.]+%[\s,]+[\d.]+%\s*$/,
+  rgb: /^\s*\d{1,3}[\s,]+\d{1,3}[\s,]+\d{1,3}\s*$/,
+};
+const WRAPPED = /^(hsl|rgb)a?\(\s*var\(\s*--([\w-]+)\s*\)\s*(?:[,/]\s*<alpha-value>\s*)?\)$/;
+
 export function finalizeTokens(acc: TokenAccumulator): { themes: string[]; tokens: RepoToken[] } {
   for (const alias of acc.aliases) {
     const target = acc.tokens.get(alias.target);
@@ -264,6 +282,23 @@ export function finalizeTokens(acc: TokenAccumulator): { themes: string[]; token
     } else if (!acc.tokens.has(alias.tailwind)) {
       put(acc, { name: alias.tailwind, theme: BASE, value: alias.value, file: alias.file, line: alias.line, container: "theme", tailwind: alias.tailwind });
     }
+  }
+
+  // Tailwind 3 colors that wrap a variable of bare channels (`primary: "hsl(var(--primary))"`, `--primary: 222.2 47.4% 11.2%`): the
+  // variable is the color, and the config entry is what gives it its class, as `--color-primary: var(--primary)` does in Tailwind 4.
+  for (const t of [...acc.tokens.values()]) {
+    if (t.kind !== "color" || !Object.values(t.locations).every((l) => l.container === "config")) continue;
+    const wrapped = WRAPPED.exec(Object.values(t.values)[0] ?? "");
+    if (!wrapped) continue;
+    const form = wrapped[1] as "hsl" | "rgb";
+    const target = acc.tokens.get(wrapped[2]);
+    if (!target || target.tailwind || target.channels || !Object.values(target.locations).every((l) => l.container === "css-var")) continue;
+    if (!Object.values(target.values).every((v) => CHANNELS[form].test(v))) continue;
+    target.channels = form;
+    target.kind = "color";
+    target.tailwind = t.name;
+    target.mapping = Object.values(t.locations)[0];
+    acc.tokens.delete(t.name);
   }
 
   // A variable that is another variable (`--text: var(--gray-12)`) is what that one is, a color if it is a color; and so on along a chain.

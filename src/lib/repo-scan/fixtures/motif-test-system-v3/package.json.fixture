@@ -1,0 +1,31 @@
+{
+  "name": "motif",
+  "version": "0.1.0",
+  "description": "Motif \u2014 a basic React design system styled with Tailwind CSS 3",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "postcss": "^8.4.49",
+    "autoprefixer": "^10.4.20",
+    "tailwindcss-animate": "^1.0.7"
+  }
+}

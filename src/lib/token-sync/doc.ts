@@ -88,7 +88,8 @@ export function readRepoTokens(tokens: RepoToken[], themes: string[]): RepoSnaps
         values[theme] = varRef(target);
         continue;
       }
-      const normalized = normalize(kind, token.values[theme]);
+      // Bare channels are the color of the function a config wraps them in.
+      const normalized = normalize(kind, token.channels ? `${token.channels}(${token.values[theme]})` : token.values[theme]);
       if (normalized === null) { unreadable = true; break; }
       values[theme] = normalized;
     }
@@ -100,8 +101,9 @@ export function readRepoTokens(tokens: RepoToken[], themes: string[]): RepoSnaps
 
     out.doc[token.name] = { kind, values };
     out.raw[token.name] = Object.fromEntries(themesRead.map((t) => [t, token.values[t]]));
-    const source = Object.values(token.locations).find((l) => l.container === "config" || l.container === "json");
-    if (source) out.readonly[token.name] = source.container === "config" ? "Defined in a Tailwind config file, which can't be edited yet" : "Defined in a token JSON file, which can't be edited yet";
+    // A value written out in a Tailwind config is changed in place; one that is computed there, or in a token JSON file, isn't.
+    const source = Object.values(token.locations).find((l) => (l.container === "config" && !l.path) || l.container === "json");
+    if (source) out.readonly[token.name] = source.container === "config" ? "Its value in the Tailwind config is computed, not written out, so Motif can't change it" : "Defined in a token JSON file, which can't be edited yet";
   }
   return out;
 }

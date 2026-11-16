@@ -1,9 +1,10 @@
 import type { RepoAnalysis, RepoToken } from "../repo-scan/types";
 import { BASE, themeOfSelector } from "../repo-scan/tokens";
-import { formatLike } from "./color";
+import { formatChannels, formatLike } from "./color";
 import { aliasTarget } from "../tokens/alias";
 import type { RepoSnapshot, SyncDoc, SyncKind } from "./doc";
 import type { TokenChange } from "./merge";
+import { addToConfig, editConfig, type ConfigAdd, type ConfigSet } from "./config-write";
 import { formatLength, writeShadow } from "./values";
 
 export interface SkippedChange {
@@ -25,9 +26,11 @@ type AtRule = import("postcss").AtRule;
 type Rule = import("postcss").Rule;
 
 const writable = (t: RepoToken, theme: string) => {
-  const c = t.locations[theme]?.container;
-  return c === "css-var" || c === "theme";
+  const loc = t.locations[theme];
+  // A config value is written in place when it is a plain literal there (the scanner records where it is).
+  return loc?.container === "css-var" || loc?.container === "theme" || (loc?.container === "config" && !!loc.path);
 };
+const isStylesheet = (t: RepoToken, theme: string) => t.locations[theme]?.container === "css-var" || t.locations[theme]?.container === "theme";
 
 // ── Notation of what is already in the repository ─────────────────────────────
 
@@ -51,13 +54,17 @@ function writtenValue(change: TokenChange, analysis: RepoAnalysis, snapshot: Rep
   if (change.kind === "color" && aliasTarget(after) !== null) return after.trim();
   const original = snapshot.raw[change.name]?.[change.theme ?? snapshot.baseTheme];
   switch (change.kind) {
-    case "color":
+    case "color": {
+      // A variable of bare channels (`--primary: 222.2 47.4% 11.2%`) stays channels.
+      const channels = analysis.tokens.find((t) => t.name === change.name)?.channels;
+      if (channels) return formatChannels(channels, after, original);
       return formatLike(original ?? sampleOf(analysis, "color") ?? "", after);
+    }
     case "radius":
     case "spacing":
       return formatLength(parseFloat(after), original ?? sampleOf(analysis, change.kind));
     case "shadow":
-      return writeShadow(after, original);
+      return writeShadow(after, original ?? sampleOf(analysis, "shadow"));
   }
 }
 
@@ -67,7 +74,8 @@ function writtenValue(change: TokenChange, analysis: RepoAnalysis, snapshot: Rep
 export function tokensFile(analysis: RepoAnalysis): string | null {
   const counts = new Map<string, number>();
   for (const t of analysis.tokens) {
-    for (const [theme, loc] of Object.entries(t.locations)) if (writable(t, theme)) counts.set(loc.file, (counts.get(loc.file) ?? 0) + 1);
+    // Only a stylesheet can hold a new token's variables.
+    for (const [theme, loc] of Object.entries(t.locations)) if (isStylesheet(t, theme)) counts.set(loc.file, (counts.get(loc.file) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
@@ -80,6 +88,19 @@ export function filesNeeded(analysis: RepoAnalysis): string[] {
 }
 
 const KIND_OF: Record<SyncKind, RepoToken["kind"]> = { color: "color", radius: "radius", spacing: "spacing", shadow: "shadow" };
+
+// Where a Tailwind 3 config keeps each kind of token, and what the token's name starts with.
+const CONFIG_SECTION: Record<SyncKind, string> = { color: "colors", radius: "borderRadius", spacing: "spacing", shadow: "boxShadow" };
+const CONFIG_PREFIX: Record<SyncKind, string> = { color: "", radius: "radius-", spacing: "spacing-", shadow: "shadow-" };
+
+// The Tailwind config the tokens are read from (and a new token is added to).
+export function configFile(analysis: RepoAnalysis): string | null {
+  for (const t of analysis.tokens) {
+    const loc = Object.values(t.locations).find((l) => l.container === "config" && l.path) ?? (t.mapping?.path ? t.mapping : undefined);
+    if (loc) return loc.file;
+  }
+  return null;
+}
 
 // ── Editing ───────────────────────────────────────────────────────────────────
 
@@ -141,6 +162,9 @@ export async function applyEdits(
   const usesAliases = analysis.tokens.some((t) => t.kind === "color" && t.tailwind === `color-${t.name}` && t.locations && Object.values(t.locations).some((l) => l.container === "css-var"));
   const dest = tokensFile(analysis);
   const aliased = new Set<string>();
+  // Values to change in Tailwind configs, by file.
+  const configSets = new Map<string, ConfigSet[]>();
+  const configAdds = new Map<string, ConfigAdd[]>();
 
   // Edits to values that exist.
   for (const change of changes.filter((c) => c.type === "changed")) {
@@ -148,6 +172,13 @@ export async function applyEdits(
     const loc = token?.locations[change.theme ?? ""];
     if (!token || !loc) { skipped.push({ name: change.name, theme: change.theme, reason: "It is not in the repository any more" }); continue; }
     if (!writable(token, change.theme!)) { skipped.push({ name: change.name, theme: change.theme, reason: snapshot.readonly[change.name] ?? "Its source can't be edited yet" }); continue; }
+    if (loc.container === "config") {
+      const own = options.original;
+      const key = change.theme ?? own?.baseTheme ?? snapshot.baseTheme;
+      const restored = own && own.doc[change.name]?.values[key] === change.after ? own.raw[change.name]?.[key] : undefined;
+      configSets.set(loc.file, [...(configSets.get(loc.file) ?? []), { token: change.name, path: loc.path!, inExtend: !!loc.inExtend, value: restored ?? writtenValue(change, analysis, snapshot) }]);
+      continue;
+    }
     const root = rootOf(loc.file);
     let target: import("postcss").Declaration | null = null;
     root?.walkDecls(`--${change.name}`, (d) => {
@@ -164,6 +195,31 @@ export async function applyEdits(
   // New tokens, and new theme values for tokens that exist.
   for (const change of changes.filter((c) => c.type === "added")) {
     const existing = analysis.tokens.find((t) => t.name === change.name);
+    // In a Tailwind 3 repository a new token is an entry in the config (and, for a color the repository keeps as channels, a variable).
+    if (analysis.stack.tailwindVersion === 3 && !existing) {
+      const section = CONFIG_SECTION[change.kind];
+      const prefix = CONFIG_PREFIX[change.kind];
+      const form = analysis.tokens.find((t) => t.channels)?.channels;
+      const cfg = configFile(analysis);
+      if (!cfg) { skipped.push({ name: change.name, theme: change.theme, reason: "The repository has no Tailwind config to add it to" }); continue; }
+      if (change.kind === "color" && form) {
+        if (!dest) { skipped.push({ name: change.name, theme: change.theme, reason: "The repository has no stylesheet of tokens to add this to" }); continue; }
+        const root = rootOf(dest);
+        if (!root) { skipped.push({ name: change.name, theme: change.theme, reason: `${dest} wasn't read` }); continue; }
+        append(ensureThemeRule(root, change.theme!), `--${change.name}`, formatChannels(form, change.after!));
+        touched.add(dest);
+        if (!aliased.has(change.name)) {
+          aliased.add(change.name);
+          configAdds.set(cfg, [...(configAdds.get(cfg) ?? []), { section, key: change.name, value: `${form}(var(--${change.name}))`, token: change.name }]);
+        }
+        continue;
+      }
+      // A config has no themes: only the base value of a token is written.
+      if (change.theme !== snapshot.baseTheme) { skipped.push({ name: change.name, theme: change.theme, reason: "A Tailwind 3 config has no themes, so only a new token's base value is written" }); continue; }
+      if (!change.name.startsWith(prefix) || change.name.length === prefix.length) { skipped.push({ name: change.name, theme: change.theme, reason: `The name has to start with ${prefix}, which is what gives Tailwind a class for it` }); continue; }
+      configAdds.set(cfg, [...(configAdds.get(cfg) ?? []), { section, key: change.name.slice(prefix.length), value: writtenValue(change, analysis, snapshot), token: change.name }]);
+      continue;
+    }
     const existingLocation = existing && Object.values(existing.locations)[0];
     if (existing && !writable(existing, Object.keys(existing.locations)[0])) {
       skipped.push({ name: change.name, theme: change.theme, reason: snapshot.readonly[change.name] ?? "Its source can't be edited yet" });
@@ -195,6 +251,16 @@ export async function applyEdits(
 
   const out: Record<string, string> = {};
   for (const path of touched) out[path] = roots.get(path)!.toString();
+  for (const file of new Set([...configSets.keys(), ...configAdds.keys()])) {
+    const text = files[file];
+    const tokens = [...(configSets.get(file) ?? []).map((s) => s.token), ...(configAdds.get(file) ?? []).map((a) => a.token)];
+    if (text === undefined) { for (const token of tokens) skipped.push({ name: token, theme: null, reason: `${file} wasn't read` }); continue; }
+    const edited = await editConfig(text, file, configSets.get(file) ?? []);
+    for (const s of edited.skipped) skipped.push({ name: s.token, theme: null, reason: s.reason });
+    const added = await addToConfig(edited.code, file, configAdds.get(file) ?? []);
+    for (const s of added.skipped) skipped.push({ name: s.token, theme: null, reason: s.reason });
+    if (added.code !== text) out[file] = added.code;
+  }
   return { files: out, skipped };
 }
 

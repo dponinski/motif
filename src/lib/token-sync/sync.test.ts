@@ -52,7 +52,7 @@ describe("readRepoTokens edge cases", () => {
     ], ["default", "dark"]);
     expect(s.skipped.map((x) => x.name)).toEqual(["a", "b", "c", "d"]);
     expect(Object.keys(s.doc)).toEqual(["e", "f"]);
-    expect(s.readonly).toEqual({ e: "Defined in a Tailwind config file, which can't be edited yet" });
+    expect(s.readonly).toEqual({ e: "Its value in the Tailwind config is computed, not written out, so Motif can't change it" });
     expect(s.doc.f.values).toEqual({ default: "4" });
     expect(s.notes).toEqual(["f: only the default value is synced"]);
   });
