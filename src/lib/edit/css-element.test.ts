@@ -99,7 +99,10 @@ describe("changing an element's style in its stylesheet", () => {
 
   it("works with a stylesheet that doesn't exist yet", async () => {
     const edit = (await run("<h2>", "gap", "space-4", "", ""))!;
-    expect(readDeclarations(edit.texts["src/Card.css"], "card__h2")).toEqual({ gap: "var(--space-4)" });
+    // A gap is only drawn in a flex or grid container, so the element is made one.
+    expect(readDeclarations(edit.texts["src/Card.css"], "card__h2")).toEqual({ display: "flex", gap: "var(--space-4)" });
+    const padded = (await run("<h2>", "p", "16px", "", ""))!;
+    expect(readDeclarations(padded.texts["src/Card.css"], "card__h2")).toEqual({ padding: "16px" });
   });
 
   it("writes and reads a state", async () => {
@@ -138,5 +141,29 @@ describe("changing an element's style in its stylesheet", () => {
     const code = CODE.replace('<h2>Title</h2>', '<h2 className={cn("x")}>Title</h2>');
     const edit = (await run('<h2 className={cn("x")}>', "p", "8px", "", CSS, code))!;
     expect(edit.texts["src/Card.tsx"]).toContain('<h2 className={cn("x card__h2")}>');
+  });
+});
+
+describe("a layout control on an element that isn't a flex container", () => {
+  it("also makes it one, so the change is drawn", async () => {
+    const out = (await run('<div className="card">', "direction", "col"))!;
+    expect(out.texts["src/Card.css"]).toContain("display: flex;");
+    expect(out.texts["src/Card.css"]).toContain("flex-direction: column;");
+    expect(out.summary).toContain("made it a flex container");
+  });
+
+  it("does it for a new class too, and leaves a flex or grid element alone", async () => {
+    const fresh = (await run('<p className="card__text">', "justify", "center"))!;
+    expect(fresh.texts["src/Card.css"]).toContain("display: flex;");
+    const flex = (await run('<div className="card">', "gap", "4", "", `.card {\n  display: flex;\n}\n`))!;
+    expect((flex.texts["src/Card.css"].match(/display:/g) ?? []).length).toBe(1);
+    const grid = (await run('<div className="card">', "gap", "4", "", `.card {\n  display: grid;\n}\n`))!;
+    expect(grid.texts["src/Card.css"]).toContain("display: grid;");
+    expect(grid.texts["src/Card.css"]).not.toContain("display: flex;");
+  });
+
+  it("is not done for what isn't a layout control", async () => {
+    const out = (await run('<div className="card">', "p", "8"))!;
+    expect(out.texts["src/Card.css"] ?? "").not.toContain("display");
   });
 });

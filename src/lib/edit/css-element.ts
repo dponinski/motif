@@ -1,7 +1,7 @@
 import { normalize } from "../repo-scan/model";
 import { CssError, classesIn, hasRule, readDeclarations, setDeclarations, STATES } from "./css";
 import { cssGroupById, cssNames } from "./css-groups";
-import { analyze, context, findElement, type ElementInfo } from "./element";
+import { CONTAINER_DISPLAY, NEEDS_CONTAINER, analyze, context, findElement, notALayout, type ElementInfo } from "./element";
 import { applyEdits, type Edit } from "./patch";
 import type { AnyNode } from "../repo-scan/ast";
 import type { TokenIndex } from "./tokens";
@@ -120,10 +120,19 @@ export async function setCssGroup(a: {
     nextCode = applyEdits(code, await classEdits(path, code, start, info, cls), start).code;
   }
   const changes = value === null ? group.props.map((p) => [p, null] as [string, null]) : group.toCss(value, names);
+  // A layout control only means something inside a flex or grid container: on another element the declaration would change the stylesheet
+  // and not what is drawn, so the element is made a flex container with it (unless it is one already, or is hidden).
+  let madeFlex = false;
+  if (value !== null && NEEDS_CONTAINER.has(groupId)) {
+    const displayGroup = cssGroupById("display");
+    const declared = (state: string) => (cls ? displayGroup.fromCss(readDeclarations(css, cls, state), names) : null);
+    const shown = (modifier ? declared(modifier) : null) ?? declared("");
+    if (!(shown && CONTAINER_DISPLAY.has(shown)) && !notALayout(shown)) { changes.unshift(["display", "flex"]); madeFlex = true; }
+  }
   const nextCss = setDeclarations(css, cls, modifier, changes);
 
   const texts: Record<string, string> = {};
   if (nextCode !== code) texts[path] = nextCode;
   if (nextCss !== css) texts[stylesheet] = nextCss;
-  return { texts, selection: start, summary };
+  return { texts, selection: start, summary: madeFlex ? `${summary} (and made it a flex container)` : summary };
 }
