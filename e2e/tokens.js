@@ -2,6 +2,7 @@ const { seed } = require("./support/seed");
 const { gitData } = require("./support/git-data");
 const { openSourceControl } = require("./support/git-panel");
 const { syncNow } = require("./support/sync-helpers");
+const { legacyView } = require("./support/tokens-shape");
 const { chromium } = require("playwright");
 const crypto = require("crypto");
 const fs = require("fs");
@@ -130,7 +131,7 @@ const check = (name, ok, detail = "") => {
   const dialog = page.getByRole("dialog");
   // A project is saved shortly after it changes.
   const project = async () => { await page.waitForTimeout(1500); return page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0]); };
-  const designSystem = async () => (await project()).tokens;
+  const designSystem = async () => legacyView((await project()).tokens);
   const gitState = async () => (await project()).repo;
   const setToken = (token) => page.evaluate((t) => {
     const raw = JSON.parse(localStorage.getItem("motif-projects"));
@@ -171,10 +172,10 @@ const check = (name, ok, detail = "") => {
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     const light = set.themes.find((t) => t.name === "Light").id;
-    const c = state.colors.find((x) => x.setId === set.id && x.name === "primary");
-    c.themeValues[light] = "#ff0000";
+    const c = state.tokens.find((x) => x.type === "color" && x.setId === set.id && x.name === "primary");
+    c.values[light] = "#ff0000";
     c.value = "#ff0000";
-    state.radii.find((r) => r.setId === set.id && r.name === "radius-md").value = 10;
+    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "radius-md").values["*"] = "10";
   });
   await openSourceControl(page);
   await status().getByText(/2 token changes waiting to sync/).waitFor({ timeout: 30000 });
@@ -198,7 +199,7 @@ const check = (name, ok, detail = "") => {
   // A second edit goes into the same pull request.
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
-    state.radii.find((r) => r.setId === set.id && r.name === "radius-sm").value = 5;
+    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "radius-sm").values["*"] = "5";
   });
   await openSourceControl(page);
   await page.getByRole("status", { name: "Sync status" }).getByText(/1 token change waiting to sync/).waitFor({ timeout: 15000 });
@@ -227,8 +228,8 @@ const check = (name, ok, detail = "") => {
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     const light = set.themes.find((t) => t.name === "Light").id;
-    const c = state.colors.find((x) => x.setId === set.id && x.name === "success");
-    c.themeValues[light] = "#00ff00";
+    const c = state.tokens.find((x) => x.type === "color" && x.setId === set.id && x.name === "success");
+    c.values[light] = "#00ff00";
     c.value = "#00ff00";
   });
   await pull();
@@ -245,7 +246,7 @@ const check = (name, ok, detail = "") => {
   // ── Deleting in Motif never deletes from the repository ───────────────────
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
-    state.colors = state.colors.filter((c) => !(c.setId === set.id && c.name === "ring"));
+    state.tokens = state.tokens.filter((c) => !(c.type === "color" && c.setId === set.id && c.name === "ring"));
   });
   await pull();
   await page.locator("[data-pull-notice]").getByText(/token changes? from the repository/).waitFor({ timeout: 30000 });
@@ -256,7 +257,7 @@ const check = (name, ok, detail = "") => {
   await setToken("ro");
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
-    state.radii.find((r) => r.setId === set.id && r.name === "radius-sm").value = 7;
+    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "radius-sm").values["*"] = "7";
   });
   await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("button", { name: "Push" }).click();

@@ -53,7 +53,8 @@ const check = (name, ok, detail = "") => { checks.push({ name, ok }); console.lo
   check("and so is a page of its own, without the blocks that showed the old components", (await paper.locator(".md-block").count()) === 1 && (await paper.getByLabel("Heading").inputValue()) === "Voice");
   await page.waitForTimeout(900);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")));
-  check("it is saved in the new shape", saved.version === 2 && saved.state.projects[0].content === undefined && Array.isArray(saved.state.projects[0].docs));
+  check("its tokens are saved as tokens and compositions, with the color the old project had", saved.state.projects[0].tokens.tokensVersion === 3 && saved.state.projects[0].tokens.tokens.some((t) => t.type === "color" && t.name === "brand") && saved.state.projects[0].tokens.colors === undefined);
+  check("it is saved in the new shape", saved.version === 3 && saved.state.projects[0].content === undefined && Array.isArray(saved.state.projects[0].docs));
   check("no page errors", errors.length === 0, errors.join(" | "));
   await browser.close();
   const failed = checks.filter((c) => !c.ok);

@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { legacyView } = require("./support/tokens-shape");
 const { componentsReady } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
@@ -170,7 +171,7 @@ const check = (name, ok, detail = "") => {
   const chatBox = page.getByPlaceholder("Ask me anything…");
   const say = async (text) => { await chatBox.fill(text); await chatBox.press("Enter"); };
   const card = (kind) => page.locator(`[data-proposal="${kind}"]`).last();
-  const savedTokens = async () => { await page.waitForTimeout(1500); return page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].tokens); };
+  const savedTokens = async () => { await page.waitForTimeout(1500); return legacyView(await page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].tokens)); };
 
   // ── Open a component, ask ─────────────────────────────────────────────────
   await rowFor("Banner").click();

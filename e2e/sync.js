@@ -243,7 +243,7 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   check("and cannot read them by asking for them", graceGets.status() === 404);
   const graceList = await (await B.context.request.get(`${APP}/api/projects`, { headers: H })).json();
   check("or see that they exist", graceList.projects.length === 0);
-  const graceSteals = await B.context.request.put(`${APP}/api/projects/beta0001`, { headers: H, data: { baseVersion: 1, data: { name: "Mine now", connection: null, tokenLink: null, tokens: {}, docs: [] } } });
+  const graceSteals = await B.context.request.put(`${APP}/api/projects/beta0001`, { headers: H, data: { baseVersion: 1, data: { name: "Mine now", connection: null, tokenLink: null, tokens: { tokensVersion: 3 }, docs: [] } } });
   check("or change them (a stale version for a project she doesn't have is refused)", graceSteals.status() === 409 && sql(`SELECT name FROM ${DB}.projects WHERE id='beta0001'`) === "Beta");
   await B.context.request.post(`${APP}/api/auth/logout`, { headers: H });
 
@@ -258,9 +258,11 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   check("and without the app header it refuses", (await B.context.request.get(`${APP}/api/projects`)).status() === 400);
   await anon.close();
   const put = (id, body) => B.context.request.put(`${APP}/api/projects/${id}`, { headers: H, data: body });
-  const good = { name: "API", connection: null, tokenLink: null, tokens: {}, docs: [] };
+  const good = { name: "API", connection: null, tokenLink: null, tokens: { tokensVersion: 3 }, docs: [] };
   const withToken = await put("api00001", { baseVersion: 0, data: { ...good, docs: [{ text: "my token is " + PAT }] } });
   check("a project containing something that looks like an access token is refused", withToken.status() === 422 && (await withToken.json()).error.includes("access token") && row("api00001") === "");
+  const oldPage = await put("api00005", { baseVersion: 0, data: { ...good, tokens: { colors: [] } } });
+  check("a page that still saves the tokens in the old shape is told to reload, and nothing is stored", oldPage.status() === 422 && (await oldPage.json()).error.includes("out of date") && row("api00005") === "");
   const withConnToken = await put("api00002", { baseVersion: 0, data: { ...good, connection: { owner: "acme", repo: "ds", defaultBranch: "main", token: "plain-secret" } } });
   check("a token field on the repository is dropped, not stored", withConnToken.status() === 200 && !sql(`SELECT data FROM ${DB}.projects WHERE id='api00002'`).includes("plain-secret"));
   check("a bad id, version or body is refused", (await put("bad id!", { baseVersion: 0, data: good })).status() === 400 && (await put("api00003", { data: good })).status() === 400 && (await put("api00003", { baseVersion: 0, data: { ...good, name: "" } })).status() === 422);
