@@ -115,6 +115,36 @@ const extra = {
   await page.getByLabel("Search tokens").fill("gray-900");
   check("search finds the colors that are a token by its name", await settle(async () => (await page.locator("[data-token-id]").count()) >= 2));
 
+  // ── Several at once ──────────────────────────────────────────────────────
+  await page.getByLabel("Search tokens").fill("");
+  const listRow = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
+  await page.getByLabel("Select background", { exact: true }).check();
+  await page.getByLabel("Select foreground", { exact: true }).check();
+  await page.getByRole("button", { name: "Make alias…" }).click();
+  const bulk = page.getByRole("dialog", { name: "Make alias" });
+  await bulk.waitFor();
+  const bulkOptions = await bulk.getByLabel("Light becomes").locator("option").allInnerTexts();
+  check("the picked colors are not offered as what they could become", !bulkOptions.includes("background") && !bulkOptions.includes("foreground") && bulkOptions.includes("gray-50"), bulkOptions.join());
+  check("nothing can be applied until something is chosen", await bulk.getByRole("button", { name: "Apply" }).isDisabled());
+  await bulk.getByLabel("Light becomes").selectOption({ label: "gray-50" });
+  await bulk.getByRole("button", { name: "Apply" }).click();
+  check("each picked color becomes the token in that theme", await settle(async () => (await listRow("background").locator("[data-alias-chip]").first().innerText()).includes("gray-50") && (await listRow("foreground").locator("[data-alias-chip]").first().innerText()).includes("gray-50") && (await page.getByLabel("Light value of foreground").inputValue()) === "#f9fafb"));
+  check("and the other theme is left as it was", (await page.getByLabel("Dark value of foreground").inputValue()) === "#ffffff");
+  check("it says it is done", (await page.locator("[data-alias-note]").innerText()).includes("Done"));
+  await page.screenshot({ path: `${OUT}/tokens-alias-bulk.png` });
+  await undo();
+  check("all of it is one undo", await settle(async () => (await page.getByLabel("Light value of foreground").inputValue()) === "#000000" && (await listRow("background").locator("[data-alias-chip]").count()) === 0));
+
+  await page.getByLabel("Select gray-50", { exact: true }).check();
+  await page.getByLabel("Select background", { exact: true }).uncheck();
+  await page.getByLabel("Select foreground", { exact: true }).uncheck();
+  await page.getByLabel("Select gray-50", { exact: true }).check();
+  await page.getByLabel("Select background", { exact: true }).check();
+  await page.getByRole("button", { name: "Make alias…" }).click();
+  await page.getByRole("dialog", { name: "Make alias" }).getByLabel("Light becomes").selectOption({ label: "surface" });
+  await page.getByRole("dialog", { name: "Make alias" }).getByRole("button", { name: "Apply" }).click();
+  check("a loop is refused, and said so", await settle(async () => (await page.locator("[data-alias-note]").innerText()).length > 0));
+
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));
   await browser.close();
