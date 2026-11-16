@@ -34,6 +34,7 @@ export default function BulkBar({
   }, [armed]);
   if (picked.length === 0) return null;
   const linked = picked.filter((r) => r.linked).length;
+  const used = picked.filter((r) => (r.use?.n ?? 0) > 0).length;
   const others = sets.filter((s) => s.id !== setId);
   const button = "flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary";
 
@@ -84,12 +85,12 @@ export default function BulkBar({
       <button
         type="button"
         onClick={() => (confirm ? onDelete() : setConfirm(true))}
-        title={linked > 0 ? `${linked} of these ${linked === 1 ? "is" : "are"} in the repository and will come back at the next sync` : undefined}
+        title={linked > 0 ? `${linked} of these ${linked === 1 ? "is" : "are"} in the repository and will come back at the next sync${used > 0 ? `; ${used} used in its code` : ""}` : undefined}
         className={cn(button, confirm ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 hover:text-red-400" : "hover:text-red-400")}
       >
         <Trash2 size={12} /> {confirm ? `Delete ${picked.length}?` : "Delete"}
       </button>
-      {confirm && linked > 0 && <span className="text-2xs text-text-tertiary">{linked} in the repository will come back at the next sync</span>}
+      {confirm && linked > 0 && <span className="text-2xs text-text-tertiary">{linked} in the repository will come back at the next sync{used > 0 ? ` (${used} used in its code, which this doesn't change)` : ""}</span>}
 
       <div className="flex-1" />
       <button type="button" onClick={onClear} aria-label="Clear the selection" title="Clear the selection (Esc)" className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><X size={12} /></button>

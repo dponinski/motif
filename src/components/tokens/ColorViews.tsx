@@ -53,12 +53,22 @@ function aliasTitle(c: ColorToken, ctx: Pick<ColorCtx, "themes" | "all">): strin
 }
 const copy = (text: string) => { void navigator.clipboard?.writeText(text).catch(() => undefined); };
 
+// "Button, Card and 2 more", for what uses a token.
+export const usedIn = (row: Row): string => {
+  const names = row.use?.components ?? [];
+  if (names.length === 0) return `${row.use?.files.length ?? 0} file${row.use?.files.length === 1 ? "" : "s"}`;
+  return names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ");
+};
+const usedTitle = (row: Row) => `Used ${row.use!.n} time${row.use!.n === 1 ? "" : "s"} in ${usedIn(row)}`;
+
 export function Badges({ row, hasRepo }: { row: Row; hasRepo: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-2xs">
       {row.changed && <span title="Changed in Motif since the last sync" className="rounded bg-amber-500/15 px-1 text-amber-500">changed</span>}
       {hasRepo && !row.linked && <span title="Not in the repository yet: it is added with the next sync" className="text-text-tertiary">Motif only</span>}
       {row.readonly && <span title="Defined where Motif can't edit it yet" className="text-text-tertiary"><Lock size={10} aria-label="Read-only" /></span>}
+      {row.unused && <span data-unused title="Nothing in the repository's components or stylesheets uses it (class names and var() are looked for)" className="rounded bg-surface-overlay px-1 text-text-tertiary">unused</span>}
+      {row.use && row.use.n > 0 && <span data-used title={usedTitle(row)} className="tabular-nums text-text-tertiary">used {row.use.n}×</span>}
     </span>
   );
 }
@@ -155,6 +165,11 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
         <div className="flex-1" />
         <button type="button" aria-label={`Delete ${row.name}`} onClick={() => { ctx.act.remove([row.id]); ctx.setOpenId(null); }} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-red-500/10 hover:text-red-400"><Trash2 size={10} /> Delete</button>
       </div>
+      {row.use && (
+        <p className="text-2xs text-text-tertiary" data-usage>
+          {row.use.n === 0 ? "Nothing in the repository's components or stylesheets uses it." : `Used ${row.use.n} time${row.use.n === 1 ? "" : "s"} in ${usedIn(row)}.`}
+        </p>
+      )}
       {used.length > 0 && (
         <p className="text-2xs text-text-tertiary" data-used-by>
           Used by {used.map((c) => c.name).join(", ")}. If this is deleted they keep the color they are now.

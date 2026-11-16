@@ -23,6 +23,10 @@ export interface Row {
   // The repository defines it somewhere Motif can't edit yet (a Tailwind config file, a JSON file).
   readonly: boolean;
   token: Token;
+  // Where the repository's code uses it, when that is known (the repository has been scanned for it, and the token is its own).
+  use: { n: number; files: string[]; components: string[] } | null;
+  // Known to be used nowhere the scan looks (class names and var() in components and stylesheets).
+  unused: boolean;
 }
 
 function searchText(kind: TokenKind, t: Token, themes: { id: string }[]): string {
@@ -44,15 +48,23 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
   const analysis = useGitStore((s) => s.analysis);
   const changed = useMemo(() => new Set(changes.map((c) => c.name)), [changes]);
   const readonlyBy = useMemo(() => (analysis ? readRepoTokens(analysis.tokens, analysis.themes).readonly : {}), [analysis]);
+  const componentsIn = useMemo(() => {
+    const byFile = new Map<string, string[]>();
+    for (const c of analysis?.components ?? []) byFile.set(c.file, [...(byFile.get(c.file) ?? []), c.name]);
+    return byFile;
+  }, [analysis]);
   return useMemo(
     () => (list as Token[]).filter((t) => t.setId === setId).map((t) => {
       const repoName = (t as { repoName?: string }).repoName;
       const key = repoName ?? cssName(t.name);
+      // Only a token the repository has can be looked for in its code, and only once a scan has counted.
+      const counted = analysis?.tokenUsage && repoName ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
+      const use = counted ? { ...counted, components: [...new Set(counted.files.flatMap((f) => componentsIn.get(f) ?? []))] } : null;
       return {
         id: t.id, kind, name: t.name, group: (t as { group?: string }).group || DEFAULT_GROUP,
-        text: searchText(kind, t, themes), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t,
+        text: searchText(kind, t, themes), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
       };
     }),
-    [list, setId, kind, changed, readonlyBy, themes]
+    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn]
   );
 }
