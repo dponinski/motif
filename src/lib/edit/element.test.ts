@@ -84,6 +84,43 @@ describe("what an element offers", () => {
   });
 });
 
+describe("a layout control on an element that isn't a flex container", () => {
+  const block = 'export function A() {\n  return <div className="p-4 rounded-lg">x</div>;\n}\n';
+  const row = 'export function A() {\n  return <div className="flex p-4">x</div>;\n}\n';
+  const grid = 'export function A() {\n  return <div className="grid p-4">x</div>;\n}\n';
+  const hidden = 'export function A() {\n  return <div className="hidden p-4">x</div>;\n}\n';
+  const explicit = 'export function A() {\n  return <div className="block p-4">x</div>;\n}\n';
+  const start = (code: string) => code.indexOf("<div");
+
+  it("makes it one first, so the change is drawn", async () => {
+    for (const [group, value, cls] of [["direction", "col", "flex-col"], ["justify", "center", "justify-center"], ["items", "center", "items-center"], ["gap", "4", "gap-4"], ["wrap", "wrap", "flex-wrap"]] as const) {
+      const out = (await setGroup("A.tsx", block, start(block), group, value))!;
+      expect(out.code).toContain(`className="p-4 rounded-lg flex ${cls}"`);
+      expect(out.summary).toContain("made it a flex container");
+    }
+  });
+
+  it("replaces a display that wasn't one (block), and leaves flex, grid and hidden alone", async () => {
+    expect((await setGroup("A.tsx", explicit, start(explicit), "direction", "col"))!.code).toContain('className="flex p-4 flex-col"');
+    expect((await setGroup("A.tsx", row, start(row), "direction", "col"))!.code).toBe(row.replace('"flex p-4"', '"flex p-4 flex-col"'));
+    expect((await setGroup("A.tsx", grid, start(grid), "gap", "2"))!.code).toBe(grid.replace('"grid p-4"', '"grid p-4 gap-2"'));
+    expect((await setGroup("A.tsx", hidden, start(hidden), "justify", "center"))!.code).toBe(hidden.replace('"hidden p-4"', '"hidden p-4 justify-center"'));
+  });
+
+  it("does it under a state too, for that state", async () => {
+    const out = (await setGroup("A.tsx", block, start(block), "direction", "col", {}, "md:"))!;
+    expect(out.code).toContain('className="p-4 rounded-lg md:flex md:flex-col"');
+    // A container at the plain size is one at every size.
+    const wide = (await setGroup("A.tsx", row, start(row), "direction", "col", {}, "md:"))!;
+    expect(wide.code).toBe(row.replace('"flex p-4"', '"flex p-4 md:flex-col"'));
+  });
+
+  it("is not done for what isn't a layout control, or when the control is cleared", async () => {
+    expect((await setGroup("A.tsx", block, start(block), "p", "8"))!.code).not.toContain("flex");
+    expect((await setGroup("A.tsx", row, start(row), "direction", null))!.code).toBe(row);
+  });
+});
+
 describe("changing classes", () => {
   it("edits the class string that already holds the group, and only that", async () => {
     const start = at(card, "<div className", 0);
@@ -117,8 +154,11 @@ describe("changing classes", () => {
 
   it("adds a className where there is none", async () => {
     const code = "export const A = () => <div>x</div>;";
-    const out = (await setGroup("A.tsx", code, code.indexOf("<div"), "gap", "2"))!;
-    expect(out.code).toBe('export const A = () => <div className="gap-2">x</div>;');
+    const out = (await setGroup("A.tsx", code, code.indexOf("<div"), "p", "2"))!;
+    expect(out.code).toBe('export const A = () => <div className="p-2">x</div>;');
+    // A gap is only drawn in a flex or grid container, so the element is made one.
+    const gap = (await setGroup("A.tsx", code, code.indexOf("<div"), "gap", "2"))!;
+    expect(gap.code).toBe('export const A = () => <div className="flex gap-2">x</div>;');
   });
 
   it("removes a group, and does nothing to remove one that isn't there", async () => {

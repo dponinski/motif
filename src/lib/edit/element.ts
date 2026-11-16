@@ -243,10 +243,28 @@ function slotEdits(slot: ClassSlot, group: ClassGroup, value: string | null, mod
 // in the element's own classes when it isn't set yet. A null value removes it. With a modifier ("hover:", "md:")
 // it is that state's class that is read and written, and the plain class is left alone. `names` are the
 // repository's token names, which decide what `text-display` or `shadow-card` is.
+// The layout controls that only mean something inside a flex or grid container: on any other element they change the code and not what is
+// drawn, so setting one makes the element a flex container first (unless it is one, or is hidden).
+export const NEEDS_CONTAINER: ReadonlySet<string> = new Set(["direction", "wrap", "justify", "items", "gap", "gap-x", "gap-y"]);
+export const CONTAINER_DISPLAY: ReadonlySet<string> = new Set(["flex", "inline-flex", "grid", "inline-grid"]);
+export const notALayout = (display: string | null | undefined): boolean => display === "hidden" || display === "contents" || display === "none";
+
 export async function setGroup(path: string, code: string, start: number, groupId: string, value: string | null, values: Record<string, string> = {}, modifier = "", names: TokenNames = NO_NAMES): Promise<EditResult | null> {
   const info = await analyze(path, code, start, values);
   if (!info) return null;
   if (info.className === "dynamic") throw new Error(info.dynamicReason ?? "These classes can't be edited");
+  if (value !== null && NEEDS_CONTAINER.has(groupId)) {
+    const display = groupById("display");
+    // Under a state the state's own display counts, else the plain one.
+    const shown = (modifier ? readGroup(info.classes, display, modifier, names) : null) ?? readGroup(info.classes, display, "", names);
+    if (!(shown && CONTAINER_DISPLAY.has(shown)) && !notALayout(shown)) {
+      const made = await setGroup(path, code, start, "display", "flex", values, modifier, names);
+      if (made && made.selection !== null) {
+        const next = await setGroup(path, made.code, made.selection, groupId, value, values, modifier, names);
+        if (next) return { ...next, summary: `${next.summary} (and made it a flex container)` };
+      }
+    }
+  }
   const group = groupById(groupId);
   const before = readGroup(info.classes, group, modifier, names);
   const state = modifier ? `${modifier.replace(/:$/, "").replace(/:/g, " ")} ` : "";
