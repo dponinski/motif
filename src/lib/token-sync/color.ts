@@ -50,7 +50,7 @@ function alphaOf(token: string | undefined): number | null {
 const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const linearToSrgb = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
 
-function oklabToRgb(L: number, a: number, b: number): { r: number; g: number; b: number } {
+export function oklabToRgb(L: number, a: number, b: number): { r: number; g: number; b: number } {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
