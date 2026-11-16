@@ -7,6 +7,8 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // The height of every bar along the top of the editor (the logo, the view bars, the panel headers), so their lines meet.
+      height: { bar: "40px" },
       colors: {
         // Surface tokens — resolved via CSS variables for theme support
         surface: {

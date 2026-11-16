@@ -18,7 +18,7 @@ export default function ActivityPanel({
 }) {
   return (
     <div className="w-[300px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
-      <div className="flex items-center gap-2 px-3 h-10 border-b border-surface-border flex-shrink-0">
+      <div data-bar className="flex items-center gap-2 px-3 h-bar border-b border-surface-border flex-shrink-0">
         <span className="text-sm font-medium text-text-primary flex-1">{activeNav === "chat" ? "AI Chat" : activeNav === "sync" ? "Sync" : "Git"}</span>
         <button
           onClick={onClose}

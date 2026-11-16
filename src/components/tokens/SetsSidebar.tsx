@@ -30,7 +30,7 @@ export default function SetsSidebar({
 
   return (
     <div className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
-      <div className="px-3 py-2.5 border-b border-surface-border flex-shrink-0">
+      <div data-bar className="flex h-bar items-center px-3 border-b border-surface-border flex-shrink-0">
         <p className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">Sets</p>
       </div>
 

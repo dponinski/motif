@@ -241,7 +241,7 @@ function Sidebar({
     <div className="w-[220px] flex-shrink-0 overflow-y-auto border-r border-surface-border bg-surface-raised pb-3">
       {sections.map((section, sectionIndex) => (
         <div key={section.title}>
-          <div className="flex items-center px-3 pb-1 pt-3">
+          <div {...(sectionIndex === 0 ? { "data-bar": true } : {})} className={cn("flex items-center px-3", sectionIndex === 0 ? "h-bar border-b border-surface-border mb-1" : "pb-1 pt-3")}>
             <span className="flex-1 text-2xs font-semibold uppercase tracking-wider text-text-tertiary">{section.title}</span>
             {sectionIndex === 0 && (
               <button onClick={onAddPage} title="New page" className="rounded p-0.5 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary">
@@ -354,7 +354,7 @@ export default function DocsView({ projectId, onClose }: { projectId: string; on
     <div className="flex flex-1 flex-col overflow-hidden bg-surface-base">
       <style>{DOCS_CSS}</style>
 
-      <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-surface-border bg-surface-raised px-4">
+      <div data-bar className="flex h-bar flex-shrink-0 items-center gap-3 border-b border-surface-border bg-surface-raised px-4">
         <BookOpen size={14} className="flex-shrink-0 text-accent" />
         <span className="flex-1 text-sm font-semibold text-text-primary">Documentation</span>
 

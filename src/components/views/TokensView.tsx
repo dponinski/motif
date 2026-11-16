@@ -61,7 +61,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-surface-base">
-      <div className="flex items-center gap-3 px-4 h-11 border-b border-surface-border bg-surface-raised flex-shrink-0">
+      <div data-bar className="flex items-center gap-3 px-4 h-bar border-b border-surface-border bg-surface-raised flex-shrink-0">
         <Palette size={14} className="text-accent flex-shrink-0" />
         <span className="text-sm font-semibold text-text-primary flex-1">Design Tokens</span>
 

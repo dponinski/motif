@@ -10,7 +10,7 @@ export default function RightPanel() {
   if (!active) return null;
   return (
     <aside className="w-[260px] flex-shrink-0 flex flex-col border-l border-surface-border bg-surface-raised overflow-hidden">
-      <div className="flex items-center gap-1.5 px-3 h-9 border-b border-surface-border flex-shrink-0">
+      <div data-bar className="flex items-center gap-1.5 px-3 h-bar border-b border-surface-border flex-shrink-0">
         <SlidersHorizontal size={12} className="text-text-tertiary" />
         <span className="text-xs font-medium text-text-secondary">Component</span>
       </div>

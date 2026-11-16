@@ -280,7 +280,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-surface-base">
-      <div className="flex h-11 flex-shrink-0 items-center gap-3 border-b border-surface-border bg-surface-raised px-4">
+      <div data-bar className="flex h-bar flex-shrink-0 items-center gap-3 border-b border-surface-border bg-surface-raised px-4">
         <ScanSearch size={14} className="flex-shrink-0 text-accent" />
         <span className="text-sm font-semibold text-text-primary">Repository</span>
         <span className="truncate text-xs text-text-tertiary">{analysis.repo} · {analysis.ref}</span>
