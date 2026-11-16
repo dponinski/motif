@@ -30,6 +30,7 @@ const extra = {
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
   const page = await context.newPage();
+  page.setDefaultTimeout(8000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|Content Security Policy|violates/i.test(m.text())) errors.push(m.text()); });
@@ -77,6 +78,36 @@ const extra = {
   // ── Undo ──────────────────────────────────────────────────────────────────
   await undo();
   check("copying is one step of undo", await settle(async () => (await value("Dark", "background")) === "#0b0b0f" && (await value("Dark", "accent")) === "#fbbf24"));
+
+  // ── A new theme: from which theme, and dark or not ────────────────────────
+  await page.locator("div.w-\\[220px\\]").getByText("Global", { exact: true }).click();
+  const themeBar = page.locator("[data-theme-bar]");
+  const segments = () => themeBar.locator("[data-theme-segment]").evaluateAll((els) => els.map((e) => e.textContent.trim()));
+  await themeBar.getByRole("button", { name: "Add theme" }).click();
+  const add = page.getByRole("dialog", { name: "New theme" });
+  check("adding a theme asks for its name, what it starts from, and whether it is a dark version", (await add.getByLabel("New theme name").isVisible()) && (await add.getByLabel("Start new theme from").locator("option").allInnerTexts()).join() === "Light,Dark" && (await add.getByLabel("Make a dark version").isVisible()));
+  check("it is not a dark version unless asked, and says so in words", !(await add.getByLabel("Make a dark version").isChecked()));
+  await add.getByLabel("New theme name").fill("Night");
+  check("a name that says dark or night suggests the dark version", await add.getByLabel("Make a dark version").isChecked());
+  await add.getByLabel("Start new theme from").selectOption(L);
+  await page.screenshot({ path: `${OUT}/tokens-new-theme.png` });
+  await add.getByRole("button", { name: "Create theme" }).click();
+  check("the new theme is added, and shown", await settle(async () => (await segments()).join() === "Light,Dark,Night" && (await page.getByLabel("Night value of background", { exact: true }).count()) === 1));
+  const lum = async (name) => { const hex = await value("Night", name); return parseInt(hex.slice(1, 3), 16); };
+  check("its colors are a dark version of the theme it started from: the light background is dark, the dark text is light", (await lum("background")) < 70 && (await lum("foreground")) > 150, `${await value("Night", "background")} ${await value("Night", "foreground")}`);
+  check("and the theme it started from is as it was", (await value("Light", "background").catch(() => "#ffffff")) === "#ffffff");
+  await undo();
+  check("adding it is one step of undo", await settle(async () => (await segments()).join() === "Light,Dark"));
+  await themeBar.getByRole("button", { name: "All themes", exact: true }).click();
+  await themeBar.getByRole("button", { name: "Add theme" }).click();
+  await add.getByLabel("New theme name").fill("Dim");
+  await add.getByLabel("Start new theme from").selectOption(D);
+  await add.getByLabel("New theme name").press("Enter");
+  check("starting from another theme, and not dark, copies that theme as it is", await settle(async () => (await value("Dim", "background")) === "#0b0b0f" && (await value("Dim", "foreground")) === "#f9fafb"));
+  await themeBar.getByRole("button", { name: "Add theme" }).click();
+  await add.getByLabel("New theme name").fill("dim");
+  check("a name a theme already has isn't taken", (await add.getByRole("alert").count()) === 1 && await add.getByRole("button", { name: "Create theme" }).isDisabled());
+  await page.keyboard.press("Escape");
 
   // ── One theme: nothing to compare ─────────────────────────────────────────
   await page.locator("div.w-\\[220px\\]").getByText("One theme", { exact: true }).click();

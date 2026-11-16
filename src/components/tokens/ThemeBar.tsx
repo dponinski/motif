@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { Copy, MoreHorizontal, Pencil, Plus, Trash2, X } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenSet, type TokenTheme } from "@/store/design-system";
 import { editTokens } from "@/store/token-history";
@@ -77,10 +78,69 @@ function Segment({ set, theme, on, onShow, onRename, onDuplicate, onDelete }: {
   );
 }
 
+// Adding a theme: its name, the theme it starts from, and whether it is a dark version of that one (the colors turned around in lightness,
+// keeping their hues). Enter adds it; a name a theme already has is said so and not taken.
+function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string; onAdd: (name: string, from: string, dark: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [from, setFrom] = useState(startFrom);
+  const [dark, setDark] = useState(false);
+  const touched = useRef(false);
+  const trimmed = name.trim();
+  const bad = trimmed !== "" && nameTaken(set.themes, trimmed);
+  const reset = (o: boolean) => {
+    setOpen(o);
+    if (o) { setName(""); setFrom(set.themes.some((t) => t.id === startFrom) ? startFrom : set.themes[0].id); setDark(false); touched.current = false; }
+  };
+  const create = () => {
+    if (!trimmed || bad) return;
+    onAdd(trimmed, from, dark);
+    setOpen(false);
+  };
+  const field = "rounded border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none";
+  return (
+    <Popover.Root open={open} onOpenChange={reset}>
+      <Popover.Trigger asChild>
+        <button type="button" aria-label="Add theme" title="Add a theme: it starts as a copy of one you choose, or a dark version of it" className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><Plus size={11} /> Add</button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="start" sideOffset={6} aria-label="New theme" className="z-50 w-72 rounded-lg border border-surface-border bg-surface-raised p-3 shadow-xl">
+          <div className="flex flex-col gap-2.5">
+            <label className="flex flex-col gap-1 text-2xs text-text-tertiary">Name
+              <input
+                autoFocus
+                aria-label="New theme name"
+                aria-invalid={bad}
+                placeholder="Dark"
+                value={name}
+                onChange={(e) => { setName(e.target.value); if (!touched.current) setDark(/dark|night/i.test(e.target.value)); }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); create(); } }}
+                className={cn(field, bad ? "border-red-400" : "border-surface-border focus:border-accent")}
+              />
+              {bad && <span role="alert" className="text-2xs text-red-400">There is a theme called that</span>}
+            </label>
+            <label className="flex flex-col gap-1 text-2xs text-text-tertiary">Start from
+              <select aria-label="Start new theme from" value={from} onChange={(e) => setFrom(e.target.value)} className={cn(field, "border-surface-border focus:border-accent")}>
+                {set.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            <label className="flex items-start gap-2 text-xs text-text-secondary">
+              <input type="checkbox" aria-label="Make a dark version" checked={dark} onChange={(e) => { touched.current = true; setDark(e.target.checked); }} className="mt-0.5" />
+              <span>Make a dark version
+                <span className="block text-2xs leading-snug text-text-tertiary">Turns each color&apos;s lightness around and keeps its hue. A color that is another token stays that token.</span>
+              </span>
+            </label>
+            <button type="button" disabled={!trimmed || bad} onClick={create} className="rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Create theme</button>
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown: ThemeShown; onShow: (id: ThemeShown) => void }) {
   const ds = () => useDesignSystemStore.getState();
   const [renaming, setRenaming] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
   const taken = (except?: string) => (name: string) => nameTaken(set.themes, name, except);
 
   return (
@@ -105,14 +165,11 @@ export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown:
           />
         ))}
       </div>
-      {adding ? (
-        <span className="flex items-center gap-1">
-          <NameField initial="" label="New theme name" taken={taken()} onCancel={() => setAdding(false)} onDone={(name) => { const id = editTokens(() => ds().addThemeToSet(set.id, name)); setAdding(false); onShow(id); }} />
-          <button type="button" aria-label="Cancel" onMouseDown={(e) => e.preventDefault()} onClick={() => setAdding(false)} className="text-text-tertiary hover:text-text-primary"><X size={11} /></button>
-        </span>
-      ) : (
-        <button type="button" aria-label="Add theme" onClick={() => setAdding(true)} title="Add a theme: it starts as a copy of the one that is open" className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><Plus size={11} /> Add</button>
-      )}
+      <AddTheme
+        set={set}
+        startFrom={shown !== "all" ? shown : set.activeThemeId ?? set.themes[0].id}
+        onAdd={(name, from, dark) => { const id = editTokens(() => ds().addThemeToSet(set.id, name, { from, dark })); onShow(id); }}
+      />
     </div>
   );
 }

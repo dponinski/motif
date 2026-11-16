@@ -43,6 +43,36 @@ describe("a theme made from another", () => {
   });
 });
 
+describe("a new theme", () => {
+  it("starts as a copy of the theme it is told to, not only the open one", () => {
+    const [light, dark] = themes();
+    store().setActiveTheme(SET, light.id);
+    const id = store().addThemeToSet(SET, "Dim", { from: dark.id });
+    expect(color("bg").themeValues[id]).toBe("#000000");
+    expect(themes().at(-1)!.name).toBe("Dim");
+  });
+
+  it("falls back to the open theme for one that isn't there", () => {
+    const [light] = themes();
+    store().setActiveTheme(SET, light.id);
+    const id = store().addThemeToSet(SET, "Dim", { from: "nope" });
+    expect(color("bg").themeValues[id]).toBe("#ffffff");
+  });
+
+  it("can be a dark version of it: colors of their own are made dark, tokens that are other tokens stay so", () => {
+    const [light] = themes();
+    store().setColorAlias(color("fg").id, light.id, "bg");
+    const id = store().addThemeToSet(SET, "Night", { from: light.id, dark: true });
+    const L = (hex: string) => parseInt(hex.slice(1, 3), 16);
+    expect(L(color("bg").themeValues[id])).toBeLessThan(80);
+    expect(color("fg").themeAlias?.[id]).toBe("bg");
+    // The alias is the color it leads to in the new theme.
+    expect(color("fg").themeValues[id]).toBe(color("bg").themeValues[id]);
+    // The theme it started from is as it was.
+    expect(color("bg").themeValues[light.id]).toBe("#ffffff");
+  });
+});
+
 describe("copying colors between themes", () => {
   it("gives the colors in one theme the color they have in the other, and only those", () => {
     const [light, dark] = themes();

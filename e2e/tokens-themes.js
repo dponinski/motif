@@ -59,11 +59,11 @@ const extra = {
 
   // ── Adding ────────────────────────────────────────────────────────────────
   await bar.getByRole("button", { name: "Add theme" }).click();
-  await bar.getByLabel("New theme name").fill("Light");
-  await bar.getByLabel("New theme name").press("Enter");
-  check("a name a theme already has isn't taken", (await bar.locator('[role="alert"]').count()) === 1 && (await segments()).join() === "Light,Dark");
-  await bar.getByLabel("New theme name").fill("Sepia");
-  await bar.getByLabel("New theme name").press("Enter");
+  await page.getByLabel("New theme name").fill("Light");
+  await page.getByLabel("New theme name").press("Enter");
+  check("a name a theme already has isn't taken", (await page.getByRole("dialog", { name: "New theme" }).locator('[role="alert"]').count()) === 1 && (await segments()).join() === "Light,Dark");
+  await page.getByLabel("New theme name").fill("Sepia");
+  await page.getByLabel("New theme name").press("Enter");
   check("a new theme is added, starts as a copy of the theme that was open (Dark) and is shown", await settle(async () => (await segments()).join() === "Light,Dark,Sepia" && (await pressed()).join() === "Sepia" && (await value("Sepia")) === "#0b0b0f"), `${await segments()} | ${await pressed()}`);
   check("adding is a step of undo", !(await history()));
   await undo();

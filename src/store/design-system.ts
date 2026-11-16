@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { deriveGroup, uniqueName } from "@/lib/tokens/organize";
+import { darkOf } from "@/lib/tokens/theme-gen";
 import { detachMissing, refreshAliases, renameAlias, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
@@ -118,7 +119,9 @@ interface DesignSystemStore {
   deleteSet: (setId: string) => void;
 
   // Theme management
-  addThemeToSet: (setId: string, name: string) => string;
+  // A new theme at the end. It starts as a copy of `from` (the open theme when not given); with `dark`, the colors that are colors of their
+  // own (not other tokens) are made a dark version of that theme's. Returns its id.
+  addThemeToSet: (setId: string, name: string, options?: { from?: string; dark?: boolean }) => string;
   // A new theme next to `themeId` with the same values (and tokens that are other tokens); returns its id.
   duplicateTheme: (setId: string, themeId: string) => string;
   deleteThemeFromSet: (setId: string, themeId: string) => void;
@@ -303,24 +306,23 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
 
       // ── Theme management ────────────────────────────────────────────────────
 
-      addThemeToSet: (setId, name) => {
+      addThemeToSet: (setId, name, options) => {
         const themeId = `theme-${nanoid(6)}`;
         set((s) => {
           const tokenSet = s.sets.find((st) => st.id === setId);
-          const baseThemeId = tokenSet?.activeThemeId ?? tokenSet?.themes[0]?.id ?? "";
+          const wanted = options?.from;
+          const baseThemeId = (wanted && tokenSet?.themes.some((t) => t.id === wanted) ? wanted : undefined) ?? tokenSet?.activeThemeId ?? tokenSet?.themes[0]?.id ?? "";
+          const sets = s.sets.map((st) => (st.id === setId ? { ...st, themes: [...st.themes, { id: themeId, name }] } : st));
           return {
-            sets: s.sets.map((st) =>
-              st.id === setId
-                ? { ...st, themes: [...st.themes, { id: themeId, name }] }
-                : st
-            ),
-            // Clone current values into the new theme
-            colors: s.colors.map((c) => {
+            sets,
+            // Clone the values of the theme it starts from into the new theme
+            colors: refreshAliases(s.colors.map((c) => {
               if (c.setId !== setId) return c;
               const baseValue = c.themeValues[baseThemeId] ?? c.value;
               const baseAlias = c.themeAlias?.[baseThemeId];
-              return { ...c, themeValues: { ...c.themeValues, [themeId]: baseValue }, ...(baseAlias ? { themeAlias: { ...c.themeAlias, [themeId]: baseAlias } } : {}) };
-            }),
+              const value = options?.dark && !baseAlias ? (darkOf(baseValue) ?? baseValue) : baseValue;
+              return { ...c, themeValues: { ...c.themeValues, [themeId]: value }, ...(baseAlias ? { themeAlias: { ...c.themeAlias, [themeId]: baseAlias } } : {}) };
+            }), sets),
           };
         });
         return themeId;
