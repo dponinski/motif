@@ -147,7 +147,7 @@ const check = (name, ok, detail = "") => {
   await page.screenshot({ path: `${OUT}/import-done.png` });
 
   // ── It matches what the Git panel shows ──────────────────────────────────
-  await nav("Git");
+  await nav("Source control");
   check("the Git panel has the same scan, and offers to re-import", await page.getByText(/tokens · 23 components/).isVisible() && await page.getByRole("button", { name: /Re-import components/ }).isVisible());
 
   const real = errors.filter((e) => !/hydrat/i.test(e));

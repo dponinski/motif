@@ -1,11 +1,24 @@
-// The repository's tokens come into a Motif set with the first pull, when the project is opened (and the set is linked to the repository);
-// the Sync tokens dialog then says the two have the same tokens. Waits for that, then closes the dialog.
-async function tokensLinked(page) {
-  await page.getByRole("button", { name: "Sync tokens" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 60000 });
-  await page.keyboard.press("Escape");
-  await dialog.waitFor({ state: "hidden" });
+// The repository is pulled when a project is opened: its components are in the list and its tokens are a set linked to it, with nothing pressed.
+
+// Waits for the components of the repository to be in the Components panel (which is open when the project is).
+async function componentsReady(page) {
+  await page.locator("aside button[title*='src/']").first().waitFor({ timeout: 90000 });
 }
 
-module.exports = { tokensLinked };
+// Opens Source control (when it isn't) and waits for it to say the tokens are linked to the repository; leaves it open.
+async function openSourceControl(page) {
+  if (!(await page.locator("[data-token-link]").isVisible().catch(() => false))) {
+    await page.locator('nav button[title="Source control"]').click();
+    await page.waitForLoadState("networkidle").catch(() => {});
+  }
+  await page.locator("[data-token-link]").waitFor({ timeout: 90000 });
+}
+
+// The tokens are linked (see openSourceControl); the Components panel is shown again afterwards.
+async function tokensLinked(page) {
+  await openSourceControl(page);
+  await page.locator('nav button[title="Components"]').click();
+  await page.waitForLoadState("networkidle").catch(() => {});
+}
+
+module.exports = { componentsReady, openSourceControl, tokensLinked };

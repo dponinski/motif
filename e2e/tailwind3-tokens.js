@@ -154,7 +154,7 @@ const check = (name, ok, detail = "") => {
   const settle = async (fn, ms = 15000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
 
   // ── Reading a Tailwind 3 repository's tokens ──────────────────────────────
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Scan" }).click();
   await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
   await tokensLinked(page);
@@ -207,9 +207,9 @@ const check = (name, ok, detail = "") => {
   check("the new color is a token of the set", await settle(async () => (await row("brand").count()) === 1));
 
   // ── What Sync sends ───────────────────────────────────────────────────────
-  await page.locator('nav button[aria-label="Sync"]').click();
+  await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("status", { name: "Sync status" }).waitFor();
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.waitForFunction(() => /In sync with pull request #\d+/.test(document.querySelector('[aria-label="Sync status"]')?.textContent ?? ""), null, { timeout: 40000 });
   const pushed = Object.keys(repos["acme/ds"]).filter((b) => b !== "main");
   check("Sync sends one branch", pushed.length === 1, pushed.join());

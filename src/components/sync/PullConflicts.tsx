@@ -5,7 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { finishPull } from "@/lib/pull";
 import { usePullStatus } from "@/store/pull";
-import { ChangeList, Conflicts } from "@/components/git/TokenSyncDialog";
+import { ChangeList, Conflicts } from "@/components/tokens/ChangeList";
 
 // A pull takes in everything that doesn't clash and asks about the rest: a token value changed in the repository and here too.
 function Body() {

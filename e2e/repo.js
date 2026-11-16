@@ -95,7 +95,7 @@ const check = (name, ok, detail = "") => {
     await seed(page, id, { repo: clean, token });
     await page.goto("http://localhost:3000/editor/" + id);
     await page.getByText("Layers", { exact: true }).waitFor();
-    await nav("Git");
+    await nav("Source control");
   };
 
   // ── Public repository, no token ────────────────────────────────────────────
@@ -151,7 +151,7 @@ const check = (name, ok, detail = "") => {
   // ── Survives a reload ─────────────────────────────────────────────────────
   await page.goto("http://localhost:3000/editor/repo0001");
   await page.getByText("Layers", { exact: true }).waitFor();
-  await nav("Git");
+  await nav("Source control");
   check("the last scan is kept across reloads", await page.getByText("25 tokens · 22 components").isVisible());
 
   // ── Adding a token ────────────────────────────────────────────────────────

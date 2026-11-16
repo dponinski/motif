@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
@@ -159,13 +160,9 @@ const check = (name, ok, detail = "") => {
   const settle = async (fn, ms = 10000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
 
   // ── The repository's tokens, linked to a set ──────────────────────────────
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
+  await componentsReady(page);
   await tokensLinked(page);
-  if (await gitOpen()) await nav("Git");
+  if (await gitOpen()) await nav("Source control");
   await nav("Components");
 
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };

@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, GitBranch, GitPullRequest, LayoutTemplate, Palette, Sparkles } from "lucide-react";
+import { BookOpen, GitBranch, LayoutTemplate, Palette, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -9,10 +9,11 @@ import { statusOf } from "@/lib/work/sync";
 import { changedFiles, useEditStore } from "@/store/edit";
 import { useGitStore } from "@/store/git";
 import { useAuth } from "@/store/auth";
+import { usePullStatus } from "@/store/pull";
 import { useWorkRuntime } from "@/store/work";
 import { useTokenChanges } from "./work/useWork";
 
-export type NavItem = "components" | "tokens" | "docs" | "chat" | "git" | "repo" | "sync";
+export type NavItem = "components" | "tokens" | "docs" | "chat" | "git" | "repo";
 
 export default function AppNav({
   activeNav,
@@ -28,6 +29,7 @@ export default function AppNav({
   const connected = useGitStore((s) => s.connection !== null);
   const runtime = useWorkRuntime(useShallow((s) => ({ refreshed: s.refreshed, syncing: s.syncing, error: s.error, tokenNote: s.tokenNote, stale: s.stale })));
   const tokens = useTokenChanges().length;
+  const behind = usePullStatus((s) => s.behind);
   const guest = useAuth((s) => !!s.user?.guest);
   const status = useMemo(() => statusOf({
     changed: changedFiles({ history, index, bases }).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha })),
@@ -42,8 +44,8 @@ export default function AppNav({
     { id: "docs", icon: <BookOpen size={16} />, label: "Docs" },
     // The assistant is paid for by the server: it isn't offered to someone a team brought in.
     ...(guest ? [] : [{ id: "chat" as const, icon: <Sparkles size={16} />, label: "Chat" }]),
-    ...(connected ? [{ id: "sync" as const, icon: <GitPullRequest size={16} />, label: `Sync: ${status.text}` }] : []),
-    { id: "git", icon: <GitBranch size={16} />, label: "Git" },
+    // One place for the repository: pulling what it has and pushing what is waiting. The dot says how that is going.
+    { id: "git", icon: <GitBranch size={16} />, label: connected ? `Source control: ${status.text}` : "Source control" },
   ];
 
   return (
@@ -65,8 +67,8 @@ export default function AppNav({
         <button
           key={item.id}
           onClick={() => setActiveNav(activeNav === item.id ? null : item.id)}
-          title={item.label}
-          aria-label={item.id === "sync" ? "Sync" : undefined}
+          title={item.id === "git" ? "Source control" : item.label}
+          aria-label={item.id === "git" ? "Source control" : undefined}
           className={cn(
             "w-10 h-10 flex items-center justify-center transition-colors",
             (activeNav === "repo" ? "git" : activeNav) === item.id
@@ -76,7 +78,8 @@ export default function AppNav({
         >
           <span className="relative">
             {item.icon}
-            {item.id === "sync" && dot && <span data-testid="sync-dot" data-status={status.kind} className={cn("absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-surface-raised", dot)} />}
+            {item.id === "git" && connected && behind && <span data-testid="behind-dot" className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-accent ring-2 ring-surface-raised" />}
+            {item.id === "git" && connected && dot && <span data-testid="sync-dot" data-status={status.kind} className={cn("absolute -right-1 -top-1 h-2 w-2 rounded-full ring-2 ring-surface-raised", dot)} />}
           </span>
         </button>
       ))}

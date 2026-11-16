@@ -164,7 +164,7 @@ const check = (name, ok, detail = "") => {
   await primaryLight().waitFor();
   const first = await primaryLight().inputValue();
   check("a token has the repository's value", /^#[0-9a-f]{6}$/.test(first), first);
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Sync tokens" }).click();
   check("and the set is linked: the dialog says the two have the same tokens", await page.getByRole("dialog").getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 }).then(() => true, () => false));
   await page.keyboard.press("Escape");
@@ -181,14 +181,14 @@ const check = (name, ok, detail = "") => {
   await nav("Tokens");
   await page.getByRole("button", { name: "List", exact: true }).click().catch(() => {});
   check("the token has the repository's new value", await settle(async () => (await primaryLight().inputValue()) === "#de3e2d"), await primaryLight().inputValue());
-  check("and the button no longer says it has changed", (await (async () => { await nav("Git"); return page.getByRole("button", { name: /^Pull/ }).innerText(); })()).includes("the repository has changed") === false);
+  check("and the button no longer says it has changed", (await (async () => { await nav("Source control"); return page.getByRole("button", { name: /^Pull/ }).innerText(); })()).includes("the repository has changed") === false);
 
   // ── Changed in both places: Pull asks ─────────────────────────────────────
   await nav("Tokens");
   await primaryLight().fill("#ff0000");
   await primaryLight().press("Enter");
   edit("oklch(0.5 0.2 150)");
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Pull", exact: false }).first().click();
   const dialog = page.getByRole("dialog", { name: /changed in both places/ });
   await dialog.waitFor({ timeout: 30000 });

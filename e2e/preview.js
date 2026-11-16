@@ -111,14 +111,14 @@ const check = (name, ok, detail = "") => {
 
   // ── Connect, scan, import ─────────────────────────────────────────────────
   const gitOpen = async () => await page.getByText("Components and tokens").isVisible();
-  const openGit = async () => { if (!(await gitOpen())) await nav("Git"); };
-  const closeGit = async () => { if (await gitOpen()) await nav("Git"); };
+  const openGit = async () => { if (!(await gitOpen())) await nav("Source control"); };
+  const closeGit = async () => { if (await gitOpen()) await nav("Source control"); };
   async function connectAndImport(repo) {
     const id = "prev000" + ++projectCount;
     await seed(page, id, { repo });
     await page.goto("http://localhost:3000/editor/" + id);
     await page.getByText("Layers", { exact: true }).waitFor();
-    await nav("Git");
+    await nav("Source control");
     await page.getByRole("button", { name: "Scan" }).click();
     await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
     await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();

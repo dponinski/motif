@@ -41,7 +41,7 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("heading", { name: "Start building" }).waitFor({ timeout: 90000 });
 
   // Link the repository's tokens to a Motif set.
-  await nav("Git");
+  await nav("Source control");
   await tokensLinked(page);
 
   // A component made here, and a token edited in Motif.
@@ -63,11 +63,11 @@ const check = (name, ok, detail = "") => {
   });
   await page.reload();
   await page.getByText("Layers", { exact: true }).waitFor({ timeout: 60000 });
-  await page.locator('nav button[aria-label="Sync"]').click();
+  await page.locator('nav button[title="Source control"]').click();
   check("the Sync panel counts both: the component's files and the token change", await settle(async () => (await status()).includes("4 files and 1 token change waiting to sync")), await status());
   check("nothing has been sent", repo.prs.length === 0 && repo.commitLog.length === 0);
   await page.screenshot({ path: `${OUT}/sync-mixed.png` });
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.getByRole("status", { name: "Sync status" }).getByText(/In sync with pull request #1/).waitFor({ timeout: 30000 });
   check("one pull request, with one commit holding the component and the token change", repo.prs.length === 1 && repo.commitLog.length === 1, JSON.stringify(repo.commitLog.map((c) => c.message)));
   const tree = gh.files(repo.prs[0].head);
@@ -85,7 +85,7 @@ const check = (name, ok, detail = "") => {
   await page.waitForTimeout(1800);
   const link = await page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].repo.tokenLink);
   check("the link has moved on to the merged tokens, with nothing staged", link.staged === null && link.base.primary.values.default === "#ff0000", JSON.stringify(link.base.primary));
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Sync tokens" }).click();
   check("the Tokens dialog says the two sides agree", await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 }).then(() => true, async () => { console.log((await dialog.innerText()).slice(0, 400)); return false; }));
 

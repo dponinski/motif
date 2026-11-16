@@ -89,7 +89,7 @@ export default function Editor({ projectId }: { projectId: string }) {
         ) : (
           <>
             {/* Chat / Git activity panel */}
-            {(activeNav === "chat" || activeNav === "git" || activeNav === "sync") && (
+            {(activeNav === "chat" || activeNav === "git") && (
               <ActivityPanel activeNav={activeNav} onClose={() => setActiveNav(null)} onOpenReport={() => setActiveNav("repo")} />
             )}
 

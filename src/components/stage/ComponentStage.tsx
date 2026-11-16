@@ -393,7 +393,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
         )}
         {(changed > 0 || work || tokenChanges > 0) && (
           <button
-            onClick={() => useNavRequest.getState().ask("sync")}
+            onClick={() => useNavRequest.getState().ask("git")}
             aria-label="Sync"
             title={waiting > 0 ? `${waiting} file${waiting === 1 ? "" : "s"} waiting. Open the Sync panel.` : "Everything is in the pull request. Open the Sync panel."}
             className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors", waiting > 0 ? "bg-accent text-white hover:bg-accent/90" : "bg-surface-subtle text-text-secondary hover:bg-surface-border")}

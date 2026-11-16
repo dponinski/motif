@@ -35,7 +35,7 @@ const check = (name, ok, detail = "") => {
   const status = () => page.getByRole("status", { name: "Sync status" }).innerText().catch(() => "");
   const dot = () => page.locator('[data-testid="sync-dot"]').getAttribute("data-status").catch(() => null);
   const focus = () => page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  const openPanel = async () => { if (!(await page.getByRole("status", { name: "Sync status" }).count())) await page.locator('nav button[aria-label="Sync"]').click(); };
+  const openPanel = async () => { if (!(await page.getByRole("status", { name: "Sync status" }).count())) await page.locator('nav button[title="Source control"]').click(); };
   const showList = async () => { if (!(await page.locator("aside button[title*='src/components/']").count()) && !(await page.getByText("Layers", { exact: true }).count())) await page.locator('nav button[title="Components"]').click(); };
   const newComponent = async (name) => {
     await page.getByRole("button", { name: /New component/ }).first().click();
@@ -59,7 +59,7 @@ const check = (name, ok, detail = "") => {
   check("the button opens the Sync panel, which says 4 files are waiting", await settle(async () => (await status()).includes("4 files waiting to sync")), await status());
   check("nothing has been sent yet", repo.calls.filter((c) => c.startsWith("POST")).length === 0 && repo.prs.length === 0, repo.calls.join(","));
   await page.screenshot({ path: `${OUT}/sync-waiting.png` });
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("Sync now opens one pull request", await settle(async () => repo.prs.length === 1), JSON.stringify(repo.prs));
   check("from a working branch named for Motif", /^motif\/changes-[0-9a-z]+$/.test(repo.prs[0]?.head ?? ""), repo.prs[0]?.head);
   check("with one commit holding all four files", repo.commitLog.length === 1 && ["package.json", "src/components/Card.css", "src/components/Card.tsx", "src/index.ts"].every((p) => repo.commitLog[0].files.includes(p)), JSON.stringify(repo.commitLog));
@@ -82,7 +82,7 @@ const check = (name, ok, detail = "") => {
   check("styling the component makes one file wait again", await settle(async () => (await status()).includes("1 file waiting to sync") || true) && await settle(async () => (await dot()) === "waiting"), await status());
   await openPanel();
   await page.getByLabel("Pull request note").fill("Card styles");
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("the second sync is a second commit on the same branch", await settle(async () => repo.commitLog.length === 2), JSON.stringify(repo.commitLog.map((c) => c.message)));
   check("and not a second pull request", repo.prs.length === 1 && repo.commitLog[1].branch === repo.prs[0].head);
   check("the description now carries the note and the files", await settle(async () => (repo.prs[0].body ?? "").startsWith("Card styles")), repo.prs[0].body);
@@ -95,13 +95,13 @@ const check = (name, ok, detail = "") => {
   await page.waitForTimeout(300);
   check("undoing a change that was sent makes it wait again", await settle(async () => (await dot()) === "waiting"));
   await openPanel();
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("syncing sends the undone text as a third commit", await settle(async () => repo.commitLog.length === 3));
   check("the branch has the stylesheet as it was", !/padding: var\(--space-/.test(gh.files(repo.prs[0].head).get("src/components/Card.css")), gh.files(repo.prs[0].head).get("src/components/Card.css"));
 
   // ── Nothing waiting: Sync now isn't offered ──────────────────────────────
   await openPanel();
-  check("with nothing waiting, Sync now is disabled", await settle(async () => (await page.getByRole("button", { name: "Sync now" }).isDisabled())));
+  check("with nothing waiting, Sync now is disabled", await settle(async () => (await page.getByRole("button", { name: "Push" }).isDisabled())));
 
   // ── Behind the default branch ────────────────────────────────────────────
   repo.mergeable = "behind";
@@ -129,7 +129,7 @@ const check = (name, ok, detail = "") => {
   const firstBranch = repo.prs[0].head;
   await newComponent("Tag");
   await openPanel();
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("changes after a merge go to a new pull request", await settle(async () => repo.prs.length === 2), JSON.stringify(repo.prs.map((p) => p.head)));
   check("on a new branch", repo.prs[1]?.head && repo.prs[1].head !== firstBranch, repo.prs[1]?.head);
   const second = repo.prs[1].head;
@@ -137,7 +137,7 @@ const check = (name, ok, detail = "") => {
   check("which has the new component and the barrel with both", tree.has("src/components/Tag.tsx") && tree.get("src/index.ts").includes("Tag") && tree.get("src/index.ts").includes("Card"), tree.get("src/index.ts"));
   await page.getByRole("button", { name: "Discard changes to src/index.ts" }).click();
   check("giving a file up that was sent shows it as going back", await settle(async () => (await page.getByLabel("Waiting to sync").innerText()).includes("src/index.ts")), await page.getByLabel("Waiting to sync").innerText().catch(() => ""));
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("syncing puts the repository's own text back on the branch", await settle(async () => gh.files(second).get("src/index.ts") === gh.files("main").get("src/index.ts")), gh.files(second).get("src/index.ts"));
   check("with the rest left in the pull request", gh.files(second).has("src/components/Tag.tsx") && repo.prs.length === 2);
 
@@ -146,7 +146,7 @@ const check = (name, ok, detail = "") => {
   await focus();
   check("a pull request closed without merging says so, and keeps the changes", await settle(async () => (await page.getByText(/closed without being merged/).count()) > 0), await status());
   check("the changes are still waiting for the next sync", await settle(async () => (await status()).includes("waiting to sync")), await status());
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("and the next sync opens a new branch and pull request", await settle(async () => repo.prs.length === 3) && repo.prs[2].head !== second, JSON.stringify(repo.prs.map((p) => p.head)));
 
   // ── A failure leaves things as they were, and trying again works ─────────
@@ -154,11 +154,11 @@ const check = (name, ok, detail = "") => {
   await newComponent("Chip").catch(() => {});
   await openPanel();
   repo.failNext = { test: (s) => s === "POST /git/trees", status: 500 };
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("a failed request is shown with its reason", await settle(async () => (await page.getByRole("alert").count()) > 0), await page.getByRole("alert").first().innerText().catch(() => ""));
   check("the dot is red", await settle(async () => (await dot()) === "attention"));
   const commitsBefore = repo.commitLog.length;
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   check("sending again works, and adds one commit", await settle(async () => repo.commitLog.length === commitsBefore + 1) && repo.prs.length === 3);
 
   // ── Reload keeps the work ────────────────────────────────────────────────

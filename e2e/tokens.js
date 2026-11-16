@@ -148,7 +148,7 @@ const check = (name, ok, detail = "") => {
   };
   const openSync = async () => {
     // The rail button toggles the panel, so only press it when the panel is closed.
-    if (!(await page.getByRole("button", { name: "Sync tokens" }).isVisible())) await nav("Git");
+    if (!(await page.getByRole("button", { name: "Sync tokens" }).isVisible())) await nav("Source control");
     await page.getByRole("button", { name: "Sync tokens" }).click();
     await dialog.getByRole("button", { name: "Check" }).waitFor();
   };
@@ -156,7 +156,7 @@ const check = (name, ok, detail = "") => {
   const lightId = (s, setName) => s.sets.find((x) => x.name === setName).themes.find((t) => t.name === "Light").id;
 
   // ── Connect ────────────────────────────────────────────────────────────────
-  await nav("Git");
+  await nav("Source control");
   await page.getByText("Components and tokens").waitFor();
 
   // ── Import: the repository's tokens come in with the first pull, with nothing pressed ──
@@ -188,8 +188,8 @@ const check = (name, ok, detail = "") => {
   check("with no button to open a pull request of their own", (await dialog.getByRole("button", { name: "Create pull request" }).count()) === 0 && (await dialog.getByRole("button", { name: "Open Sync" }).isVisible()));
   await page.screenshot({ path: `${OUT}/tokens-changes.png` });
   await closeSync();
-  check("nothing has been sent: Sync says two token changes are waiting", repos["acme/ds"].main && prs.length === 0 && await page.locator('nav button[aria-label="Sync"]').count() === 1);
-  await page.locator('nav button[aria-label="Sync"]').click();
+  check("nothing has been sent: Sync says two token changes are waiting", repos["acme/ds"].main && prs.length === 0 && await page.locator('nav button[title="Source control"]').count() === 1);
+  await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("status", { name: "Sync status" }).getByText(/2 token changes waiting to sync/).waitFor({ timeout: 15000 });
   await page.getByLabel("Token changes").waitFor();
   await syncNow(page, 1);
@@ -210,7 +210,7 @@ const check = (name, ok, detail = "") => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     state.radii.find((r) => r.setId === set.id && r.name === "radius-sm").value = 5;
   });
-  await page.locator('nav button[aria-label="Sync"]').click();
+  await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("status", { name: "Sync status" }).getByText(/1 token change waiting to sync/).waitFor({ timeout: 15000 });
   await syncNow(page, 1);
   const edited2 = repos["acme/ds"][pr.head].get("src/styles/motif.css");
@@ -277,15 +277,15 @@ const check = (name, ok, detail = "") => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     state.radii.find((r) => r.setId === set.id && r.name === "radius-sm").value = 7;
   });
-  await page.locator('nav button[aria-label="Sync"]').click();
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.locator('nav button[title="Source control"]').click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.getByText("The token can't open pull requests. It needs Pull requests: read and write.").first().waitFor({ timeout: 30000 });
   check("a token that can't open pull requests gets a clear message, and no pull request is recorded", (await gitState()).work?.pr === null && prs.length === 1);
   await setToken("t");
   await page.goto("http://localhost:3000/editor/tok00001");
   await page.getByText("Layers", { exact: true }).waitFor();
-  await page.locator('nav button[aria-label="Sync"]').click();
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.locator('nav button[title="Source control"]').click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.getByRole("status", { name: "Sync status" }).getByText(/In sync with pull request #2/).waitFor({ timeout: 30000 });
   check("with a token that can, the same changes carry on and open it", prs.length === 2 && repos["acme/ds"][prs[1].head].get("src/styles/motif.css").includes("--radius-sm: 0.4375rem;"));
 
@@ -306,7 +306,7 @@ const check = (name, ok, detail = "") => {
   } } });
   await page.goto("http://localhost:3000/editor/tok00002");
   await page.getByText("Layers", { exact: true }).waitFor();
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Sync tokens" }).click();
   await dialog.getByText("This repository has no design tokens yet.").waitFor({ timeout: 30000 });
   await page.screenshot({ path: `${OUT}/tokens-export.png` });
@@ -325,7 +325,7 @@ const check = (name, ok, detail = "") => {
   mergePr(3);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.getByText(/was merged/).first().waitFor({ timeout: 30000 });
-  await nav("Git");
+  await nav("Source control");
   await page.getByRole("button", { name: "Sync tokens" }).click();
   await dialog.getByText("Motif and the repository have the same tokens.").waitFor({ timeout: 30000 });
   check("once merged, the new repository and the set agree", true);

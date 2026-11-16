@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { componentsReady } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 
 const { OUT } = require("./support/env");
@@ -131,13 +132,7 @@ const check = (name, ok, detail = "") => {
   const aside = page.locator("aside").last();
   const gitOpen = async () => (await page.getByPlaceholder("owner/name").isVisible()) || (await page.getByText("Components and tokens").isVisible());
 
-  await nav("Git");
-  await page.getByRole("button", { name: "Scan" }).click();
-  await page.getByText(/tokens · \d+ components/).waitFor({ timeout: 30000 });
-  await page.getByRole("button", { name: /(Re-import|Import) components/ }).click();
-  await page.getByText(/Imported \d+ components/).waitFor();
-  if (await gitOpen()) await nav("Git");
-  await nav("Components");
+  await componentsReady(page);
 
   // The pointer is moved off the preview first: a button under it would show its hover color.
   const css = async (selector, prop) => { await page.mouse.move(720, 12); return stage.locator(selector).first().evaluate((el, p) => getComputedStyle(el)[p], prop); };
@@ -230,20 +225,20 @@ const check = (name, ok, detail = "") => {
 
   // Someone changes Banner in the repository while this is open: it isn't sent, so the repository's change isn't lost.
   repos["acme/ds"].main.set("src/components/Banner.tsx", repos["acme/ds"].main.get("src/components/Banner.tsx") + "// changed elsewhere\n");
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.waitForTimeout(2500);
   check("a file changed in the repository meanwhile is left out of the pull request", prs.length === 1 && !prs[0].body.includes("`src/components/Banner.tsx`") && prs[0].body.includes("`src/components/Button.tsx`"), prs.map((p) => p.body).join("|").slice(0, 300));
   check("and the panel says which one", (await page.getByRole("status", { name: "Sync status" }).innerText()).includes("changed in the repository"), await page.getByRole("status", { name: "Sync status" }).innerText());
   repos["acme/ds"].main.set("src/components/Banner.tsx", repos["acme/ds"].main.get("src/components/Banner.tsx").replace("// changed elsewhere\n", ""));
   await page.locator('nav button[title="Components"]').click().catch(() => {});
-  await page.locator('nav button[aria-label="Sync"]').click();
+  await page.locator('nav button[title="Source control"]').click();
   // The editor looks again when the files change; a nudge is a new edit to the same file.
   await page.reload();
   await page.getByText("Layers", { exact: true }).waitFor({ timeout: 60000 });
-  await page.locator('nav button[aria-label="Sync"]').click();
-  await page.getByRole("button", { name: "Sync now" }).waitFor();
+  await page.locator('nav button[title="Source control"]').click();
+  await page.getByRole("button", { name: "Push" }).waitFor();
   await page.waitForFunction(() => !/changed in the repository/.test(document.querySelector('[aria-label="Sync status"]')?.textContent ?? ""), null, { timeout: 20000 });
-  await page.getByRole("button", { name: "Sync now" }).click();
+  await page.getByRole("button", { name: "Push" }).click();
   await page.waitForFunction(() => /In sync with pull request #1/.test(document.querySelector('[aria-label="Sync status"]')?.textContent ?? ""), null, { timeout: 20000 });
   const pr = prs[prs.length - 1];
   check("one pull request in all, from a working branch, against the branch that was imported", prs.length === 1 && /^motif\/changes-/.test(pr.head) && pr.base === "main" && pr.title === "Changes from Motif");
