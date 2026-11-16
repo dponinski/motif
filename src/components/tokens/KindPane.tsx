@@ -43,6 +43,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   // Whether the repository has been counted for where its tokens are used.
   const counted = rows.some((r) => r.use !== null);
   const hasRepo = useGitStore((s) => !!(s.tokenLink || s.analysis));
+  const colorsView = kind === "color";
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<Only>("all");
   const [renaming, setRenaming] = useState<Row | null>(null);
@@ -55,14 +56,16 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   const [addMany, setAddMany] = useState(false);
   const search = useRef<HTMLInputElement>(null);
 
-  const filtered = useMemo(() => filterItems(rows, query, only), [rows, query, only]);
+  // Comparing themes needs more than one: with one left, a comparison that was on is off.
+  const multiTheme = colorsView && set.themes.length > 1;
+  const shownOnly: Only = (only === "differs" || only === "same") && !multiTheme ? "all" : only;
+  const filtered = useMemo(() => filterItems(rows, query, shownOnly), [rows, query, shownOnly]);
   const groups = useMemo(() => groupItems(filtered), [filtered]);
   const order = useMemo(() => groups.flatMap((g) => g.items.map((r) => r.id)), [groups]);
   const selection = useSelection(order);
   const picked = useMemo(() => rows.filter((r) => selection.selected.has(r.id)), [rows, selection.selected]);
   const taken = useMemo(() => rows.map((r) => r.name), [rows]);
   const allGroups = useMemo(() => [...new Set(rows.map((r) => r.group))], [rows]);
-  const colorsView = kind === "color";
   const shown = themeId === "all" ? set.themes : set.themes.filter((t) => t.id === themeId);
 
   const drag = useTokenDrag({
@@ -180,8 +183,8 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
           <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary" />
           <input ref={search} aria-label="Search tokens" placeholder="Search (press /)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setQuery(""); e.currentTarget.blur(); } }} className="w-52 rounded border border-surface-border bg-surface-base py-1 pl-6 pr-2 text-xs text-text-primary outline-none focus:border-accent" />
         </label>
-        {([["all", "All"], ["changed", "Changed"], ["unsynced", "Not in repository"], ["readonly", "Read-only"], ...(counted ? [["unused", "Unused"]] : [])] as [Only, string][]).map(([id, label]) => (
-          <button key={id} type="button" aria-pressed={only === id} onClick={() => setOnly(id)} className={chip(only === id)}>{label}</button>
+        {([["all", "All"], ["changed", "Changed"], ["unsynced", "Not in repository"], ["readonly", "Read-only"], ...(counted ? [["unused", "Unused"]] : []), ...(multiTheme ? [["differs", "Differ between themes"], ["same", "Same in every theme"]] : [])] as [Only, string][]).map(([id, label]) => (
+          <button key={id} type="button" aria-pressed={shownOnly === id} onClick={() => setOnly(id)} className={chip(shownOnly === id)}>{label}</button>
         ))}
         {!counted && hasRepo && rows.some((r) => r.linked) && (
           <button type="button" disabled title="Scan the repository again (in Source control) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
@@ -215,6 +218,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
             return refused;
           },
         } : undefined}
+        copy={multiTheme ? { themes: set.themes, apply: (from, to) => editTokens(() => ds().copyThemeColors(selection.ids, from, to)) } : undefined}
         onGroup={(g) => { editTokens(() => ds().setTokenGroup(kind, selection.ids, g)); }}
         onSet={(id) => { editTokens(() => ds().moveTokensToSet(kind, selection.ids, id)); selection.clear(); }}
         onDuplicate={() => common.duplicate(selection.ids)}
