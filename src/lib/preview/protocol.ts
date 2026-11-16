@@ -86,10 +86,16 @@ export interface GestureEndMessage {
   changed: boolean;
 }
 
-export type ToPreview = RenderMessage | ModulesMessage | CssMessage | EditMessage | CanvasMessage | ZoomMessage | GestureEndMessage | DropProbeMessage | DropEndMessage | TextEditStartMessage;
+// Asks a Tailwind 3 page for the stylesheet it has built (once what it shows is drawn), so a page that has to run without Motif can carry it.
+export interface Tailwind3CssRequest {
+  type: "tailwind3css";
+}
+
+export type ToPreview = Tailwind3CssRequest | RenderMessage | ModulesMessage | CssMessage | EditMessage | CanvasMessage | ZoomMessage | GestureEndMessage | DropProbeMessage | DropEndMessage | TextEditStartMessage;
 
 export type FromPreview =
   | { type: "ready" }
+  | { type: "tailwind3css"; css: string }
   | { type: "rendered"; id: number; height: number; width?: number }
   | { type: "select"; key: string }
   | { type: "error"; message: string }
@@ -113,4 +119,4 @@ export type FromPreview =
   | { type: "menu"; key: string; clientX: number; clientY: number };
 
 export const isFromPreview = (data: unknown): data is FromPreview =>
-  typeof data === "object" && data !== null && ["ready", "rendered", "select", "error", "wheel", "space", "gesture", "dragging", "key", "menu", "dropTarget", "move", "textEdit", "text"].includes((data as { type?: unknown }).type as string);
+  typeof data === "object" && data !== null && ["ready", "tailwind3css", "rendered", "select", "error", "wheel", "space", "gesture", "dragging", "key", "menu", "dropTarget", "move", "textEdit", "text"].includes((data as { type?: unknown }).type as string);

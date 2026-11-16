@@ -93,7 +93,7 @@ export async function planComponent(input: {
   if (problem) throw new Error(problem);
 
   // With Tailwind v4 in the repository the component is made of its classes, as the others are.
-  const engine: StyleEngine = analysis.stack.tailwindVersion === 4 ? "tailwind" : "css";
+  const engine: StyleEngine = analysis.stack.tailwindVersion !== null ? "tailwind" : "css";
   const file = `${join(dir, name)}.tsx`;
   const { code, css, rootStart } = componentSource(name, engine);
   const stylesheet = css === null ? null : `${join(dir, name)}.css`;

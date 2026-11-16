@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { previewKey } from "@/lib/docs";
-import { previewPage, type PreviewView } from "@/lib/preview/docs-previews";
+import { previewMessage, previewPage, type PreviewView } from "@/lib/preview/docs-previews";
 import type { LibraryComponent } from "@/lib/preview/library";
-import { RUNTIME_PATH } from "@/lib/preview/srcdoc";
+import { RUNTIME_PATH, buildSrcdoc, newNonce, runtimeUrlFor } from "@/lib/preview/srcdoc";
 import type { LibrarySource } from "@/store/library";
 import { errorMessage } from "@/components/git/hooks";
 import { cachedGraph, type Host } from "./preview-core";
 import { readerFor, versionOf } from "./reader";
+import { builtTailwind3Css } from "./tailwind3-css";
 
 // The preview runtime's own code, fetched once, for pages that carry it inside them.
 let runtime: Promise<string> | null = null;
@@ -24,10 +25,13 @@ export function previewPageFor(component: LibraryComponent, view: PreviewView, s
   const key = `${versionOf(source)}|${previewKey(component, view)}`;
   if (!pages.has(key)) {
     pages.set(key, (async () => {
-      if (source.tailwindVersion === 3) throw new Error("Documentation pages can't show components of a Tailwind v3 repository yet");
       const graph = await cachedGraph(source, host, readerFor(source, host), component.file);
       if (graph.unsupported.length) throw new Error(graph.unsupported[0]);
-      return previewPage({ graph, tailwindVersion: source.tailwindVersion, runtimeSource: await runtimeSource(), component, view });
+      // Tailwind 3 has no engine a page can carry, so the stylesheet is built by running the page here and the page is given that.
+      const tailwind3Css = source.tailwindVersion === 3
+        ? await builtTailwind3Css(buildSrcdoc({ graph, tailwindVersion: 3, runtimeUrl: runtimeUrlFor(window.location.origin), nonce: newNonce(), initial: previewMessage(component, view) }))
+        : undefined;
+      return previewPage({ graph, tailwindVersion: source.tailwindVersion, runtimeSource: await runtimeSource(), component, view, tailwind3Css });
     })().catch((err) => { pages.delete(key); throw err; }));
   }
   return pages.get(key)!;

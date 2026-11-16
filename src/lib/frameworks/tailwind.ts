@@ -76,7 +76,7 @@ const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 export async function planTailwind(host: Pick<GitHost, "getFile">, repo: RepoState, branch: string, repoName: string): Promise<FrameworkPlan> {
   const { analysis, snapshot } = repo;
   if (analysis.stack.tailwindVersion === 4) throw new FrameworkRefusal("Tailwind CSS v4 is already set up in this repository.");
-  if (analysis.stack.tailwindVersion === 3) throw new FrameworkRefusal("This repository uses Tailwind CSS v3. Motif adds v4 only, and doesn't change versions.");
+  if (analysis.stack.tailwindVersion === 3) throw new FrameworkRefusal("This repository uses Tailwind CSS v3, which Motif previews and edits as it is. Adding a framework only adds v4 to a repository with none; Motif doesn't change versions.");
 
   const files: Record<string, FileWrite> = {};
   const summary: FrameworkPlan["summary"] = [];

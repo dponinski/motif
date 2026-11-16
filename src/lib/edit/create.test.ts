@@ -101,6 +101,12 @@ describe("planning a component", () => {
     expect(plan.bases["package.json"].sha).toMatch(/^[0-9a-f]{40}$/);
   });
 
+  it("makes a Tailwind component in a Tailwind v3 repository too, not a stylesheet next to it", async () => {
+    const { plan } = await planIn({ "package.json": `{"devDependencies":{"tailwindcss":"^3.4.0"}}`, "tailwind.config.js": "module.exports = {}", "src/app.css": "@tailwind base;", "README.md": "x" });
+    expect(plan.engine).toBe("tailwind");
+    expect(plan.stylesheet).toBeNull();
+  });
+
   it("refuses a name that is taken", async () => {
     await expect(planIn({ "src/components/Button.tsx": "export const Button = () => <b/>;" })).rejects.toThrow(/already exists|already a component/);
     await expect(planIn({ "README.md": "x" }, "button")).rejects.toThrow(/capital letter/);
