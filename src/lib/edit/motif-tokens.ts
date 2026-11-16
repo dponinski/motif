@@ -1,45 +1,38 @@
-import type { RepoToken } from "../repo-scan/types";
+import type { RepoAnalysis, RepoToken } from "../repo-scan/types";
+import { keyPrefixes } from "../token-sync/keys";
 import { normalizeColor } from "../token-sync/color";
 import type { SyncDoc } from "../token-sync/doc";
 import { lengthPx, splitOpacity, swatchOf, unwrapArbitrary } from "./tokens";
 
-// Tokens Motif has and the repository does not (yet), as the inspector and the preview need to see them, and whether a token made
-// from a value on an element could be named by a class once it is synced. Whether it could depends on how the repository
-// exposes its tokens to Tailwind: Sync writes a new color as a variable with an `@theme inline` alias only when the repository
-// already does that, and a new radius or spacing into an `@theme` block only when there is one.
+// Tokens Motif has and the repository does not (yet), as the inspector and the preview need to see them: a token is usable the moment it
+// is made, and goes out with the other changes. What a class is called depends on how the repository names its tokens (see
+// lib/token-sync/keys.ts): `--radius-card` is `rounded-card`, a color kept as channels is its config entry, and so on.
 
-export type MakeKind = "color" | "radius" | "spacing";
+export type MakeKind = "color" | "radius" | "spacing" | "shadow";
 // `prefix` is what the token's name starts with so that Tailwind has a class for it (`radius-card` is `rounded-card`).
 export type MakePlan = { prefix: string } | { reason: string };
 export type MakePlans = Record<MakeKind, MakePlan>;
 
-// Colors are variables exposed to Tailwind one by one: `--color-primary: var(--primary)` in `@theme inline`.
-export const usesColorAliases = (tokens: RepoToken[]): boolean =>
-  tokens.some((t) => t.kind === "color" && t.tailwind === `color-${t.name}` && Object.values(t.locations).some((l) => l.container === "css-var"));
-
-const inTheme = (tokens: RepoToken[], kind: RepoToken["kind"]) => tokens.some((t) => t.kind === kind && Object.values(t.locations).some((l) => l.container === "theme"));
+export { usesColorAliases } from "../token-sync/keys";
 
 export function makePlans(tokens: RepoToken[], tailwind: 3 | 4 | null): MakePlans {
   // Without Tailwind a token is a variable, and a stylesheet's controls name it with `var()`.
-  if (tailwind === null) return { color: { prefix: "" }, radius: { prefix: "" }, spacing: { prefix: "" } };
+  if (tailwind === null) return { color: { prefix: "" }, radius: { prefix: "" }, spacing: { prefix: "" }, shadow: { prefix: "" } };
   if (tailwind === 3) {
     // A new token is an entry in the config's `theme.extend` (and for a color the repository keeps as channels, a variable too), so
     // there has to be a config with tokens in it to follow.
     const hasConfig = tokens.some((t) => t.mapping?.path || Object.values(t.locations).some((l) => l.container === "config" && l.path));
     if (!hasConfig) {
       const reason = "This repository has no Tailwind config with tokens that Motif can add to";
-      return { color: { reason }, radius: { reason }, spacing: { reason } };
+      return { color: { reason }, radius: { reason }, spacing: { reason }, shadow: { reason } };
     }
-    return { color: { prefix: "" }, radius: { prefix: "radius-" }, spacing: { prefix: "spacing-" } };
   }
-  return {
-    color: usesColorAliases(tokens) ? { prefix: "" } : { reason: "This repository doesn't give Tailwind its colors through @theme inline, so no class could name a new one" },
-    radius: inTheme(tokens, "radius") ? { prefix: "radius-" } : { reason: "This repository has no @theme block of radii to add one to" },
-    spacing: inTheme(tokens, "spacing") ? { prefix: "spacing-" } : { reason: "This repository has no @theme block of spacing to add one to" },
-  };
+  // Tailwind 4 has a place for every kind (`@theme`, made when the repository has none), so nothing is refused.
+  const prefixes = keyPrefixes({ tokens, stack: { tailwindVersion: tailwind } as RepoAnalysis["stack"] });
+  return { color: { prefix: prefixes.color ?? "" }, radius: { prefix: prefixes.radius ?? "" }, spacing: { prefix: prefixes.spacing ?? "" }, shadow: { prefix: prefixes.shadow ?? "" } };
 }
 
-const KINDS: ReadonlySet<string> = new Set(["color", "radius", "spacing"]);
+const KINDS: ReadonlySet<string> = new Set(["color", "radius", "spacing", "shadow"]);
 
 export interface MotifOnly {
   // As the repository's own tokens are, so the inspector offers them like any other.
@@ -48,7 +41,7 @@ export interface MotifOnly {
   themeCss: string;
 }
 
-// The tokens of `doc` (Motif's, by name) that `repoTokens` doesn't have, and that a class could name once synced.
+// The tokens of `doc` (Motif's, by their name in the repository) that `repoTokens` doesn't have, and that a class can name.
 export function motifOnlyTokens(doc: SyncDoc, repoTokens: RepoToken[], tailwind: 3 | 4 | null): MotifOnly {
   const plans = makePlans(repoTokens, tailwind);
   const have = new Set(repoTokens.map((t) => t.name));
@@ -59,11 +52,13 @@ export function motifOnlyTokens(doc: SyncDoc, repoTokens: RepoToken[], tailwind:
     if (have.has(name) || !KINDS.has(t.kind)) continue;
     const kind = t.kind as MakeKind;
     const plan = plans[kind];
-    if ("reason" in plan || !name.startsWith(plan.prefix)) continue;
-    const values = kind === "color" ? t.values : Object.fromEntries(Object.entries(t.values).map(([k, v]) => [k, `${v}px`]));
-    tokens.push({ name, kind, values, locations: {}, tailwind: tailwind === null ? null : kind === "color" ? `color-${name}` : name, file: "Motif", line: 0 });
+    if ("reason" in plan) continue;
+    const values = kind === "color" || kind === "shadow" ? t.values : Object.fromEntries(Object.entries(t.values).map(([k, v]) => [k, `${v}px`]));
+    // A color declared right in `@theme` is named for its variable (`color-brand`); in every other shape its class is `color-` and its name.
+    const direct = kind === "color" && plan.prefix === "color-";
+    tokens.push({ name, kind, values, locations: {}, tailwind: tailwind === null ? null : kind === "color" && !direct ? `color-${name}` : name, file: "Motif", line: 0 });
     if (tailwind === 4) {
-      if (kind === "color") inline.push(`  --color-${name}: var(--${name});`);
+      if (kind === "color" && !direct) inline.push(`  --color-${name}: var(--${name});`);
       else theme.push(`  --${name}: ${Object.values(values)[0]};`);
     }
   }

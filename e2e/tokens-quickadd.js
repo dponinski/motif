@@ -190,7 +190,7 @@ const check = (name, ok, detail = "") => {
   check("a color written out is offered to be saved as a token", await saveButton("Background").isEnabled());
   check("so is a radius that is only close to one", (await hint("radius").innerText()).includes("Closest: md") && (await saveButton("Radius").isEnabled()));
   const spacing = saveButton("Padding");
-  check("where the repository has no @theme of spacing, it says why it can't", (await spacing.isDisabled()) && ((await spacing.getAttribute("title")) ?? "").includes("no @theme block of spacing"), await spacing.getAttribute("title"));
+  check("spacing is offered too, though the repository has no @theme of spacing (one is made when it is sent)", await spacing.isEnabled(), await spacing.getAttribute("title"));
   await saveButton("Background").click();
   const input = page.getByLabel("Name of the new color token");
   await input.waitFor();
@@ -213,6 +213,14 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("button", { name: "Save and use" }).click();
   check("and is used by its class", await settle(async () => (await field("Radius").inputValue()) === "card" && ((await classes()) ?? "").includes("rounded-card")));
   check("which the preview draws", await settle(async () => (await css("#root div.flex", "borderRadius")) === "10px"), await css("#root div.flex", "borderRadius"));
+
+  // ── A spacing, where the repository has no @theme of spacing ──────────────
+  await spacing.click();
+  const spacingName = page.getByLabel("Name of the new spacing token");
+  await spacingName.waitFor();
+  await spacingName.fill("gutter");
+  await page.getByRole("button", { name: "Save and use" }).click();
+  check("a spacing is used by its class, and the preview draws it at once", await settle(async () => ((await classes()) ?? "").includes("p-gutter") && (await css("#root div.flex", "paddingTop")) === "13.5px"), `${await classes()} ${await css("#root div.flex", "paddingTop")}`);
 
   // ── In the Tokens screen, to be sent with the next sync ───────────────────
   await nav("Tokens");

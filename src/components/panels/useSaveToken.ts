@@ -8,7 +8,8 @@ import { useGitStore } from "@/store/git";
 import { editTokens } from "@/store/token-history";
 import type { SaveToken } from "./TokenField";
 
-const MAKE: Partial<Record<string, MakeKind>> = { color: "color", radius: "radius", spacing: "spacing" };
+// A value written out on an element can become a color, a radius or a spacing; a shadow is made on the Tokens screen.
+const MAKE: Partial<Record<string, Exclude<MakeKind, "shadow">>> = { color: "color", radius: "radius", spacing: "spacing" };
 
 // What it would take to make a value written out on an element (`bg-[#1d4ed8]`, `rounded-[10px]`) a token: a name, a place in the set
 // the repository's tokens are linked to, and then the element uses the token. Null when the value is one that is already a token or

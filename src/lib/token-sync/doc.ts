@@ -4,6 +4,7 @@ import type { RepoToken } from "../repo-scan/types";
 import { normalizeColor } from "./color";
 import { deriveGroup } from "../tokens/organize";
 import { aliasTarget, varRef } from "../tokens/alias";
+import { repoKey, type KeyPrefixes } from "./keys";
 import { normalizeShadow, parseLengthPx, parseShadow, shadowKey } from "./values";
 
 // What is compared between Motif and a repository: tokens by repository name, each with one
@@ -112,6 +113,8 @@ export function readRepoTokens(tokens: RepoToken[], themes: string[]): RepoSnaps
 
 export interface LinkShape {
   setId: string;
+  // What the names of tokens made in Motif start with in the repository's own naming (lib/token-sync/keys.ts); absent for a link made before.
+  prefixes?: KeyPrefixes;
   // Repository theme key -> Motif theme id.
   themes: Record<string, string>;
   baseTheme: string;
@@ -130,7 +133,6 @@ export const cssName = (name: string) => {
   return /^[0-9]/.test(slug) ? `t-${slug}` : slug || "token";
 };
 
-const keyOf = (t: { name: string; repoName?: string }) => t.repoName ?? cssName(t.name);
 
 function shadowValue(t: ShadowToken): string {
   const rest = (t.raw ? parseShadow(t.raw) : null)?.slice(1).map(shadowKey) ?? [];
@@ -148,11 +150,11 @@ export function readMotifTokens(state: TokenSlices, link: LinkShape): SyncDoc {
       if (alias) values[theme] = varRef(alias);
       else if (v !== undefined) values[theme] = normalizeColor(v) ?? v;
     }
-    doc[keyOf(c)] = { kind: "color", values };
+    doc[repoKey("color", c, link.prefixes)] = { kind: "color", values };
   }
-  for (const r of state.radii) if (r.setId === link.setId) doc[keyOf(r)] = { kind: "radius", values: { [link.baseTheme]: lengthKey(r.value) } };
-  for (const s of state.spacing) if (s.setId === link.setId) doc[keyOf(s)] = { kind: "spacing", values: { [link.baseTheme]: lengthKey(s.value) } };
-  for (const s of state.shadows) if (s.setId === link.setId) doc[keyOf(s)] = { kind: "shadow", values: { [link.baseTheme]: shadowValue(s) } };
+  for (const r of state.radii) if (r.setId === link.setId) doc[repoKey("radius", r, link.prefixes)] = { kind: "radius", values: { [link.baseTheme]: lengthKey(r.value) } };
+  for (const s of state.spacing) if (s.setId === link.setId) doc[repoKey("spacing", s, link.prefixes)] = { kind: "spacing", values: { [link.baseTheme]: lengthKey(s.value) } };
+  for (const s of state.shadows) if (s.setId === link.setId) doc[repoKey("shadow", s, link.prefixes)] = { kind: "shadow", values: { [link.baseTheme]: shadowValue(s) } };
   return doc;
 }
 
@@ -201,7 +203,7 @@ export function applyDoc(state: TokenSlices, link: LinkShape, doc: SyncDoc, acti
     const next: T[] = [];
     for (const item of existing) {
       if (item.setId !== link.setId) { next.push(item); continue; }
-      const key = keyOf(item);
+      const key = repoKey(kind, item, link.prefixes);
       const token = doc[key];
       if (token?.kind === kind) { next.push(update(item, token)); seen.add(key); }
     }
@@ -227,19 +229,19 @@ export function applyDoc(state: TokenSlices, link: LinkShape, doc: SyncDoc, acti
 
   const colors = sync<ColorToken>(
     state.colors, "color",
-    (c, t) => ({ ...c, repoName: keyOf(c), ...colorValues(t, c.themeValues) }),
+    (c, t) => ({ ...c, repoName: repoKey("color", c, link.prefixes), ...colorValues(t, c.themeValues) }),
     (name, t) => ({ id: nanoid(6), name, repoName: name, group: colorGroup(name, names), setId: link.setId, ...colorValues(t) })
   );
 
   const px = (t: SyncToken) => parseFloat(firstValue(t, link.baseTheme));
   const radii = sync<RadiusToken>(
     state.radii, "radius",
-    (r, t) => ({ ...r, repoName: keyOf(r), value: px(t) }),
+    (r, t) => ({ ...r, repoName: repoKey("radius", r, link.prefixes), value: px(t) }),
     (name, t) => ({ id: nanoid(6), name, repoName: name, value: px(t), setId: link.setId })
   );
   const spacing = sync<SpacingToken>(
     state.spacing, "spacing",
-    (s, t) => ({ ...s, repoName: keyOf(s), value: px(t) }),
+    (s, t) => ({ ...s, repoName: repoKey("spacing", s, link.prefixes), value: px(t) }),
     (name, t) => ({ id: nanoid(6), name, repoName: name, value: px(t), setId: link.setId })
   );
 
@@ -256,7 +258,7 @@ export function applyDoc(state: TokenSlices, link: LinkShape, doc: SyncDoc, acti
   };
   const shadows = sync<ShadowToken>(
     state.shadows, "shadow",
-    (s, t) => ({ ...s, repoName: keyOf(s), ...shadowFields(t, s.color) }),
+    (s, t) => ({ ...s, repoName: repoKey("shadow", s, link.prefixes), ...shadowFields(t, s.color) }),
     (name, t) => ({ id: nanoid(6), name, repoName: name, setId: link.setId, ...shadowFields(t) })
   );
 

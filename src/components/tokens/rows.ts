@@ -3,7 +3,8 @@ import { useShallow } from "zustand/react/shallow";
 import { useDesignSystemStore, DEFAULT_GROUP, type ColorToken, type RadiusToken, type ShadowToken, type SpacingToken, type TokenKind, type TypographyToken } from "@/store/design-system";
 import { useGitStore } from "@/store/git";
 import { useTokenChanges } from "@/components/work/useWork";
-import { cssName, readRepoTokens } from "@/lib/token-sync/doc";
+import { cssName, readRepoTokens, type SyncKind } from "@/lib/token-sync/doc";
+import { keyPrefixes, repoKey } from "@/lib/token-sync/keys";
 import { hexOf } from "@/lib/tokens/contrast";
 
 export type Token = ColorToken | TypographyToken | SpacingToken | RadiusToken | ShadowToken;
@@ -47,6 +48,8 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
   const changes = useTokenChanges();
   const analysis = useGitStore((s) => s.analysis);
   const changed = useMemo(() => new Set(changes.map((c) => c.name)), [changes]);
+  // The names tokens made here have in the repository (a radius `card` is `radius-card` there).
+  const prefixes = useMemo(() => (analysis ? keyPrefixes(analysis) : undefined), [analysis]);
   const readonlyBy = useMemo(() => (analysis ? readRepoTokens(analysis.tokens, analysis.themes).readonly : {}), [analysis]);
   const componentsIn = useMemo(() => {
     const byFile = new Map<string, string[]>();
@@ -56,7 +59,7 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
   return useMemo(
     () => (list as Token[]).filter((t) => t.setId === setId).map((t) => {
       const repoName = (t as { repoName?: string }).repoName;
-      const key = repoName ?? cssName(t.name);
+      const key = kind === "typography" ? (repoName ?? cssName(t.name)) : repoKey(kind as SyncKind, t as { name: string; repoName?: string }, prefixes);
       // Only a token the repository has can be looked for in its code, and only once a scan has counted.
       const counted = analysis?.tokenUsage && repoName && analysis.tokens.some((x) => x.name === key) ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
       const use = counted ? { ...counted, components: [...new Set(counted.files.flatMap((f) => componentsIn.get(f) ?? []))] } : null;
@@ -65,6 +68,6 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
         text: searchText(kind, t, themes), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
       };
     }),
-    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn]
+    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes]
   );
 }
