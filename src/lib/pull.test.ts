@@ -113,3 +113,45 @@ describe("a later pull", () => {
     expect(out.notes).toEqual([]);
   });
 });
+
+describe("a theme deleted here that the repository has", () => {
+  const files = loadFixture("motif-test-system");
+  const themeOf = (name: string) => ds().sets[0].themes.find((t) => t.name === name);
+
+  it("comes back with the next pull, as a theme of the set that the repository's values go to, and the link maps it again", async () => {
+    await pullRepository(host(files), connection);
+    const dark = themeOf("Dark")!;
+    const before = color("background").themeValues[dark.id];
+    ds().deleteThemeFromSet(ds().sets[0].id, dark.id);
+    expect(themeOf("Dark")).toBeUndefined();
+    const out = await pullRepository(host(files, "sha-2"), connection);
+    expect(out.conflicts).toBeNull();
+    expect(out.notes.join(" ")).toMatch(/1 theme brought back: Dark/);
+    const back = themeOf("Dark")!;
+    expect(back).toBeDefined();
+    expect(git().tokenLink!.themes.dark).toBe(back.id);
+    // The repository's own values, not a copy of the light theme's.
+    expect(color("background").themeValues[back.id]).toBe(before);
+    expect(color("background").themeValues[back.id]).not.toBe(color("background").themeValues[light()]);
+  });
+
+  it("is not left as values of a theme that isn't there, when the theme is not brought back", async () => {
+    await pullRepository(host(files), connection);
+    const dark = themeOf("Dark")!;
+    ds().deleteThemeFromSet(ds().sets[0].id, dark.id);
+    await pullRepository(host(files, "sha-2"), connection);
+    const known = new Set(ds().sets[0].themes.map((t) => t.id));
+    for (const c of ds().colors) for (const id of Object.keys(c.themeValues)) expect(known.has(id)).toBe(true);
+  });
+
+  it("changes nothing in the repository: the deleted theme's values are not sent as removed", async () => {
+    await pullRepository(host(files), connection);
+    const dark = themeOf("Dark")!;
+    ds().deleteThemeFromSet(ds().sets[0].id, dark.id);
+    const out = await pullRepository(host(files, "sha-2"), connection);
+    expect(out.analysis.tokens.some((t) => t.name === "background")).toBe(true);
+    // Nothing is waiting to be sent for it.
+    const link = git().tokenLink!;
+    expect(link.staged ?? null).toBeNull();
+  });
+});

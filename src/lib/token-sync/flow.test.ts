@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RepoReader } from "../github";
 import { loadFixture } from "../repo-scan/fixtures";
 import { applyDoc, type TokenSlices } from "./doc";
-import { addImport, applyMerged, newTokensPath, planExport, planSync, readRepoState, relativeImport, type RepoState, type TokenLink } from "./flow";
+import { addImport, applyMerged, healLink, newTokensPath, planExport, planSync, readRepoState, relativeImport, type RepoState, type TokenLink } from "./flow";
 import { resolveTokenMerge } from "./merge";
 import { applyEdits, filesNeeded } from "./write";
 
@@ -241,5 +241,29 @@ describe("paths and imports", () => {
     expect(newTokensPath({ ...base, stack: { entryFiles: ["src/index.ts"] } as never })).toBe("src/styles/tokens.css");
     expect(newTokensPath(base)).toBe("src/styles/tokens.css");
     expect(newTokensPath({ ...base, stack: { entryFiles: ["index.ts"] } as never })).toBe("styles/tokens.css");
+  });
+});
+
+describe("a link whose theme was deleted in Motif", () => {
+  it("keeps only the themes Motif still has, and the repository's values for them", async () => {
+    const { link } = await linked();
+    const healed = healLink(link, [{ id: "set-1", themes: [{ id: "t-light" }] }]);
+    expect(healed.themes).toEqual({ light: "t-light" });
+    expect(healed.baseTheme).toBe("light");
+    expect(Object.values(healed.base).every((t) => Object.keys(t.values).every((k) => k === "light"))).toBe(true);
+    expect(Object.keys(healed.base)).toEqual(Object.keys(link.base));
+  });
+
+  it("moves the base theme to one that is left, when the base theme itself was deleted", async () => {
+    const { link } = await linked();
+    const healed = healLink(link, [{ id: "set-1", themes: [{ id: "t-dark" }] }]);
+    expect(healed.themes).toEqual({ dark: "t-dark" });
+    expect(healed.baseTheme).toBe("dark");
+  });
+
+  it("is the same link when no theme is gone, or when its set isn't there to ask", async () => {
+    const { link } = await linked();
+    expect(healLink(link, [{ id: "set-1", themes: [{ id: "t-light" }, { id: "t-dark" }, { id: "t-other" }] }])).toBe(link);
+    expect(healLink(link, [])).toBe(link);
   });
 });

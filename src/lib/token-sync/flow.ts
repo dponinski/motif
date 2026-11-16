@@ -67,6 +67,20 @@ export function applyMerged(link: TokenLink, slices: TokenSlices, merged: SyncDo
   };
 }
 
+// The link without the repository themes whose Motif theme is gone (deleted from the set). The repository's theme is not touched by this:
+// it is as if the repository had added it since, so a pull brings it back as a theme of the set, mapped again, with the repository's values.
+// Returns the link itself when nothing was gone.
+export function healLink(link: TokenLink, sets: { id: string; themes: { id: string }[] }[]): TokenLink {
+  const themes = sets.find((s) => s.id === link.setId)?.themes;
+  if (!themes) return link;
+  const kept = Object.entries(link.themes).filter(([, id]) => themes.some((t) => t.id === id));
+  if (kept.length === Object.keys(link.themes).length) return link;
+  const keys = new Set(kept.map(([key]) => key));
+  const base: SyncDoc = {};
+  for (const [name, token] of Object.entries(link.base)) base[name] = { ...token, values: Object.fromEntries(Object.entries(token.values).filter(([theme]) => keys.has(theme))) } as SyncDoc[string];
+  return { ...link, themes: Object.fromEntries(kept), baseTheme: keys.has(link.baseTheme) ? link.baseTheme : ([...keys][0] ?? link.baseTheme), base };
+}
+
 export const themeLabel = (key: string) => key.charAt(0).toUpperCase() + key.slice(1);
 
 // ── A repository with no tokens ───────────────────────────────────────────────
