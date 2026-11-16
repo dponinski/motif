@@ -86,6 +86,8 @@ export function readPayload(input: unknown): { ok: true; payload: ProjectPayload
   }
   if (input.tokenLink !== null && input.tokenLink !== undefined && !isObject(input.tokenLink)) return { ok: false, error: "The token link isn't valid" };
   if (!isObject(input.tokens)) return { ok: false, error: "The tokens aren't valid" };
+  // A page opened before the tokens were saved as tokens and compositions would write them back as five lists, which this version reads as nothing.
+  if (input.tokens.tokensVersion !== 3) return { ok: false, error: "This page is out of date: reload it to keep saving" };
   if (!Array.isArray(input.docs)) return { ok: false, error: "The documentation isn't valid" };
 
   const payload: ProjectPayload = { name, connection, tokenLink: withoutStaged((input.tokenLink as Record<string, unknown> | null | undefined) ?? null), tokens: input.tokens, docs: input.docs };

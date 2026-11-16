@@ -8,7 +8,7 @@ const payload = (over: Partial<ProjectPayload> = {}): ProjectPayload => ({
   name: "Acme",
   connection: { owner: "acme", repo: "ds", defaultBranch: "main" },
   tokenLink: null,
-  tokens: { colors: [{ id: "c1", name: "primary", value: "#fff" }] },
+  tokens: { tokensVersion: 3, tokens: [{ id: "c1", name: "primary", type: "color", value: "#fff" }] },
   docs: [{ id: "p1", title: "Intro", blocks: [] }],
   ...over,
 });
@@ -32,12 +32,12 @@ describe("what a project is, to the server", () => {
       name: "  Acme  ",
       repo: { connection: { owner: "acme", repo: "ds", token: "github_pat_" + "x".repeat(30), defaultBranch: "dev" }, analysis: { big: true }, tokenLink: null },
       library: { source: null, components: [{ name: "Button" }] },
-      tokens: { colors: [] },
+      tokens: { tokensVersion: 3, tokens: [] },
       docs: [],
     };
     const out = toPayload(project as never);
     expect(JSON.stringify(out)).not.toContain("github_pat_");
-    expect(out).toEqual({ name: "Acme", connection: { owner: "acme", repo: "ds", defaultBranch: "dev" }, tokenLink: null, tokens: { colors: [] }, docs: [] });
+    expect(out).toEqual({ name: "Acme", connection: { owner: "acme", repo: "ds", defaultBranch: "dev" }, tokenLink: null, tokens: { tokensVersion: 3, tokens: [] }, docs: [] });
     expect(toPayload({ ...project, name: " ", repo: { ...project.repo, connection: null } } as never).name).toBe("Untitled");
   });
 });
@@ -56,13 +56,19 @@ describe("reading what a page sent", () => {
     }
   });
 
+  it("tells a page that still saves the tokens in the old shape to reload, instead of taking them", () => {
+    const old = readPayload(payload({ tokens: { colors: [] } }));
+    expect(old.ok).toBe(false);
+    expect(!old.ok && old.error).toMatch(/out of date/);
+  });
+
   it("refuses what looks like an access token anywhere in it, and anything too large", () => {
     for (const secret of ["ghp_" + "A".repeat(36), "github_pat_" + "B".repeat(40), "ghu_" + "c".repeat(30), "ghs_" + "d".repeat(30)]) {
       const r = readPayload(payload({ docs: [{ blocks: [{ text: `use ${secret} here` }] }] }));
       expect(r.ok).toBe(false);
       expect(!r.ok && r.error).toMatch(/access token/);
     }
-    expect(readPayload(payload({ tokens: { big: "x".repeat(1_600_000) } })).ok).toBe(false);
+    expect(readPayload(payload({ tokens: { tokensVersion: 3, big: "x".repeat(1_600_000) } })).ok).toBe(false);
     // Ordinary words that start the same are fine.
     expect(readPayload(payload({ docs: [{ text: "ghp_short and github_pat_x" }] })).ok).toBe(true);
   });
@@ -127,6 +133,14 @@ describe("moving a project's parts between the server and the browser", () => {
     const p = projectFromPayload("p9", payload());
     expect(p).toMatchObject({ id: "p9", name: "Acme", repo: { connection: { owner: "acme", repo: "ds", token: "", defaultBranch: "main" }, analysis: null }, library: { components: [] } });
     expect(p.tokens.sets).toBeDefined();
+  });
+
+  it("reads what the server holds in the shape of an earlier version (five lists) as tokens and compositions", () => {
+    const old = { sets: [{ id: "set-global", name: "Global", themes: [{ id: "t", name: "Default" }], activeThemeId: "t" }], colors: [{ id: "c1", name: "primary", value: "#fff", group: "g", setId: "set-global", themeValues: { t: "#fff" } }], spacing: [{ id: "s1", name: "space-1", value: 4, setId: "set-global" }], typography: [], radii: [], shadows: [] };
+    const p = projectFromPayload("p9", payload({ tokens: old }));
+    expect(p.tokens.tokensVersion).toBe(3);
+    expect(p.tokens.tokens.map((t) => `${t.type}:${t.name}`)).toEqual(["color:primary", "number:space-1"]);
+    expect(applyPayload(local(), payload({ tokens: old })).tokens.tokens).toHaveLength(2);
   });
 
   it("takes the server's parts but keeps this device's token, scan and library for the same repository", () => {

@@ -1,5 +1,5 @@
 import type { Project } from "@/store/projects";
-import { emptyTokenData, type TokenData } from "@/store/design-system";
+import { migrateTokenData } from "@/lib/tokens/migrate";
 import type { ProjectPayload } from "./payload";
 
 // Moving a synced project's parts into a project held in the browser, and the other way round (toPayload).
@@ -24,7 +24,7 @@ export function projectFromPayload(id: string, payload: ProjectPayload, info: Se
       tokenLink: payload.tokenLink as unknown as Project["repo"]["tokenLink"],
     },
     library: { source: null, components: [] },
-    tokens: { ...emptyTokenData(), ...(payload.tokens as unknown as Partial<TokenData>) },
+    tokens: migrateTokenData(payload.tokens),
     docs: payload.docs as Project["docs"],
   };
 }
@@ -51,7 +51,7 @@ export function applyPayload(project: Project, payload: ProjectPayload, info: Se
       pulledSha: sameRepo ? project.repo.pulledSha ?? null : null,
     },
     library: sameRepo || (!was && !next) ? project.library : { source: null, components: [] },
-    tokens: { ...emptyTokenData(), ...(payload.tokens as unknown as Partial<TokenData>) },
+    tokens: migrateTokenData(payload.tokens),
     docs: payload.docs as Project["docs"],
   };
 }

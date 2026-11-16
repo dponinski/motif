@@ -5,7 +5,8 @@ import { debouncedStorage } from "../lib/debounced-storage";
 import { safeStorage } from "../lib/safe-storage";
 import { storageProblem } from "./storage-problem";
 import type { DocBlock, DocPage } from "../lib/motif-document";
-import { emptyTokenData, type TokenData } from "./design-system";
+import { emptyStoredTokenData, migrateTokenData } from "../lib/tokens/migrate";
+import type { StoredTokenData } from "../lib/tokens/model";
 import type { GitConnection, RepoState } from "./git";
 import type { LibraryData } from "./library";
 
@@ -19,7 +20,8 @@ export interface Project {
   updatedAt: number;
   repo: RepoState;
   library: LibraryData;
-  tokens: TokenData;
+  // In the typed model (tokens and compositions); the token store holds the same tokens as five lists (lib/tokens/migrate.ts).
+  tokens: StoredTokenData;
   // The documentation pages the designer wrote or edited; generated pages exist without being stored.
   docs: DocPage[];
   // The team that shares it (null or missing for a person's own), and who last changed it there. They come from the
@@ -62,7 +64,7 @@ export const useProjectsStore = create<ProjectsStore>()(
           updatedAt: now,
           repo: { connection, analysis: null, tokenLink: null },
           library: { source: null, components: [] },
-          tokens: emptyTokenData(),
+          tokens: emptyStoredTokenData(),
           docs: [],
           ...(teamId ? { teamId } : {}),
         };
@@ -83,7 +85,7 @@ export const useProjectsStore = create<ProjectsStore>()(
     }),
     {
       name: "motif-projects",
-      version: 2,
+      version: 3,
       // Written a moment after the last change, and when the page is left: a design system with its scan and components is
       // large, and the editor saves into it every half second.
       storage: debouncedStorage<{ projects: Project[] }>({
@@ -103,6 +105,12 @@ export const useProjectsStore = create<ProjectsStore>()(
             .map((p) => ({ ...p, blocks: p.blocks.filter((b: DocBlock) => !native.has(b.type)) })),
         }));
         return { ...state, projects } as ProjectsStore;
+      },
+      // Whatever shape the tokens of a project were saved in (the five lists of version 2, the typed model), they are read as the typed model.
+      merge: (persisted, current) => {
+        const saved = persisted as { projects?: Project[] } | undefined;
+        if (!saved || !Array.isArray(saved.projects)) return current;
+        return { ...current, projects: saved.projects.map((p) => (p.tokens && (p.tokens as { tokensVersion?: unknown }).tokensVersion === 3 ? p : { ...p, tokens: migrateTokenData(p.tokens) })) };
       },
     }
   )
