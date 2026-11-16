@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { filterItems, groupItems, nextName, sortForReading, uniqueName, type Only } from "@/lib/tokens/organize";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { useDesignSystemStore, type ColorToken, type TokenKind, type TokenSet } from "@/store/design-system";
+import { tokenKey } from "@/lib/tokens/alias-colors";
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
 import { AddRow, type AddField } from "./fields";
@@ -202,6 +203,17 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
         groups={allGroups}
         sets={sets}
         setId={set.id}
+        alias={colorsView ? {
+          themes: set.themes,
+          targets: rows.filter((r) => !selection.selected.has(r.id)).map((r) => ({ key: tokenKey(r.token as ColorToken), name: r.name })),
+          apply: (choices) => {
+            let refused = 0;
+            editTokens(() => {
+              for (const id of selection.ids) for (const [theme, target] of Object.entries(choices)) if (!ds().setColorAlias(id, theme, target)) refused++;
+            });
+            return refused;
+          },
+        } : undefined}
         onGroup={(g) => { editTokens(() => ds().setTokenGroup(kind, selection.ids, g)); }}
         onSet={(id) => { editTokens(() => ds().moveTokensToSet(kind, selection.ids, id)); selection.clear(); }}
         onDuplicate={() => common.duplicate(selection.ids)}
