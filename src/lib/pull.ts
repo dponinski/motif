@@ -3,7 +3,7 @@ import { describeUpdate } from "./preview/library";
 import { scanBranch } from "./read-repository";
 import type { RepoAnalysis } from "./repo-scan/types";
 import { readRepoTokens } from "./token-sync/doc";
-import { linkShapeFor, planSync, type RepoState, type SyncPlan, type TokenLink } from "./token-sync/flow";
+import { healLink, linkShapeFor, planSync, themeLabel, type RepoState, type SyncPlan, type TokenLink } from "./token-sync/flow";
 import { keyPrefixes } from "./token-sync/keys";
 import { useDesignSystemStore } from "../store/design-system";
 import { repoSlug, useGitStore, type GitConnection } from "../store/git";
@@ -39,15 +39,20 @@ function pullTokens(analysis: RepoAnalysis, connection: GitConnection): { notes:
   const stored = git.tokenLink;
   const link = stored && stored.repo === slug && ds.sets.some((s) => s.id === stored.setId) ? stored : null;
 
-  if (link) {
+  if (stored && link) {
     // A link to another branch than the one pull requests are made from isn't followed.
     if (link.branch !== connection.defaultBranch) return { notes: [], conflicts: null };
-    const plan = planSync(link, tokenSlices(), state);
-    if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { link, plan, state } };
+    // A theme of the repository that was deleted from the set here is not mapped to anything any more: it comes back, as the repository has it.
+    const live = healLink(link, ds.sets);
+    const plan = planSync(live, tokenSlices(), state);
+    if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { link: live, plan, state } };
     const prefixes = keyPrefixes(analysis);
-    if (plan.toMotif.length > 0 || plan.merge.restored.length > 0) {
-      applySyncPlan(link, plan, [], state);
-      return { notes: [`${plural(plan.toMotif.length + plan.merge.restored.length, "token change")} from the repository`], conflicts: null };
+    // (Only for a theme that was deleted here: any other theme the repository has is brought in with its values, as a change.)
+    const back = live !== link ? analysis.themes.filter((key) => !(key in live.themes)) : [];
+    if (plan.toMotif.length > 0 || plan.merge.restored.length > 0 || back.length > 0) {
+      applySyncPlan(live, plan, [], state);
+      const changes = plan.toMotif.length + plan.merge.restored.length;
+      return { notes: [back.length > 0 ? `${plural(back.length, "theme")} brought back: ${back.map(themeLabel).join(", ")}` : `${plural(changes, "token change")} from the repository`], conflicts: null };
     }
     // Nothing to take; the link only learns how this repository names its tokens.
     if (JSON.stringify(link.prefixes) !== JSON.stringify(prefixes)) git.setTokenLink({ ...link, prefixes });
