@@ -75,7 +75,15 @@ export function filesOf(config: DtcgConfig, dir: string, theme: string | null): 
   return config.files === "single" ? [`${dir}/tokens${suffix}.json`] : config.sets.map((s) => `${dir}/${s.key}${suffix}.json`);
 }
 
+// The stylesheet as the blocks it is made of: `@theme` and `:root` for the base values, then each theme's selector with what it changes.
+export interface CssBlock { selector: string; lines: [string, string][] }
+
 export function generateCss(files: DtcgFiles): string {
+  const blocks = cssBlocks(files);
+  return `${HEADER}${blocks.length ? `\n${blocks.map((b) => block(b.selector, b.lines)).join("\n\n")}\n` : ""}`;
+}
+
+export function cssBlocks(files: DtcgFiles): CssBlock[] {
   const configPath = Object.keys(files).find((f) => f.endsWith("/tokens.config.json") || f === "tokens.config.json");
   if (!configPath) throw new Error("There is no tokens.config.json");
   const config = JSON.parse(files[configPath]) as DtcgConfig;
@@ -89,12 +97,12 @@ export function generateCss(files: DtcgFiles): string {
     for (const v of variablesOf(f.path, f.type, f.value, f.ext)) (config.tailwind && f.path.length > 1 && THEME_NAMESPACES.has(f.path[0]) ? inTheme : inRoot).push(v);
   }
 
-  const blocks: string[] = [];
+  const blocks: CssBlock[] = [];
   if (config.tailwind) {
-    if (inTheme.length) blocks.push(block("@theme", inTheme));
-    if (inRoot.length) blocks.push(block(":root", inRoot));
+    if (inTheme.length) blocks.push({ selector: "@theme", lines: inTheme });
+    if (inRoot.length) blocks.push({ selector: ":root", lines: inRoot });
   } else if (inTheme.length || inRoot.length) {
-    blocks.push(block(":root", [...inTheme, ...inRoot]));
+    blocks.push({ selector: ":root", lines: [...inTheme, ...inRoot] });
   }
 
   // The tokens a theme changes, with the type of the token they change.
@@ -105,9 +113,8 @@ export function generateCss(files: DtcgFiles): string {
       const was = typeAt.get(f.path.join("."));
       for (const v of variablesOf(f.path, f.type ?? was?.type, f.value, was?.ext ?? f.ext)) lines.push(v);
     }
-    if (lines.length) blocks.push(block(selector, lines));
+    if (lines.length) blocks.push({ selector, lines });
   }
-
-  return `${HEADER}${blocks.length ? `\n${blocks.join("\n\n")}\n` : ""}`;
+  return blocks;
 }
 

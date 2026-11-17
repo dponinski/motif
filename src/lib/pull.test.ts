@@ -172,7 +172,7 @@ describe("the first pull of a repository whose tokens are variables in its style
     expect(useLibraryStore.getState().components.length).toBeGreaterThan(5);
     // The set every project starts with is the repository's, not left empty beside another.
     expect(ds().sets).toHaveLength(1);
-    expect(ds().sets[0].name).toBe("ds");
+    expect(ds().sets[0].name).toBe("acme/ds");
     const link = git().tokenLink;
     expect(isDtcgLink(link)).toBe(true);
     expect(sheetLink()).toBeNull();

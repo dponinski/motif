@@ -130,7 +130,7 @@ async function convertExport(input: { host: GitHost & RepoReader; link: DtcgLink
   const convert = link.convert!;
   const state = await readRepoState(host, link.repo, link.branch);
   // The stylesheets have changed since the tokens were pulled: they come first, or a value the repository changed would be written over.
-  const now = convertAnalysis(state.analysis, link.repo.split("/").pop() ?? link.repo);
+  const now = convertAnalysis(state.analysis, link.repo);
   if (!now || JSON.stringify(canonicalFiles(now.files)) !== JSON.stringify(canonicalFiles(link.base))) {
     return { link, staged: 0, attention: "The repository's tokens have changed since they were pulled. Pull to bring the changes in; the tokens are not in the pull request until then." };
   }

@@ -66,7 +66,7 @@ async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection, a
   let found: RepoTokenFiles | null = real;
   let convert: DtcgLink["convert"];
   if (!real && (!stored || stored.convert) && convertOnPull()) {
-    const conv = convertAnalysis(analysis, slug.split("/").pop() ?? slug);
+    const conv = convertAnalysis(analysis, slug);
     if (conv) {
       const configPath = `${conv.dir}/tokens.config.json`;
       found = { configPath, dir: conv.dir, config: JSON.parse(conv.files[configPath]), files: conv.files };

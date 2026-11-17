@@ -11,8 +11,10 @@ import { motifOnlyTokens } from "@/lib/edit/motif-tokens";
 import type { RepoToken } from "@/lib/repo-scan/types";
 import { aliasTarget } from "@/lib/tokens/alias";
 import { EMPTY_INDEX, buildTokenIndex, type TokenIndex } from "@/lib/edit/tokens";
-import { useDesignSystemStore } from "@/store/design-system";
-import { stylesheetLink, useGitStore } from "@/store/git";
+import { dtcgOverrides } from "@/lib/dtcg/overrides";
+import { toStored } from "@/lib/tokens/migrate";
+import { snapshotTokens, useDesignSystemStore } from "@/store/design-system";
+import { isDtcgLink, stylesheetLink, useGitStore } from "@/store/git";
 import type { LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
@@ -77,6 +79,13 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
   const motifTokens = usePreviewStore((s) => s.motifTokens);
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
   const analysis = useGitStore((s) => s.analysis);
+  // A repository whose tokens are design tokens files (or about to be): what is shown is what the files would come to with Motif's tokens.
+  const files = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink : null));
+  const tokens = useDesignSystemStore(useShallow((s) => ({ sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions })));
+  const fromFiles = useMemo(
+    () => (files && repo && files.repo === repo ? dtcgOverrides(files, toStored(snapshotTokens({ ...useDesignSystemStore.getState(), ...tokens }))) : null),
+    [files, repo, tokens]
+  );
   const motif = useMemo(
     () => (link && repo && link.repo === repo
       ? tokenOverrides(readMotifTokens({ colors, spacing, radii, shadows }, analysis ? { ...link, prefixes: keyPrefixes(analysis) } : link), link.base, link.baseTheme, Object.keys(link.themes), analysis?.stack.tailwindVersion === 3 ? channelForms(analysis.tokens) : {})
@@ -93,6 +102,7 @@ export function useTokenOverrides(repo: string | null): { css: string; changed: 
     const extend = tailwind3Extend(readMotifTokens({ colors, spacing, radii, shadows }, { ...link, prefixes: keyPrefixes(analysis) }), link.base, link.baseTheme, analysis.tokens);
     return Object.keys(extend).length ? JSON.stringify(extend) : "";
   }, [analysis, link, repo, colors, spacing, radii, shadows]);
+  if (fromFiles) return { css: fromFiles.css, changed: fromFiles.changed, shown: motifTokens ? fromFiles.css : "", theme: motifTokens ? fromFiles.theme : "" };
   return { ...motif, shown: motifTokens ? motif.css : "", theme: motifTokens ? theme : "" };
 }
 
