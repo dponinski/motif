@@ -292,14 +292,15 @@ const check = (name, ok, detail = "") => {
   await tokensFile.getByText("This repository has no design tokens yet.").waitFor({ timeout: 30000 });
   await page.screenshot({ path: `${OUT}/tokens-export.png` });
   await tokensFile.getByRole("button", { name: "Add to pull request" }).click();
-  await page.getByText(/Added \d+ tokens in src\/tokens\.css to your pull request/).waitFor({ timeout: 30000 });
+  await page.getByText(/Added \d+ design tokens to your pull request/).waitFor({ timeout: 30000 });
   check("adding tokens to a repository that has none sends nothing yet", prs.length === 2);
   await syncNow(page, 3);
   const exportPr = prs[2];
   const bare = repos["acme/bare"][exportPr.head];
-  check("a tokens stylesheet is added and imported from the Tailwind stylesheet", bare.has("src/tokens.css") && bare.get("src/index.css") === '@import "tailwindcss";\n@import "./tokens.css";\n\nbody { margin: 0; }\n');
+  check("design tokens files and the stylesheet built from them are added, and imported from the Tailwind stylesheet", bare.has("src/tokens/tokens.json") && bare.has("src/tokens/tokens.config.json") && bare.has("style-dictionary.config.mjs") && bare.has("src/tokens.css") && bare.get("src/index.css") === '@import "tailwindcss";\n@import "./tokens.css";\n\nbody { margin: 0; }\n');
   if (process.env.SHOW) console.log(bare.get("src/tokens.css").split("\n").slice(0, 80).join("\n"));
-  check("it holds variables and the Tailwind wiring", /:root \{\n[\s\S]*--primary: #6366f1;/.test(bare.get("src/tokens.css")) && bare.get("src/tokens.css").includes("@theme inline {\n  --color-primary: var(--primary);") && /@theme \{[\s\S]*--radius-md: 4px;/.test(bare.get("src/tokens.css")));
+  const sheet = bare.get("src/tokens.css");
+  check("it holds the variables Tailwind builds classes from, in @theme", sheet.includes("@theme {") && sheet.includes("--color-primary: #6366f1;") && sheet.includes("--spacing-4: 16px;") && sheet.includes("--radius-md: 4px;"), sheet);
   check("the pull request explains what it adds", exportPr.title === "Changes from Motif" && /- Add \d+ design tokens from Motif/.test(exportPr.body));
   mergePr(3);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));

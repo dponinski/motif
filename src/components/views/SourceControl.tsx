@@ -8,6 +8,8 @@ import { diffLines } from "@/lib/edit/diff";
 import { stackLine, stylingLine, supportCounts } from "@/lib/repo-scan/summary";
 import { scanBranch } from "@/lib/read-repository";
 import { planExport, readRepoState } from "@/lib/token-sync/flow";
+import { stageDtcgTokens } from "@/lib/work/dtcg-tokens";
+import { toStored } from "@/lib/tokens/migrate";
 import { changeLine, tokenSummary } from "@/lib/token-sync/pr";
 import { overlayOf, overlayReader } from "@/lib/work/overlay";
 import { stageFiles } from "@/lib/work/stage";
@@ -15,7 +17,7 @@ import { plan, statusOf, type Changed } from "@/lib/work/sync";
 import { changedFiles, useEditStore, type ChangedFile } from "@/store/edit";
 import { isDtcgLink, NO_CONNECTION, repoSlug, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
 import { useAccount } from "@/store/account";
-import { useDesignSystemStore } from "@/store/design-system";
+import { snapshotTokens, useDesignSystemStore } from "@/store/design-system";
 import { usePullStatus } from "@/store/pull";
 import { firstProblem, storageProblem } from "@/store/storage-problem";
 import { tokenSlices } from "@/store/token-sync";
@@ -168,6 +170,42 @@ function ExportTokens({ connection, onDone }: { connection: GitConnection; onDon
   );
 }
 
+// The same for a repository whose tokens will be design tokens files: every set goes in, with the stylesheet they come to and what builds it.
+function ExportTokenFiles({ connection, onDone }: { connection: GitConnection; onDone: (text: string) => void }) {
+  const host = useGitHost(connection);
+  const link = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink : null));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const wrongBranch = !!link && link.branch !== connection.defaultBranch;
+
+  const create = async () => {
+    if (!link) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const staged = await stageDtcgTokens({ host, link, model: toStored(snapshotTokens(useDesignSystemStore.getState())), overlay: overlayOf(useEditStore.getState()), scope: editScope(connection) });
+      useGitStore.getState().setTokenLink(staged.link);
+      onDone(staged.staged > 0 ? `Added ${staged.staged} design token${staged.staged === 1 ? "" : "s"} to your pull request. Push sends them.${staged.attention ? ` ${staged.attention}` : ""}` : "There are no tokens to add yet.");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-1.5 rounded-md border border-surface-border p-2.5" aria-label="Tokens file" data-tokens-file data-dtcg>
+      <p className="text-xs leading-relaxed text-text-secondary">This repository has no design tokens yet. Every set goes in as design tokens files, with the stylesheet they come to and what builds it, when you push, or now.</p>
+      {wrongBranch && <p className="text-xs text-amber-500">Changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent.</p>}
+      {error && <p role="alert" className="break-words text-xs text-red-400">{error}</p>}
+      <button className={cn(secondary, "self-start")} onClick={create} disabled={busy || !link || wrongBranch}>
+        {busy && <Loader2 size={12} className="animate-spin" />}
+        Add to pull request
+      </button>
+    </section>
+  );
+}
+
 // ── The repository, read ──────────────────────────────────────────────────────
 
 function Details({ connection, onOpenReport }: { connection: GitConnection; onOpenReport: () => void }) {
@@ -235,6 +273,10 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
   // The tokens are design tokens files, for every set.
   const filesDir = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.dir || "the top of the repository" : null));
   const filesOutput = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.output : null));
+  // Waiting for the first push: the repository has no tokens, and every set will go in as files.
+  const awaitingFiles = useGitStore((s) => isDtcgLink(s.tokenLink) && !!s.connection && s.tokenLink.repo === repoSlug(s.connection) && !s.tokenLink.staged && Object.keys(s.tokenLink.base).length === 0 && !!s.analysis && s.analysis.tokens.length === 0);
+  // Not sent yet: the repository has none.
+  const filesNew = useGitStore((s) => isDtcgLink(s.tokenLink) && Object.keys(s.tokenLink.base).length === 0 && !s.tokenLink.staged && !!s.analysis && s.analysis.tokens.length === 0);
   const analysis = useGitStore((s) => s.analysis);
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);
@@ -277,6 +319,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
   const mustUpdate = status.reason === "behind";
   const awaitingExport = !!link && link.repo === slug && !link.staged && Object.keys(link.base).length === 0 && !!analysis && analysis.tokens.length === 0;
 
+
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-3 select-text">
       <div className="flex items-center gap-2">
@@ -317,6 +360,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
       )}
 
       {awaitingExport && <ExportTokens connection={connection} onDone={setTokensNote} />}
+      {awaitingFiles && <ExportTokenFiles connection={connection} onDone={setTokensNote} />}
 
       {tokenChanges.length > 0 && (
         <section className="flex flex-col gap-1.5" aria-label="Token changes">
@@ -380,7 +424,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
       )}
 
       {filesDir !== null && (
-        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Push sends Motif&apos;s token changes to the files{filesOutput ? ` and writes ${filesOutput} from them` : ""}.</p>
+        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>{filesNew ? <>Tokens: every set will go into design tokens files in {filesDir} with the first push.</> : <>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Push sends Motif&apos;s token changes to the files{filesOutput ? ` and writes ${filesOutput} from them` : ""}.</>}</p>
       )}
       {link && link.repo === slug && (
         <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link>Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository.</p>

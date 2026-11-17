@@ -137,3 +137,52 @@ describe("what the pull request says", () => {
     expect(text.split("\n")).toEqual(["Update 2 design tokens from Motif", "`color.brand` (dark): `#fff` → `#000`", "`ratio`: `2`", "Not changed: `x`"]);
   });
 });
+
+describe("the first push of a repository that has no tokens", () => {
+  beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
+  const empty = () => repoOf({ "package.json": '{"name":"app","dependencies":{"react":"^19.0.0"}}', "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" });
+  const awaiting = (): DtcgLink => ({ format: "dtcg", repo: "a/b", branch: "main", dir: "src/tokens", files: "single", output: "src/styles/tokens.css", tailwind: false, base: {}, staged: null, syncedAt: 0 });
+
+  it("counts every token of every set as waiting", () => {
+    const waiting = waitingDtcgChanges(awaiting(), fixture());
+    expect(waiting.length).toBeGreaterThan(10);
+    expect(waiting.every((c) => c.type === "added")).toBe(true);
+  });
+
+  it("puts the files, the stylesheet, the build and package.json in the editor as one step", async () => {
+    const repo = empty();
+    const r = await stage(repo, awaiting(), fixture());
+    expect(r.staged).toBeGreaterThan(10);
+    expect(Object.keys(edits()).sort()).toEqual(["package.json", "src/styles/tokens.css", "src/tokens/tokens.config.json", "src/tokens/tokens.dark.json", "src/tokens/tokens.json", "style-dictionary.config.mjs"]);
+    expect(JSON.parse(edits()["package.json"]).scripts["tokens:build"]).toBe("node style-dictionary.config.mjs");
+    expect(edits()["src/styles/tokens.css"]).toContain("--color-brand: oklch(0.6 0.2 260);");
+    // The repository is untouched, and it is one undo.
+    expect(Object.keys(repo.files).sort()).toEqual(["package.json", "src/Button.tsx"]);
+    useEditStore.getState().undo();
+    expect(Object.keys(edits())).toEqual([]);
+  });
+
+  it("moves the link on to what was written, with its base still empty until the pull request is merged", async () => {
+    const r = await stage(empty(), awaiting(), fixture());
+    expect(r.link).toMatchObject({ dir: "src/tokens", files: "single", output: "src/styles/tokens.css", base: {} });
+    expect(r.link.staged!.paths).toContain("src/tokens/tokens.json");
+    expect(Object.keys(r.link.staged!.files)).toContain("src/tokens/tokens.config.json");
+    expect(waitingDtcgChanges(r.link, fixture())).toEqual([]);
+  });
+
+  it("builds on itself: a token changed after is a change to the files that are in the pull request", async () => {
+    const repo = empty();
+    const first = await stage(repo, awaiting(), fixture());
+    const second = await stage(repo, first.link, withColor(fixture(), "g50", "p-l", "#ff0000"));
+    expect(second.staged).toBe(1);
+    expect(second.attention).toBeNull();
+    expect(edits()["src/styles/tokens.css"]).toContain("--color-gray-50: #ff0000;");
+    expect(JSON.parse(edits()["src/tokens/tokens.json"]).color["gray-50"].$value.hex).toBe("#ff0000");
+  });
+
+  it("has nothing to add for a project with no tokens", async () => {
+    const r = await stage(empty(), awaiting(), { ...fixture(), tokens: [], compositions: [] });
+    expect(r.staged).toBe(0);
+    expect(Object.keys(edits())).toEqual([]);
+  });
+});

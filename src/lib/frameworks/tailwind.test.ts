@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { scanRepository, memorySource } from "../repo-scan";
 import { readRepoState, planExport } from "../token-sync/flow";
+import { fixture } from "../dtcg/fixture";
+import { generateCss } from "../dtcg/generate";
+import { writeDtcg } from "../dtcg/write";
 import { FrameworkRefusal, TAILWIND_VERSION, addDevDependency, newPackageJson, planTailwind, tailwindSummary } from "./tailwind";
 
 // A host holding files in memory, with the sha each has.
@@ -173,5 +176,34 @@ describe("planned over what is already in the pull request", () => {
     const overlay2 = { texts: both, bases: Object.fromEntries(Object.keys(both).map((p) => [p, { text: "", sha: null }])) };
     const oh2 = overlayReader(reader, overlay2);
     await expect(planTailwind(oh2, await readRepoState(oh2, "acme/ds", "main"), "main", "ds")).rejects.toThrow(/already set up/);
+  });
+});
+
+describe("Tailwind added to a repository whose tokens are design tokens files", () => {
+  const model = fixture();
+  const written = writeDtcg(model, { files: "single", dir: "src/tokens", output: "src/styles/tokens.css", tailwind: false });
+  const repoFiles = (css: string) => ({ ...written.files, "src/styles/tokens.css": css, "package.json": '{"name":"app"}' });
+  const hostOf = (files: Record<string, string>) => ({
+    listTree: async () => ({ paths: Object.keys(files), truncated: false }),
+    readText: async (path: string) => files[path] ?? null,
+    getFile: async (path: string) => (path in files ? { path, text: files[path], sha: `sha-${path}` } : null),
+  }) as never;
+  const state = (analysis: object) => ({ analysis: { stack: { tailwindVersion: null }, styleFiles: ["src/styles/tokens.css"], tokens: [], ...analysis }, snapshot: { doc: {}, baseTheme: "light" } }) as never;
+
+  it("says Tailwind in the config and writes the stylesheet again with @theme, which the new stylesheet imports", async () => {
+    const plan = await planTailwind(hostOf(repoFiles(generateCss(written.files))), state({}), "main", "app");
+    expect(JSON.parse(plan.files["src/tokens/tokens.config.json"].text).tailwind).toBe(true);
+    expect(plan.files["src/styles/tokens.css"].text).toContain("@theme {");
+    expect(plan.files["src/styles/tokens.css"].text).toContain("--color-brand: oklch(0.6 0.2 260);");
+    expect(plan.files["src/styles/tailwind.css"].text).toBe('@import "tailwindcss";\n@import "./tokens.css";\n');
+    expect(plan.summary.map((s) => s.path)).toEqual(expect.arrayContaining(["src/tokens/tokens.config.json", "src/styles/tokens.css"]));
+  });
+
+  it("leaves a stylesheet that isn't one Motif's build writes, and says so", async () => {
+    const plan = await planTailwind(hostOf(repoFiles(":root { --x: 1; }\n")), state({}), "main", "app");
+    expect(plan.files["src/styles/tokens.css"]).toBeUndefined();
+    expect(plan.files["src/tokens/tokens.config.json"]).toBeUndefined();
+    expect(plan.notes.join(" ")).toContain("isn't a file Motif's build writes");
+    expect(plan.files["src/styles/tailwind.css"].text).toBe('@import "tailwindcss";\n');
   });
 });
