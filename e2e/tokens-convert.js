@@ -118,6 +118,38 @@ const check = (name, ok, detail = "") => {
   const settled = await page.locator("[data-token-link][data-dtcg]").first().innerText();
   check("the panel talks about the files, not the conversion", /design tokens files in src\/tokens/.test(settled) && !/variables in your stylesheets/.test(settled), settled);
 
+  // ── Renaming a token that is in the files: everywhere it is used ───────────
+  const nav = async (title) => { await page.locator(`nav button[title="${title}"]`).click(); await page.waitForLoadState("networkidle").catch(() => {}); await page.waitForTimeout(250); };
+  await nav("Tokens");
+  await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
+  await page.getByRole("tab", { name: /Colors/ }).click();
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  await page.getByLabel("Select primary", { exact: true }).waitFor();
+  await page.getByLabel("Edit primary (Light)").click();
+  const editor = page.locator("[data-color-editor]");
+  await editor.waitFor();
+  check("a token that is in the files can be renamed in the repository", await editor.locator("[data-rename-open]").isVisible());
+  await editor.locator("[data-rename-open]").click();
+  const rename = page.getByRole("dialog", { name: /Rename primary in the repository/ });
+  await rename.getByLabel("New name").fill("accent");
+  await rename.getByRole("button", { name: "Find places" }).click();
+  await rename.locator("[data-rename-plan]").waitFor({ timeout: 30000 });
+  await rename.getByRole("button", { name: "Rename and add to pull request" }).click();
+  await settle(async () => (await page.getByRole("dialog").count()) === 0);
+  await page.screenshot({ path: `${OUT}/tokens-convert-renamed.png` });
+  check("nothing is waiting but the rename, which is not a token removed and another added", !/TOKEN CHANGES/i.test(await page.locator("body").innerText()));
+  await page.locator('nav button[title="Source control"]').click();
+  await page.getByRole("button", { name: "Push" }).click();
+  check("Push opens another pull request", await settle(async () => repo.prs.length === 2 && (await status()).includes("In sync with pull request #2")), await status());
+  const head2 = gh.files(repo.prs[1].head);
+  const base2 = gh.files("main");
+  const changed2 = [...head2].filter(([p, t]) => t !== base2.get(p)).map(([p]) => p).sort();
+  check("it changes the files, the generated stylesheet, the stylesheet's own alias and the component", changed2.join() === "src/app.css,src/components/Badge.tsx,src/tokens.css,src/tokens/tokens.dark.json,src/tokens/tokens.json", changed2.join());
+  const t2 = JSON.parse(head2.get("src/tokens/tokens.json"));
+  check("the token is at its new place in the files, and the old place is gone", !!t2.accent && !("primary" in t2) && !("primary" in JSON.parse(head2.get("src/tokens/tokens.dark.json"))) && "accent" in JSON.parse(head2.get("src/tokens/tokens.dark.json")), Object.keys(t2).join());
+  check("the generated stylesheet has the variable under its new name, in both themes", /--accent: oklch\(0\.55 0\.2 260\);/.test(head2.get("src/tokens.css")) && /\.dark \{[^}]*--accent:/.test(head2.get("src/tokens.css")) && !head2.get("src/tokens.css").includes("--primary:"), head2.get("src/tokens.css"));
+  check("the alias Tailwind reads and the component follow", head2.get("src/app.css").includes("--color-accent: var(--accent);") && head2.get("src/components/Badge.tsx").includes("bg-accent") && !head2.get("src/components/Badge.tsx").includes("bg-primary "), head2.get("src/components/Badge.tsx"));
+
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));
   await browser.close();

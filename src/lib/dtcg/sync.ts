@@ -113,7 +113,7 @@ function nameOf(path: string[]): string {
   return (at === -1 ? path : path.slice(0, at)).join(".");
 }
 
-export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: DtcgFiles): DtcgMerge {
+export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: DtcgFiles, options: { gone?: ReadonlySet<string> } = {}): DtcgMerge {
   // The three sides in the same form, so a color written differently isn't a change.
   const [base, mine, theirs] = [canonicalFiles(rawBase), canonicalFiles(rawMine), canonicalFiles(rawTheirs)];
   const trees: Record<string, unknown> = {};
@@ -131,7 +131,7 @@ export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: Dtc
       const was = new Set(tokenPaths(b).map((p) => p.join(".")));
       for (const path of tokenPaths(t)) {
         const key = path.join(".");
-        if (was.has(key) && !have.has(key)) { m = setAt(m, path, getAt(t, path)) as Obj; restored.push(key); }
+        if (was.has(key) && !have.has(key) && !options.gone?.has(key)) { m = setAt(m, path, getAt(t, path)) as Obj; restored.push(key); }
       }
     }
     const { merged, conflicts: clashes } = mergeJson(freeze(b), freeze(m), freeze(t));
@@ -233,6 +233,9 @@ export interface DtcgLink {
   // A repository whose tokens are still variables in its stylesheets: `base` is what they come to as design tokens files (lib/dtcg/convert.ts),
   // and the first push is what writes the files and takes the variables out of the stylesheets. Gone when the pull request is merged.
   convert?: Pick<Conversion, "converted" | "containers" | "selectors" | "left">;
+  // Tokens renamed here since the last sync, by the path they had (`color.primary`) and the one they have (`color.brand`): the old path is gone
+  // on purpose, so a sync doesn't bring it back. Cleared when the pull request is merged.
+  renamed?: Record<string, string>;
   syncedAt: number;
 }
 
@@ -245,9 +248,12 @@ export interface DtcgPlan {
   toRepo: DtcgChange[];
 }
 
+// The paths that were renamed away: not tokens deleted, so not brought back.
+export const goneOf = (link: Pick<DtcgLink, "renamed">): ReadonlySet<string> => new Set(Object.keys(link.renamed ?? {}));
+
 export function planDtcgSync(link: DtcgLink, model: StoredTokenData, theirs: DtcgFiles): DtcgPlan {
   const mine = writeDtcg(model, writeOptionsOf(link)).files;
-  const merge = mergeDtcg(link.base, mine, theirs);
+  const merge = mergeDtcg(link.base, mine, theirs, { gone: goneOf(link) });
   return { merge, toMotif: describeDtcgChanges(mine, merge.files), toRepo: describeDtcgChanges(theirs, merge.files) };
 }
 

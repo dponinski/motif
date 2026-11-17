@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useDesignSystemStore, DEFAULT_GROUP, type ColorToken, type NumberToken, type RadiusToken, type ShadowToken, type SpacingToken, type StringToken, type TokenKind, type TypographyToken } from "@/store/design-system";
 import { isDtcgLink, useGitStore } from "@/store/git";
-import { COMPOSITION_NAMESPACE, leafOf, pathOf, placeOf } from "@/lib/dtcg/names";
+import { COMPOSITION_NAMESPACE, leafOf, pathOf, placeOf, repoNameOfPlace } from "@/lib/dtcg/names";
 import { useTokenChanges } from "@/components/work/useWork";
 import { cssName, readRepoTokens, type SyncKind } from "@/lib/token-sync/doc";
 import { keyPrefixes, repoKey } from "@/lib/token-sync/keys";
@@ -27,6 +27,8 @@ export interface Row {
   // The repository defines it somewhere Motif can't edit yet (a Tailwind config file, a JSON file).
   readonly: boolean;
   token: Token;
+  // The variable it makes in the repository, when it is in design tokens files (`color-brand`), else its name there.
+  variable: string | null;
   // Where the repository's code uses it, when that is known (the repository has been scanned for it, and the token is its own).
   use: { n: number; files: string[]; components: string[] } | null;
   // Known to be used nowhere the scan looks (class names and var() in components and stylesheets).
@@ -52,7 +54,7 @@ function searchText(kind: TokenKind, t: Token, themes: { id: string }[], data: C
 }
 
 // Where a token is in the design tokens files: the path its variable is named by (`color.brand` is `--color-brand`).
-function pathInFiles(kind: TokenKind, t: Token): string[] | null {
+export function pathInFiles(kind: TokenKind, t: Token): string[] | null {
   const repoName = (t as { repoName?: string }).repoName;
   const placed = placeOf(repoName);
   if (placed) return placed;
@@ -97,6 +99,7 @@ export function useRows(outer: TokenKind, setId: string, themes: { id: string }[
       const counted = analysis?.tokenUsage && (repoName || place) && analysis.tokens.some((x) => x.name === key) ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
       const use = counted ? { ...counted, components: [...new Set(counted.files.flatMap((f) => componentsIn.get(f) ?? []))] } : null;
       return {
+        variable: place ? place.join("-") : repoName ?? null,
         id: t.id, kind, name: t.name, group: (t as { group?: string }).group || DEFAULT_GROUP,
         text: searchText(kind, t, themes, data), linked: !!repoName || (!!place && !!analysis?.tokens.some((x) => x.name === key)), changed: changed.has(place ? place.join(".") : key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
         differs: kind === "color" && themes.length > 1 && new Set(themes.map((th) => { const c = t as ColorToken; return hexOf(c.themeValues[th.id] ?? c.value).toLowerCase(); })).size > 1,
@@ -104,4 +107,11 @@ export function useRows(outer: TokenKind, setId: string, themes: { id: string }[
     }),
     [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes, data, inFiles]
   );
+}
+
+// What a token is called, and where it is when that isn't where its name puts it, once it is at `place` in the files.
+export function nameAtPlace(kind: TokenKind, t: Token, place: string[]): { name: string; repoName: string | undefined } {
+  const name = place.length > 1 ? place[place.length - 1] : place[0];
+  const natural = pathInFiles(kind, { ...t, name, repoName: undefined } as Token);
+  return { name, repoName: natural && natural.join(".") === place.join(".") ? undefined : repoNameOfPlace(place) };
 }

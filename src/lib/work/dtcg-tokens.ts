@@ -3,9 +3,9 @@ import { describeCheck, editStylesheets, type Sheet } from "../dtcg/convert-edit
 import { convertAnalysis } from "../dtcg/convert";
 import { planDtcgExport } from "../dtcg/export";
 import { generateCss, HEADER } from "../dtcg/generate";
-import { patchFiles } from "../dtcg/patch";
+import { applyRenames, patchFiles } from "../dtcg/patch";
 import { readRepoTokenFiles } from "../dtcg/repo";
-import { canonicalFiles, describeDtcgChanges, mergeDtcg, planDtcgSync, writeOptionsOf, type DtcgChange, type DtcgLink } from "../dtcg/sync";
+import { canonicalFiles, describeDtcgChanges, goneOf, mergeDtcg, planDtcgSync, writeOptionsOf, type DtcgChange, type DtcgLink } from "../dtcg/sync";
 import { writeDtcg } from "../dtcg/write";
 import type { StoredTokenData } from "../tokens/model";
 import { readRepoState } from "../token-sync/flow";
@@ -31,7 +31,7 @@ export function waitingDtcgChanges(link: DtcgLink | null, model: StoredTokenData
   if (!link) return [];
   // (Tokens still in the stylesheets are not waiting: moving them into files goes with the next push, whatever it is for, or with "Add to pull
   // request"; what is waiting is what Motif changed besides.)
-  return describeDtcgChanges(link.staged?.files ?? link.base, writeDtcg(model, writeOptionsOf(link)).files);
+  return describeDtcgChanges(link.staged?.files ?? applyRenames(link.base, link.renamed), writeDtcg(model, writeOptionsOf(link)).files);
 }
 
 const MAX_LISTED = 60;
@@ -76,12 +76,12 @@ export async function stageDtcgTokens(input: {
   }
 
   const mine = writeDtcg(model, writeOptionsOf(link)).files;
-  const merge = mergeDtcg(link.base, mine, planned.files);
+  const merge = mergeDtcg(link.base, mine, planned.files, { gone: goneOf(link) });
   const toRepo = describeDtcgChanges(planned.files, merge.files);
   const done = (paths: string[]): DtcgLink => ({ ...link, staged: { files: merge.files, paths: [...new Set([...(link.staged?.paths ?? []), ...paths])] } });
   if (toRepo.length === 0) return { link: done([]), staged: 0, attention: null };
 
-  const files = patchFiles(planned.files, merge.files);
+  const files = patchFiles(planned.files, merge.files, { gone: goneOf(link) });
   const notes: string[] = [];
   let attention: string | null = null;
 

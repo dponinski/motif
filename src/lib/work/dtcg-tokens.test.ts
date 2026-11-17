@@ -137,6 +137,36 @@ describe("staging token changes when the tokens are design tokens files", () => 
   });
 });
 
+describe("renaming a token that is in the files", () => {
+  beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
+  const renamed = (m: StoredTokenData): StoredTokenData => ({ ...m, tokens: m.tokens.map((t) => (t.id === "g50" ? { ...t, name: "gray-25" } : t)) });
+
+  it("moves the token to its new place, and the old place goes", async () => {
+    const { repo, link, model } = linked();
+    const r = await stage(repo, { ...link, renamed: { "color.gray-50": "color.gray-25" } }, renamed(model));
+    const tree = JSON.parse(edits()[PRIM]);
+    expect(tree.color["gray-25"].$value.hex).toBe("#f9fafb");
+    expect("gray-50" in tree.color).toBe(false);
+    expect(edits()[CSS]).toContain("--color-gray-25: #f9fafb;");
+    expect(edits()[CSS]).not.toContain("--color-gray-50");
+    expect(r.attention).toBeNull();
+  });
+
+  it("is held back when it wasn't said to be a rename (a token gone from Motif is brought back, not deleted from the repository)", async () => {
+    const { repo, link, model } = linked();
+    const r = await stage(repo, link, renamed(model));
+    expect(r.staged).toBe(0);
+    expect(r.attention).toMatch(/Pull/);
+    expect(edits()).toEqual({});
+  });
+
+  it("is not waiting again once it is staged", async () => {
+    const { repo, link, model } = linked();
+    const r = await stage(repo, { ...link, renamed: { "color.gray-50": "color.gray-25" } }, renamed(model));
+    expect(waitingDtcgChanges(r.link, renamed(model))).toEqual([]);
+  });
+});
+
 describe("what the pull request says", () => {
   it("lists the token changes under the first line", () => {
     const text = dtcgSummary([{ name: "color.brand", theme: "dark", type: "changed", before: "#fff", after: "#000" }, { name: "ratio", theme: null, type: "added", after: "2" }], ["Not changed: `x`"]);

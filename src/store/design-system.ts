@@ -213,6 +213,9 @@ interface DesignSystemStore {
   // A token the repository names takes the name the repository will have for it (the files are changed by the rename that stages them),
   // and the colors that are it follow. False when it isn't one of the repository's, or another token of its set has that name.
   renameRepoToken: (kind: TokenKind, id: string, to: string) => boolean;
+  // Renames a token that is in design tokens files: its name, and the place it is at when that isn't where its name puts it (`repoName`).
+  // Colors that are it stay it.
+  renameFileToken: (kind: TokenKind, id: string, name: string, repoName: string | undefined) => boolean;
   setTokenGroup: (kind: TokenKind, ids: string[], group: string) => void;
   moveTokensToSet: (kind: TokenKind, ids: string[], setId: string) => void;
   duplicateTokens: (kind: TokenKind, ids: string[]) => string[];
@@ -624,6 +627,19 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         const from = token.repoName;
         set((s) => {
           const next = withList(kind, listOf(s, kind).map((t) => (t.id === id ? { ...t, name: to, repoName: to } : t))) as Partial<TokenData>;
+          return (kind === "color" ? { ...next, colors: renameAlias(next.colors!, token.setId, from, to) } : next) as never;
+        });
+        return true;
+      },
+
+      renameFileToken: (kind, id, name, repoName) => {
+        const token = listOf(get(), kind).find((t) => t.id === id);
+        if (!token || !name) return false;
+        const to = tokenKey({ name, repoName });
+        if (listOf(get(), kind).some((t) => t.id !== id && t.setId === token.setId && tokenKey(t as { name: string; repoName?: string }) === to)) return false;
+        const from = tokenKey(token as { name: string; repoName?: string });
+        set((s) => {
+          const next = withList(kind, listOf(s, kind).map((t) => (t.id === id ? { ...t, name, repoName } : t))) as Partial<TokenData>;
           return (kind === "color" ? { ...next, colors: renameAlias(next.colors!, token.setId, from, to) } : next) as never;
         });
         return true;
