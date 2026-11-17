@@ -7,13 +7,16 @@ import { editPrBody } from "@/lib/work/body";
 import { refreshWork, syncWork, SyncFailed, WorkEnded, type Changed, type WorkState } from "@/lib/work/sync";
 import { overlayOf, overlayReader } from "@/lib/work/overlay";
 import { advanceLink, changedTokenNames, stageTokens, waitingTokenChanges } from "@/lib/work/tokens";
+import { stageDtcgTokens, waitingDtcgChanges } from "@/lib/work/dtcg-tokens";
+import { toStored } from "@/lib/tokens/migrate";
+import type { TokenChange } from "@/lib/token-sync/merge";
 import { readRepoState } from "@/lib/token-sync/flow";
 import { tokenSlices } from "@/store/token-sync";
-import { useDesignSystemStore } from "@/store/design-system";
+import { snapshotTokens, useDesignSystemStore } from "@/store/design-system";
 import { errorMessage, useCanSend, useGitHost } from "@/components/git/hooks";
 import { useReadRepository } from "@/components/stage/useReadRepository";
 import { changedFiles, editLog, useEditStore, type Base } from "@/store/edit";
-import { NO_CONNECTION, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
+import { isDtcgLink, NO_CONNECTION, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { usePullStatus } from "@/store/pull";
 import { useWorkRuntime } from "@/store/work";
@@ -21,6 +24,9 @@ import { useWorkRuntime } from "@/store/work";
 const REFRESH_EVERY = 60_000;
 
 export const TITLE = "Changes from Motif";
+
+// Motif's tokens in the form that is compared with the design tokens files.
+const currentModel = () => toStored(snapshotTokens(useDesignSystemStore.getState()));
 
 const toChanged = (): Changed[] => changedFiles(useEditStore.getState()).map((f) => ({ path: f.path, before: f.before, after: f.after, sha: f.sha }));
 
@@ -48,6 +54,8 @@ export function discardChanges(paths: string[]) {
   // Token files that are given up are no longer what Motif's tokens were written to: they are waiting again.
   const link = stylesheetLink(useGitStore.getState().tokenLink);
   if (link?.staged && paths.some((p) => link.staged!.paths.includes(p))) useGitStore.getState().setTokenLink({ ...link, staged: null });
+  const files = useGitStore.getState().tokenLink;
+  if (isDtcgLink(files) && files.staged && paths.some((p) => files.staged!.paths.includes(p))) useGitStore.getState().setTokenLink({ ...files, staged: null });
   // A rename whose files are given up isn't staged any more (Motif's token keeps the new name until it is renamed back).
   const after = stylesheetLink(useGitStore.getState().tokenLink);
   if (after?.renamed) {
@@ -99,6 +107,11 @@ export function useWorkActions() {
       setWork(null);
       runtime().set({ refreshed: null, note: "", error: null, notice: `Pull request #${work.pr?.number} was merged. The repository has your changes now.` });
       await readRepository();
+      // What the pull request merged is the repository's: the files are as Motif wrote them, so nothing of the tokens is waiting.
+      const files = useGitStore.getState().tokenLink;
+      // The files' starting point becomes what the pull request carried (not what the repository has now: a change someone else made since is
+      // still to be pulled).
+      if (isDtcgLink(files) && files.staged) useGitStore.getState().setTokenLink({ ...files, base: files.staged.files, staged: null, syncedAt: Date.now() });
       const current = stylesheetLink(useGitStore.getState().tokenLink);
       if (current && link && current.repo === link.repo) {
         let merged = {} as Awaited<ReturnType<typeof readRepoState>>["snapshot"]["doc"];
@@ -147,6 +160,16 @@ export function useWorkActions() {
             } catch (err) {
               runtime().set({ tokenNote: `The tokens couldn't be added to the pull request: ${errorMessage(err)}` });
             }
+          }
+        }
+        const dtcg = useGitStore.getState().tokenLink;
+        if (isDtcgLink(dtcg) && dtcg.branch === conn.defaultBranch && waitingDtcgChanges(dtcg, currentModel()).length > 0) {
+          try {
+            const staged = await stageDtcgTokens({ host, link: dtcg, model: currentModel(), overlay: overlayOf(useEditStore.getState()), scope: editScope(conn) });
+            useGitStore.getState().setTokenLink(staged.link);
+            runtime().set({ tokenNote: staged.attention });
+          } catch (err) {
+            runtime().set({ tokenNote: `The tokens couldn't be added to the pull request: ${errorMessage(err)}` });
           }
         }
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -203,19 +226,30 @@ export function useWorkActions() {
   }, [host, canSend, readRepository]);
 }
 
-// Token changes in Motif that aren't in the editor's files yet (no request: see lib/work/tokens.ts).
-export function useTokenChanges() {
+// Token changes in Motif that aren't in the editor's files yet (no request: see lib/work/tokens.ts and lib/work/dtcg-tokens.ts).
+export function useTokenChanges(): TokenChange[] {
   const link = useGitStore((s) => stylesheetLink(s.tokenLink));
+  const files = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink : null));
   const colors = useDesignSystemStore((s) => s.colors);
   const spacing = useDesignSystemStore((s) => s.spacing);
   const radii = useDesignSystemStore((s) => s.radii);
   const shadows = useDesignSystemStore((s) => s.shadows);
+  const sets = useDesignSystemStore((s) => s.sets);
+  const typography = useDesignSystemStore((s) => s.typography);
+  const numbers = useDesignSystemStore((s) => s.numbers);
+  const strings = useDesignSystemStore((s) => s.strings);
+  const compositions = useDesignSystemStore((s) => s.compositions);
   const connection = useGitStore((s) => s.connection);
   return useMemo(() => {
     // A link to a branch other than the one the pull request is from isn't sent, so nothing waits for it.
+    if (files) {
+      if (connection && files.branch !== connection.defaultBranch) return [];
+      return waitingDtcgChanges(files, currentModel()).map((c) => ({ ...c, kind: "color" as const }));
+    }
     if (!link || (connection && link.branch !== connection.defaultBranch)) return [];
     return waitingTokenChanges(link, { colors, spacing, radii, shadows });
-  }, [link, connection, colors, spacing, radii, shadows]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [link, files, connection, colors, spacing, radii, shadows, sets, typography, numbers, strings, compositions]);
 }
 
 // Mounted once while a project is open: checks the pull request now and then, and which of the edited files the

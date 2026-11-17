@@ -50,6 +50,12 @@ export const pathOf = (type: TokenType, use: string | undefined, name: string): 
   return ns ? [ns, leafOf(name, ns)] : [slug(name)];
 };
 
+// A token that is somewhere else in the files than Motif would put it (a repository's own groups: `color.brand.500`) keeps that place in its
+// `repoName`, written `dtcg:color.brand.500`, so a push writes it back where it was.
+const PLACE = "dtcg:";
+export const placeOf = (repoName: string | undefined): string[] | null => (repoName?.startsWith(PLACE) ? repoName.slice(PLACE.length).split(".") : null);
+export const repoNameOfPlace = (path: string[]): string => `${PLACE}${path.join(".")}`;
+
 // The name of the variable a path is.
 export const variableOf = (path: string[]): string => `--${path.join("-")}`;
 

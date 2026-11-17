@@ -59,7 +59,7 @@ export function applyPayload(project: Project, payload: ProjectPayload, info: Se
 function keepStaged(server: ProjectPayload["tokenLink"], mine: Project["repo"]["tokenLink"]): Project["repo"]["tokenLink"] {
   if (!server) return null;
   // (Only a link of one set has anything staged.)
-  const staged = mine && "setId" in mine && mine.setId === server.setId ? mine.staged : undefined;
+  const staged = mine && (("setId" in mine && mine.setId === server.setId) || ("format" in mine && server.format === "dtcg")) ? mine.staged : undefined;
   return (staged ? { ...server, staged } : server) as unknown as Project["repo"]["tokenLink"];
 }
 

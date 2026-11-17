@@ -5,7 +5,7 @@ import { fromStored, toStored } from "../tokens/migrate";
 import { ALL_THEMES, TOKENS_VERSION, type Composition, type Slot, type StoredTokenData, type Token, type TokenType, type Unit } from "../tokens/model";
 import { isUnit } from "../tokens/uses";
 import { colorToCss, isColorValue } from "./color";
-import { COMPOSITION_NAMESPACE, leafOf, pathOf, pathOfRef, purposeOfNamespace } from "./names";
+import { COMPOSITION_NAMESPACE, leafOf, pathOf, pathOfRef, purposeOfNamespace, repoNameOfPlace, slug, themeKey } from "./names";
 import { walk, type Flat } from "./flat";
 import type { DtcgConfig, DtcgFiles } from "./types";
 import { SHADOW_PROPS, TYPOGRAPHY_PROPS } from "./write";
@@ -73,9 +73,9 @@ export function readDtcg(files: DtcgFiles, existing?: StoredTokenData): Read {
   const oldSet = (name: string) => existing?.sets.find((s) => s.name.toLowerCase() === name.toLowerCase());
   const sets: TokenSet[] = configSets.map((cs) => {
     const old = oldSet(cs.name);
-    const themes = cs.themes.map((t) => ({ id: old?.themes.find((x) => x.name.toLowerCase() === t.name.toLowerCase())?.id ?? `theme-${nanoid(6)}`, name: t.name }));
+    const themes = cs.themes.map((t) => ({ id: old?.themes.find((x) => x.name.toLowerCase() === t.name.toLowerCase())?.id ?? `theme-${nanoid(6)}`, name: t.name, ...(t.key !== themeKey(t.name) ? { repoKey: t.key } : {}) }));
     const active = old && themes.some((t) => t.id === old.activeThemeId) ? old.activeThemeId : themes[0].id;
-    return { id: old?.id ?? `set-${nanoid(6)}`, name: cs.name, themes, activeThemeId: active, ...(cs.description ? { description: cs.description } : {}) };
+    return { id: old?.id ?? `set-${nanoid(6)}`, name: cs.name, ...(cs.key !== slug(cs.name) ? { repoKey: cs.key } : {}), themes, activeThemeId: active, ...(cs.description ? { description: cs.description } : {}) };
   });
   const setByKey = new Map(configSets.map((cs, i) => [cs.key, { cs, set: sets[i] }]));
 
@@ -126,9 +126,12 @@ export function readDtcg(files: DtcgFiles, existing?: StoredTokenData): Read {
     const id = idByPath.get(keyOf(f.path))!;
     const name = nameOf(f);
     const group = typeof f.ext.group === "string" ? f.ext.group : undefined;
-    const repoName = typeof f.ext.repoName === "string" ? f.ext.repoName : undefined;
     const nsUse = f.path.length > 1 ? purposeOfNamespace(f.path[0]) : undefined;
     const use = typeof f.ext.use === "string" ? f.ext.use : nsUse;
+    // Somewhere in the files other than where Motif puts a token of this name: remembered, so a push writes it back there.
+    const kind: TokenType = f.type === "color" ? "color" : f.type === "fontFamily" || f.type === "string" ? "string" : "number";
+    const place = keyOf(pathOf(kind, use, name)) !== keyOf(f.path) ? repoNameOfPlace(f.path) : undefined;
+    const repoName = place ?? (typeof f.ext.repoName === "string" ? f.ext.repoName : undefined);
     const where = { id, name, setId: set.id, ...(group ? { group } : {}), ...(repoName !== undefined ? { repoName } : {}) };
 
     if (f.type === "color") {

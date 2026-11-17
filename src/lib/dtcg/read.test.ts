@@ -133,3 +133,29 @@ describe("reading a repository's own files", () => {
     expect(notes).toEqual(["tokens/x.json isn't valid JSON"]);
   });
 });
+
+describe("the keys a repository's config gave", () => {
+  const read = (files: Record<string, unknown>) => readDtcg(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, JSON.stringify(v)])));
+  const config = { files: "per-set", output: "src/styles/tokens.css", tailwind: true, selectors: { night: ".night" }, sets: [{ name: "Brand colors", key: "brand", themes: [{ key: "day", name: "Light" }, { key: "night", name: "Dark" }] }] };
+  const files = { "tokens/tokens.config.json": config, "tokens/brand.json": { color: { a: { $type: "color", $value: { colorSpace: "srgb", components: [1, 1, 1] } } } } };
+
+  it("are kept on the set and the themes when they aren't the ones the names give", () => {
+    const { data } = read(files);
+    expect(data.sets[0]).toMatchObject({ name: "Brand colors", repoKey: "brand" });
+    expect(data.sets[0].themes.map((t) => [t.name, t.repoKey])).toEqual([["Light", "day"], ["Dark", "night"]]);
+  });
+
+  it("are written again as they were, so the files and the config stay where they are", () => {
+    const { data } = read(files);
+    const out = writeDtcg(data, { files: "per-set", dir: "tokens", output: "src/styles/tokens.css", tailwind: true });
+    expect(Object.keys(out.files).sort()).toEqual(["tokens/brand.json", "tokens/tokens.config.json"]);
+    expect(out.config.sets[0].key).toBe("brand");
+    expect(out.config.sets[0].themes.map((t) => t.key)).toEqual(["day", "night"]);
+  });
+
+  it("aren't remembered when they are the ones the names give", () => {
+    const { data } = read({ ...files, "tokens/tokens.config.json": { ...config, sets: [{ name: "Brand", key: "brand", themes: [{ key: "light", name: "Light" }] }] } });
+    expect(data.sets[0].repoKey).toBeUndefined();
+    expect(data.sets[0].themes[0].repoKey).toBeUndefined();
+  });
+});

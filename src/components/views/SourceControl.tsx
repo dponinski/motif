@@ -234,6 +234,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
   const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   // The tokens are design tokens files, for every set.
   const filesDir = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.dir || "the top of the repository" : null));
+  const filesOutput = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.output : null));
   const analysis = useGitStore((s) => s.analysis);
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);
@@ -379,7 +380,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
       )}
 
       {filesDir !== null && (
-        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Motif&apos;s own token changes aren&apos;t sent to the repository yet.</p>
+        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Push sends Motif&apos;s token changes to the files{filesOutput ? ` and writes ${filesOutput} from them` : ""}.</p>
       )}
       {link && link.repo === slug && (
         <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link>Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository.</p>
