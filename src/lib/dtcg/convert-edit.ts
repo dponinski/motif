@@ -35,7 +35,7 @@ type Postcss = typeof import("postcss");
 
 // ── Taking the variables out ──────────────────────────────────────────────────
 
-async function removeVariables(postcss: Postcss, sheet: Sheet, conv: Conversion): Promise<{ text: string; removed: number }> {
+async function removeVariables(postcss: Postcss, sheet: Sheet, conv: Pick<Conversion, "converted" | "containers">): Promise<{ text: string; removed: number }> {
   const root = postcss.parse(sheet.text, { from: sheet.path });
   let removed = 0;
   const gone = new Set(conv.converted);
@@ -128,7 +128,7 @@ export const describeCheck = (c: ConversionCheck): string =>
 
 export async function editStylesheets(input: {
   sheets: Sheet[];
-  conversion: Conversion;
+  conversion: Pick<Conversion, "converted" | "containers">;
   // The Tailwind entry stylesheet (the one that imports tailwindcss), if there is one.
   entry: string | null;
   tailwind: boolean;

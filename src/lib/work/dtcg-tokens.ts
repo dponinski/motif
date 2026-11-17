@@ -1,9 +1,11 @@
 import type { GitHost, RepoReader } from "../github";
+import { describeCheck, editStylesheets, type Sheet } from "../dtcg/convert-edit";
+import { convertAnalysis } from "../dtcg/convert";
 import { planDtcgExport } from "../dtcg/export";
 import { generateCss, HEADER } from "../dtcg/generate";
 import { patchFiles } from "../dtcg/patch";
 import { readRepoTokenFiles } from "../dtcg/repo";
-import { describeDtcgChanges, mergeDtcg, planDtcgSync, writeOptionsOf, type DtcgChange, type DtcgLink } from "../dtcg/sync";
+import { canonicalFiles, describeDtcgChanges, mergeDtcg, planDtcgSync, writeOptionsOf, type DtcgChange, type DtcgLink } from "../dtcg/sync";
 import { writeDtcg } from "../dtcg/write";
 import type { StoredTokenData } from "../tokens/model";
 import { readRepoState } from "../token-sync/flow";
@@ -27,7 +29,9 @@ export interface DtcgStageResult {
 // last merged state).
 export function waitingDtcgChanges(link: DtcgLink | null, model: StoredTokenData): DtcgChange[] {
   if (!link) return [];
-  return describeDtcgChanges(link.staged?.files ?? link.base, writeDtcg(model, writeOptionsOf(link)).files);
+  // Tokens still in the stylesheets: what is waiting is all of them, going into files.
+  const from = link.staged?.files ?? (link.convert ? {} : link.base);
+  return describeDtcgChanges(from, writeDtcg(model, writeOptionsOf(link)).files);
 }
 
 const MAX_LISTED = 60;
@@ -61,10 +65,12 @@ export async function stageDtcgTokens(input: {
   if (!planned) {
     // Nothing in the repository or in the pull request. A link that never sent anything is waiting for its first push: every set goes in as
     // files, with the stylesheet they come to and what builds it. One that had files has lost them.
+    if (link.convert) return convertExport(input, oh);
     if (Object.keys(link.base).length === 0) return firstExport(input, oh);
     return { link, staged: 0, attention: "The design tokens files aren't in the repository, so the tokens can't be added to the pull request. Pull to see what the repository has." };
   }
-  const plan = planDtcgSync(link, model, real?.files ?? {});
+  // (Tokens that are still in the stylesheets: the repository has no files, so what it has is what the last pull found.)
+  const plan = planDtcgSync(link, model, real?.files ?? (link.convert ? link.base : {}));
   if (plan.merge.conflicts.length > 0 || plan.toMotif.length > 0 || plan.merge.restored.length > 0) {
     return { link, staged: 0, attention: "The repository has token changes that Motif hasn't taken yet. Pull to bring them in; the tokens are not in the pull request until then." };
   }
@@ -112,5 +118,54 @@ async function firstExport(input: { host: GitHost & RepoReader; link: DtcgLink; 
     link: { ...link, ...exported.link, base: link.base, staged: { files: exported.link.base, paths: Object.keys(files) } },
     staged: exported.changes.length,
     attention: left ?? exported.notes[0] ?? null,
+  };
+}
+
+const MAX_DIFFERENCES = 20;
+
+// Tokens that are variables in the stylesheets of the repository: every set as files; the stylesheet they generate; the build; the variables
+// taken out of the stylesheets and the generated one imported; and the check that nothing changed. As one step to undo.
+async function convertExport(input: { host: GitHost & RepoReader; link: DtcgLink; model: StoredTokenData; scope: string }, oh: ReturnType<typeof overlayReader>): Promise<DtcgStageResult> {
+  const { host, link, model } = input;
+  const convert = link.convert!;
+  const state = await readRepoState(host, link.repo, link.branch);
+  // The stylesheets have changed since the tokens were pulled: they come first, or a value the repository changed would be written over.
+  const now = convertAnalysis(state.analysis, link.repo.split("/").pop() ?? link.repo);
+  if (!now || JSON.stringify(canonicalFiles(now.files)) !== JSON.stringify(canonicalFiles(link.base))) {
+    return { link, staged: 0, attention: "The repository's tokens have changed since they were pulled. Pull to bring the changes in; the tokens are not in the pull request until then." };
+  }
+
+  const exported = await planDtcgExport(oh, state.analysis, link.branch, model, { files: link.files, selectors: convert.selectors, output: link.output, skipImport: true });
+  const generated = exported.files[exported.link.output].text;
+
+  const wanted = new Set(convert.converted);
+  const paths = new Set<string>(state.analysis.tailwindEntry ? [state.analysis.tailwindEntry] : []);
+  for (const t of state.analysis.tokens) if (wanted.has(t.name)) for (const l of Object.values(t.locations)) paths.add(l.file);
+  const sheets: Sheet[] = [];
+  for (const path of paths) {
+    const file = await oh.getFile(path, link.branch);
+    if (file) sheets.push({ path, text: file.text, sha: file.sha });
+  }
+  const edit = await editStylesheets({ sheets, conversion: convert, entry: state.analysis.tailwindEntry ?? null, tailwind: exported.link.tailwind, output: exported.link.output, generated });
+
+  const notes = [
+    `Check: ${describeCheck(edit.check)}`,
+    ...edit.check.differences.slice(0, MAX_DIFFERENCES).map((d) => `${code(`--${d.name}`)} (${d.theme}): ${code(short(d.before))} → ${code(short(d.after))}`),
+    ...(edit.check.differences.length > MAX_DIFFERENCES ? [`…and ${edit.check.differences.length - MAX_DIFFERENCES} more`] : []),
+    ...(convert.left.length ? [`Left in the stylesheets (${convert.left.length}): ${convert.left.slice(0, 8).map((l) => `${code(`--${l.name}`)}`).join(", ")}${convert.left.length > 8 ? ", …" : ""}`] : []),
+    ...exported.skipped.map((s) => `Not included: ${code(s.name)}: ${s.reason}`),
+    ...exported.notes,
+  ];
+  if (!edit.imported) notes.push(`To do: import \`${exported.link.output}\` from your stylesheet${exported.link.tailwind ? " after the Tailwind import" : ""} to use these tokens.`);
+
+  const files: Record<string, string> = Object.fromEntries(Object.entries(exported.files).map(([path, f]) => [path, f.text]));
+  for (const [path, f] of Object.entries(edit.files)) files[path] = f.text;
+  const lines = dtcgSummary(exported.changes, notes, true).split("\n");
+  lines[0] = `Move ${exported.changes.length} design token${exported.changes.length === 1 ? "" : "s"} from the stylesheets into design tokens files`;
+  await stageFiles({ host, branch: link.branch, scope: input.scope, files, summary: lines.join("\n") });
+  return {
+    link: { ...link, ...exported.link, base: link.base, staged: { files: exported.link.base, paths: Object.keys(files) } },
+    staged: exported.changes.length,
+    attention: edit.check.differences.length > 0 ? `${new Set(edit.check.differences.map((d) => d.name)).size} variable${new Set(edit.check.differences.map((d) => d.name)).size === 1 ? "" : "s"} would come to a different value: see the first step of the pull request.` : exported.notes[0] ?? null,
   };
 }

@@ -185,7 +185,7 @@ function ExportTokenFiles({ connection, onDone }: { connection: GitConnection; o
     try {
       const staged = await stageDtcgTokens({ host, link, model: toStored(snapshotTokens(useDesignSystemStore.getState())), overlay: overlayOf(useEditStore.getState()), scope: editScope(connection) });
       useGitStore.getState().setTokenLink(staged.link);
-      onDone(staged.staged > 0 ? `Added ${staged.staged} design token${staged.staged === 1 ? "" : "s"} to your pull request. Push sends them.${staged.attention ? ` ${staged.attention}` : ""}` : "There are no tokens to add yet.");
+      onDone(staged.staged > 0 ? `${link.convert ? "Moved" : "Added"} ${staged.staged} design token${staged.staged === 1 ? "" : "s"} ${link.convert ? "into design tokens files in" : "to"} your pull request. Push sends them.${staged.attention ? ` ${staged.attention}` : ""}` : "There are no tokens to add yet.");
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -195,7 +195,7 @@ function ExportTokenFiles({ connection, onDone }: { connection: GitConnection; o
 
   return (
     <section className="flex flex-col gap-1.5 rounded-md border border-surface-border p-2.5" aria-label="Tokens file" data-tokens-file data-dtcg>
-      <p className="text-xs leading-relaxed text-text-secondary">This repository has no design tokens yet. Every set goes in as design tokens files, with the stylesheet they come to and what builds it, when you push, or now.</p>
+      <p className="text-xs leading-relaxed text-text-secondary">{link?.convert ? "This repository's tokens are variables in its stylesheets. They move into design tokens files, with the stylesheet they generate and what builds it, when you push, or now. The pull request shows a check that every value comes out the same." : "This repository has no design tokens yet. Every set goes in as design tokens files, with the stylesheet they come to and what builds it, when you push, or now."}</p>
       {wrongBranch && <p className="text-xs text-amber-500">Changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent.</p>}
       {error && <p role="alert" className="break-words text-xs text-red-400">{error}</p>}
       <button className={cn(secondary, "self-start")} onClick={create} disabled={busy || !link || wrongBranch}>
@@ -273,8 +273,11 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
   // The tokens are design tokens files, for every set.
   const filesDir = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.dir || "the top of the repository" : null));
   const filesOutput = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.output : null));
+  // Still variables in the stylesheets: how many go into the files with the first push, and how many stay.
+  const converting = useGitStore((s) => (isDtcgLink(s.tokenLink) && s.tokenLink.convert && !s.tokenLink.staged ? s.tokenLink.convert : null));
+  const tailwind3 = useGitStore((s) => s.analysis?.stack.tailwindVersion === 3);
   // Waiting for the first push: the repository has no tokens, and every set will go in as files.
-  const awaitingFiles = useGitStore((s) => isDtcgLink(s.tokenLink) && !!s.connection && s.tokenLink.repo === repoSlug(s.connection) && !s.tokenLink.staged && Object.keys(s.tokenLink.base).length === 0 && !!s.analysis && s.analysis.tokens.length === 0);
+  const awaitingFiles = useGitStore((s) => isDtcgLink(s.tokenLink) && !!s.connection && s.tokenLink.repo === repoSlug(s.connection) && !s.tokenLink.staged && (!!s.tokenLink.convert || (Object.keys(s.tokenLink.base).length === 0 && !!s.analysis && s.analysis.tokens.length === 0)));
   // Not sent yet: the repository has none.
   const filesNew = useGitStore((s) => isDtcgLink(s.tokenLink) && Object.keys(s.tokenLink.base).length === 0 && !s.tokenLink.staged && !!s.analysis && s.analysis.tokens.length === 0);
   const analysis = useGitStore((s) => s.analysis);
@@ -424,10 +427,10 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
       )}
 
       {filesDir !== null && (
-        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>{filesNew ? <>Tokens: every set will go into design tokens files in {filesDir} with the first push.</> : <>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Push sends Motif&apos;s token changes to the files{filesOutput ? ` and writes ${filesOutput} from them` : ""}.</>}</p>
+        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>{converting ? <>Tokens: the variables in your stylesheets ({converting.converted.length}) will move into design tokens files in {filesDir} with the first push, and {filesOutput} is generated from them. {converting.left.length > 0 ? `${converting.left.length} stay where they are.` : ""} Sync shows the check that every value comes out the same.</> : filesNew ? <>Tokens: every set will go into design tokens files in {filesDir} with the first push.</> : <>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Push sends Motif&apos;s token changes to the files{filesOutput ? ` and writes ${filesOutput} from them` : ""}.</>}</p>
       )}
       {link && link.repo === slug && (
-        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link>Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository.</p>
+        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link>Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository.{tailwind3 ? " Moving them into design tokens files isn’t available for Tailwind 3 yet; they are changed in the stylesheet and config as before." : ""}</p>
       )}
 
       <Details connection={connection} onOpenReport={onOpenReport} />

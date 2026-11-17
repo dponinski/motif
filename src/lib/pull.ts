@@ -2,7 +2,9 @@ import type { GitHost, RepoReader } from "./github";
 import { describeUpdate } from "./preview/library";
 import { scanBranch } from "./read-repository";
 import type { RepoAnalysis } from "./repo-scan/types";
-import { readRepoTokenFiles } from "./dtcg/repo";
+import { convertAnalysis } from "./dtcg/convert";
+import { convertOnPull } from "./dtcg/convert-flag";
+import { readRepoTokenFiles, type RepoTokenFiles } from "./dtcg/repo";
 import { planDtcgSync, resolveDtcg, takeDtcg, type DtcgLink, type DtcgPlan } from "./dtcg/sync";
 import type { DtcgFiles } from "./dtcg/types";
 import { fromStored, toStored } from "./tokens/migrate";
@@ -51,24 +53,40 @@ const hasTokens = () => {
 
 // A repository whose tokens are design tokens files: merged with Motif's tokens as a whole (every set), and asking only about a value that
 // was changed in both places. The first time, an empty project takes the repository's tokens as they are.
-async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection): Promise<{ notes: string[]; conflicts: PendingConflicts | null }> {
+// A repository whose tokens are variables in its stylesheets is read the same way, as the files they come to (lib/dtcg/convert.ts): nothing is
+// asked and nothing is written to the repository until the first push.
+async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection, analysis: RepoAnalysis): Promise<{ notes: string[]; conflicts: PendingConflicts | null }> {
   const slug = repoSlug(connection);
   const git = useGitStore.getState();
   const stored = isDtcgLink(git.tokenLink) && git.tokenLink.repo === slug ? git.tokenLink : null;
   // A link to another branch than the one pull requests are made from isn't followed.
   if (stored && stored.branch !== connection.defaultBranch) return { notes: [], conflicts: null };
-  const found = await readRepoTokenFiles(host, connection.defaultBranch);
-  // (A link that has never sent anything is waiting for the first push: there is nothing to have gone.)
-  if (!found) return { notes: stored && Object.keys(stored.base).length > 0 ? ["The design tokens files aren't in the repository any more"] : [], conflicts: null };
+  const real = await readRepoTokenFiles(host, connection.defaultBranch);
 
-  const first: DtcgLink = { format: "dtcg", repo: slug, branch: connection.defaultBranch, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind, base: {}, syncedAt: Date.now() };
+  let found: RepoTokenFiles | null = real;
+  let convert: DtcgLink["convert"];
+  if (!real && (!stored || stored.convert) && convertOnPull()) {
+    const conv = convertAnalysis(analysis, slug.split("/").pop() ?? slug);
+    if (conv) {
+      const configPath = `${conv.dir}/tokens.config.json`;
+      found = { configPath, dir: conv.dir, config: JSON.parse(conv.files[configPath]), files: conv.files };
+      convert = { converted: conv.converted, containers: conv.containers, selectors: conv.selectors, left: conv.left };
+    }
+  }
+  // (A link that has never sent anything is waiting for the first push: there is nothing to have gone.)
+  if (!found) return { notes: stored && !stored.convert && Object.keys(stored.base).length > 0 ? ["The design tokens files aren't in the repository any more"] : [], conflicts: null };
+
+  const first: DtcgLink = { format: "dtcg", repo: slug, branch: connection.defaultBranch, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind, base: {}, ...(convert ? { convert } : {}), syncedAt: Date.now() };
   if (!stored) {
-    if (hasTokens()) return { notes: ["The repository has design tokens files, but this project already has tokens of its own, so they weren't brought in. Use a project with no tokens to bring them in."], conflicts: null };
+    if (hasTokens()) return { notes: [convert ? "The repository's tokens are in its stylesheets, but this project already has tokens of its own, so they weren't brought in. Use a project with no tokens to bring them in." : "The repository has design tokens files, but this project already has tokens of its own, so they weren't brought in. Use a project with no tokens to bring them in."], conflicts: null };
     const n = applyDtcg(first, found.files, found.files);
     return { notes: [`${plural(n, "token")} brought in`], conflicts: null };
   }
 
-  const link: DtcgLink = { ...stored, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind };
+  // The files are really there now (the pull request that converted the stylesheets was merged), or still only what the stylesheets come to.
+  const { convert: _gone, ...rest } = stored;
+  void _gone;
+  const link: DtcgLink = { ...rest, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind, ...(convert ? { convert } : {}) };
   const plan = planDtcgSync(link, toStored(snapshotTokens(useDesignSystemStore.getState())), found.files);
   if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { format: "dtcg", link, plan, theirs: found.files } };
   if (plan.toMotif.length > 0 || plan.merge.restored.length > 0) {
@@ -76,7 +94,7 @@ async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection): 
     return { notes: [`${plural(plan.toMotif.length, "token change")} from the repository`], conflicts: null };
   }
   // Nothing to take: what has changed in the repository since is Motif's to send, so the link moves on to the files as they are.
-  if (JSON.stringify(link.base) !== JSON.stringify(found.files)) git.setTokenLink({ ...link, base: found.files, syncedAt: Date.now() });
+  if (JSON.stringify(link.base) !== JSON.stringify(found.files) || JSON.stringify(stored.convert) !== JSON.stringify(link.convert)) git.setTokenLink({ ...link, base: found.files, syncedAt: Date.now() });
   return { notes: [], conflicts: null };
 }
 
@@ -152,7 +170,7 @@ export async function pullRepository(host: GitHost & RepoReader, connection: Git
 
   // Design tokens files in the repository (and no link to its stylesheets) are what the tokens are; else the stylesheets are.
   const sheet = stylesheetLink(git.tokenLink);
-  const dtcg = !(sheet && sheet.repo === slug) ? await pullDtcg(host, connection) : null;
+  const dtcg = !(sheet && sheet.repo === slug) ? await pullDtcg(host, connection, analysis) : null;
   const tokens = dtcg && (dtcg.notes.length > 0 || dtcg.conflicts || isDtcgLink(useGitStore.getState().tokenLink)) ? dtcg : pullTokens(analysis, connection);
   notes.push(...tokens.notes);
   return { analysis, notes, conflicts: tokens.conflicts };

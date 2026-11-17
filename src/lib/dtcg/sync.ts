@@ -4,6 +4,7 @@ import { colorToCss, cssToColor, isColorValue } from "./color";
 import { walk, type Flat } from "./flat";
 import { readDtcg, type Read } from "./read";
 import { stringify, writeDtcg, type WriteOptions } from "./write";
+import type { Conversion } from "./convert";
 import type { DtcgFiles } from "./types";
 
 // Syncing design tokens files is a three-way merge of JSON: `base` is the files as of the last sync, `mine` what Motif writes from its tokens
@@ -229,6 +230,9 @@ export interface DtcgLink {
   // between this (or, before anything is staged, `base`) and Motif's tokens. Cleared when the pull request is merged or one of the files is
   // given up. Only a hint for the status; Sync plans from the real state.
   staged?: { files: DtcgFiles; paths: string[] } | null;
+  // A repository whose tokens are still variables in its stylesheets: `base` is what they come to as design tokens files (lib/dtcg/convert.ts),
+  // and the first push is what writes the files and takes the variables out of the stylesheets. Gone when the pull request is merged.
+  convert?: Pick<Conversion, "converted" | "containers" | "selectors" | "left">;
   syncedAt: number;
 }
 

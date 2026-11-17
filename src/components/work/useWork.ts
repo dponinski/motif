@@ -111,7 +111,7 @@ export function useWorkActions() {
       const files = useGitStore.getState().tokenLink;
       // The files' starting point becomes what the pull request carried (not what the repository has now: a change someone else made since is
       // still to be pulled).
-      if (isDtcgLink(files) && files.staged) useGitStore.getState().setTokenLink({ ...files, base: files.staged.files, staged: null, syncedAt: Date.now() });
+      if (isDtcgLink(files) && files.staged) { const { convert: _converted, ...done } = files; void _converted; useGitStore.getState().setTokenLink({ ...done, base: files.staged.files, staged: null, syncedAt: Date.now() }); }
       const current = stylesheetLink(useGitStore.getState().tokenLink);
       if (current && link && current.repo === link.repo) {
         let merged = {} as Awaited<ReturnType<typeof readRepoState>>["snapshot"]["doc"];

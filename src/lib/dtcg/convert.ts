@@ -1,6 +1,7 @@
-import type { RepoToken } from "../repo-scan/types";
+import type { RepoAnalysis, RepoToken } from "../repo-scan/types";
 import { readRepoTokens } from "../token-sync/doc";
-import { themeLabel } from "../token-sync/flow";
+import { newTokensPath, themeLabel } from "../token-sync/flow";
+import { tokensDirFor } from "./export";
 import { deriveGroup } from "../tokens/organize";
 import { aliasTarget } from "../tokens/alias";
 import { ALL_THEMES, TOKENS_VERSION, type Composition, type StoredTokenData, type Token, type Unit } from "../tokens/model";
@@ -205,4 +206,15 @@ export function convertTokens(input: ConvertInput): Conversion | null {
   const converted = [...places.keys()].filter((n) => !dropped.has(shownName(n)));
   const containers = Object.fromEntries(converted.map((n) => [n, places.get(n)!.length > 1 ? "theme" as const : "rule" as const]));
   return { files: written.files, model: data, converted, containers, selectors, left };
+}
+
+// A repository's tokens as design tokens files, in the place a push would put them: what pull works on until the files are really there.
+// Nothing for a Tailwind 3 repository (its tokens are in a config as much as in stylesheets; converting them comes later).
+export function convertAnalysis(analysis: RepoAnalysis, name: string): (Conversion & { dir: string; output: string; tailwind: boolean }) | null {
+  if (analysis.stack.tailwindVersion === 3) return null;
+  const output = newTokensPath(analysis);
+  const dir = tokensDirFor(output);
+  const tailwind = analysis.stack.tailwindVersion === 4;
+  const conv = convertTokens({ tokens: analysis.tokens, themes: analysis.themes, tailwind, name, dir, output });
+  return conv && { ...conv, dir, output, tailwind };
 }

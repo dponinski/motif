@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GitHost, RepoReader } from "./github";
 import { memoryReader } from "./repo-scan";
 import { loadFixture } from "./repo-scan/fixtures";
 import { finishPull, pullRepository } from "./pull";
+import { setConvertOnPull } from "./dtcg/convert-flag";
 import { emptyTokenData, useDesignSystemStore } from "../store/design-system";
-import { stylesheetLink, useGitStore, type GitConnection } from "../store/git";
+import { isDtcgLink, stylesheetLink, useGitStore, type GitConnection } from "../store/git";
 import { useLibraryStore } from "../store/library";
 
 const CSS = "src/styles/motif.css";
@@ -14,7 +15,7 @@ const host = (files: Record<string, string>, sha = "sha-1"): GitHost & RepoReade
 const ds = () => useDesignSystemStore.getState();
 const git = () => useGitStore.getState();
 const sheetLink = () => stylesheetLink(git().tokenLink);
-const color = (name: string) => ds().colors.find((c) => (c.repoName ?? c.name) === name)!;
+const color = (name: string) => ds().colors.find((c) => c.name === name || c.repoName === name)!;
 const light = () => ds().sets[0].themes[0].id;
 
 beforeEach(() => {
@@ -158,3 +159,91 @@ describe("a theme deleted here that the repository has", () => {
     expect(link.staged ?? null).toBeNull();
   });
 });
+
+// Converting a repository's stylesheet tokens on pull is switched on for these (lib/dtcg/convert-flag.ts).
+describe("the first pull of a repository whose tokens are variables in its stylesheets, with conversion on", () => {
+  const files = loadFixture("motif-test-system");
+  beforeEach(() => setConvertOnPull(true));
+  afterEach(() => setConvertOnPull(null));
+
+  it("brings in its components and its tokens as design tokens, with the names the variables have, nothing written to the repository", async () => {
+    const out = await pullRepository(host(files), connection);
+    expect(out.conflicts).toBeNull();
+    expect(useLibraryStore.getState().components.length).toBeGreaterThan(5);
+    // The set every project starts with is the repository's, not left empty beside another.
+    expect(ds().sets).toHaveLength(1);
+    expect(ds().sets[0].name).toBe("ds");
+    const link = git().tokenLink;
+    expect(isDtcgLink(link)).toBe(true);
+    expect(sheetLink()).toBeNull();
+    if (!isDtcgLink(link)) return;
+    expect(link).toMatchObject({ repo: "acme/ds", branch: "main", files: "single", tailwind: true });
+    expect(link.convert!.converted).toEqual(expect.arrayContaining(["primary", "background", "radius-lg"]));
+    expect(ds().sets[0].themes.map((t) => t.name)).toEqual(["Light", "Dark"]);
+    expect(color("primary").themeValues[light()]).toMatch(/^oklch\(0\.52 0\.21 270\)$/);
+    expect(git().pulledSha).toBe("sha-1");
+    expect(out.notes.join(" ")).toMatch(/tokens brought in/);
+  });
+
+  it("leaves a project that has tokens of its own alone, and says so", async () => {
+    ds().addColor({ name: "mine", value: "#123456", group: "base", setId: ds().sets[0].id });
+    const out = await pullRepository(host(files), connection);
+    expect(ds().sets).toHaveLength(1);
+    expect(ds().colors.map((c) => c.name)).toEqual(["mine"]);
+    expect(git().tokenLink).toBeNull();
+    expect(out.notes.join(" ")).toMatch(/already has tokens of its own/);
+  });
+});
+
+describe("a repository whose tokens are variables in its stylesheets, on a later pull, with conversion on", () => {
+  beforeEach(() => setConvertOnPull(true));
+  afterEach(() => setConvertOnPull(null));
+  const files = loadFixture("motif-test-system");
+  const changedRepo = (to: string) => ({ ...files, [CSS]: files[CSS].replace("--primary: oklch(0.52 0.21 270);", `--primary: ${to};`) });
+  const dtcgLink = () => git().tokenLink as Extract<NonNullable<ReturnType<typeof git>["tokenLink"]>, { format: "dtcg" }>;
+
+  it("takes in what the stylesheets changed, and nothing else moves", async () => {
+    await pullRepository(host(files), connection);
+    const before = color("secondary").themeValues[light()];
+    const out = await pullRepository(host(changedRepo("oklch(0.6 0.2 30)"), "sha-2"), connection);
+    expect(out.conflicts).toBeNull();
+    expect(color("primary").themeValues[light()]).toBe("oklch(0.6 0.2 30)");
+    expect(color("secondary").themeValues[light()]).toBe(before);
+    expect(out.notes.join(" ")).toMatch(/token change/);
+    expect(dtcgLink().convert).toBeDefined();
+  });
+
+  it("asks about a value changed in both places", async () => {
+    await pullRepository(host(files), connection);
+    ds().setColorText(color("primary").id, light(), "#ff0000");
+    const out = await pullRepository(host(changedRepo("oklch(0.6 0.2 30)"), "sha-2"), connection);
+    expect(out.conflicts?.format).toBe("dtcg");
+    expect(color("primary").themeValues[light()]).toBe("#ff0000");
+    finishPull(out.conflicts!, [0]);
+    expect(color("primary").themeValues[light()]).toBe("oklch(0.6 0.2 30)");
+  });
+
+  it("is up to date when nothing changed", async () => {
+    await pullRepository(host(files), connection);
+    const out = await pullRepository(host(files), connection);
+    expect(out.conflicts).toBeNull();
+    expect(out.notes).toEqual([]);
+  });
+
+  it("is a repository of design tokens files once the pull request that made them is merged", async () => {
+    await pullRepository(host(files), connection);
+    const virtual = dtcgLink().base;
+    expect(Object.keys(virtual).length).toBeGreaterThan(1);
+    const out = await pullRepository(host({ ...files, ...virtual }, "sha-2"), connection);
+    expect(out.conflicts).toBeNull();
+    expect(dtcgLink().convert).toBeUndefined();
+    expect(color("primary").themeValues[light()]).toBe("oklch(0.52 0.21 270)");
+  });
+
+  it("keeps Tailwind 3 repositories on the stylesheet and the config", async () => {
+    await pullRepository(host(loadFixture("motif-test-system-v3")), connection);
+    expect(sheetLink()).not.toBeNull();
+    expect(isDtcgLink(git().tokenLink)).toBe(false);
+  });
+});
+
