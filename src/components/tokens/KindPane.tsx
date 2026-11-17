@@ -18,14 +18,18 @@ import RenameDialog from "./RenameDialog";
 import { ListBody, ListHead, PaletteBody, type ColorCtx } from "./ColorViews";
 import { OtherBody, type OtherCtx } from "./OtherViews";
 import { useRows, type Row } from "./rows";
+import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
 import { useSelection } from "./useSelection";
 import { useTokenDrag, type DropTarget } from "./drag";
 
-const NOUN: Record<TokenKind, string> = { color: "color", typography: "text style", spacing: "spacing", radius: "radius", shadow: "shadow" };
+const NOUN: Record<TokenKind, string> = { color: "color", typography: "text style", spacing: "spacing", radius: "radius", shadow: "shadow", number: "number", string: "string" };
+
+// The list of the store each kind of token is in.
+const LIST = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows", number: "numbers", string: "strings" } as const;
 
 const free = (prefix: string, names: string[]) => { for (let i = 1; ; i++) if (!names.includes(`${prefix}-${i}`)) return `${prefix}-${i}`; };
 const suggest = (kind: TokenKind, group: string, names: string[]) =>
-  kind === "color" ? nextName(group, names) : kind === "spacing" ? free("space", names) : kind === "radius" ? free("radius", names) : kind === "shadow" ? free("shadow", names) : free("text", names);
+  kind === "color" ? nextName(group, names) : kind === "spacing" ? free("space", names) : kind === "radius" ? free("radius", names) : kind === "shadow" ? free("shadow", names) : kind === "number" ? free("number", names) : kind === "string" ? free("string", names) : free("text", names);
 
 // A choice kept in the browser (which view of colors was last used); the same on the server and the first paint, then what was kept.
 const listeners = new Set<() => void>();
@@ -37,7 +41,7 @@ function useStored<T extends string>(key: string, fallback: T): [T, (v: T) => vo
 
 const chip = (on: boolean) => cn("rounded-full border px-2 py-0.5 text-2xs transition-colors", on ? "border-accent/50 bg-accent/15 text-accent" : "border-surface-border text-text-tertiary hover:text-text-secondary");
 
-export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: TokenSet; sets: TokenSet[] }) {
+export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind: TokenKind; set: TokenSet; sets: TokenSet[]; addOnOpen?: boolean }) {
   const ds = () => useDesignSystemStore.getState();
   const rows = useRows(kind, set.id, set.themes);
   // Whether the repository has been counted for where its tokens are used.
@@ -51,7 +55,7 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
   const [themeChoice, setThemeChoice] = useState<ThemeShown>("all");
   // A theme that was deleted is no longer shown.
   const themeId: ThemeShown = set.themes.some((t) => t.id === themeChoice) ? themeChoice : "all";
-  const [adding, setAdding] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(addOnOpen ? "base" : null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [addMany, setAddMany] = useState(false);
   const search = useRef<HTMLInputElement>(null);
@@ -101,6 +105,8 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
         if (row.kind === "spacing") s.updateSpacing(row.id, patch);
         else if (row.kind === "radius") s.updateRadius(row.id, patch);
         else if (row.kind === "shadow") s.updateShadow(row.id, patch);
+        else if (row.kind === "number") s.updateNumber(row.id, patch);
+        else if (row.kind === "string") s.updateString(row.id, patch);
         else s.updateTypography(row.id, patch);
       }),
     },
@@ -129,13 +135,24 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
       case "spacing": return { focus: "value", fields: [{ key: "name", label: "New spacing name", placeholder: "name", width: "w-44" }, { key: "value", label: "New spacing value", placeholder: "px", width: "w-20", mono: true, validate: (v) => Number.isFinite(parseFloat(v)) }] };
       case "radius": return { focus: "value", fields: [{ key: "name", label: "New radius name", placeholder: "name", width: "w-44" }, { key: "value", label: "New radius value", placeholder: "px", width: "w-20", mono: true, validate: (v) => Number.isFinite(parseFloat(v)) }] };
       case "shadow": return { focus: "name", fields: [{ key: "name", label: "New shadow name", placeholder: "name", width: "w-44" }] };
+      case "number": return { focus: "value", fields: [
+        { key: "name", label: "New number name", placeholder: "name", width: "w-44" },
+        { key: "value", label: "New number value", placeholder: "value", width: "w-20", mono: true, validate: (v) => Number.isFinite(parseFloat(v)) },
+        { key: "unit", label: "New number unit", placeholder: "", width: "w-20", options: UNITS.map((u) => ({ value: u.value, label: u.label })) },
+        { key: "use", label: "New number used as", placeholder: "", width: "w-36", options: NUMBER_USES },
+      ] };
+      case "string": return { focus: "value", fields: [
+        { key: "name", label: "New string name", placeholder: "name", width: "w-44" },
+        { key: "value", label: "New string value", placeholder: "text", width: "w-64", validate: (v) => v.trim() !== "" },
+        { key: "use", label: "New string used as", placeholder: "", width: "w-36", options: STRING_USES },
+      ] };
       case "typography": return { focus: "name", fields: [{ key: "name", label: "New text style name", placeholder: "name", width: "w-44" }, { key: "size", label: "New text style size", placeholder: "size", width: "w-20", mono: true, validate: (v) => v === "" || Number.isFinite(parseFloat(v)) }] };
     }
   };
   const addRow = (group: string, done: () => void) => {
     const { fields, focus } = fieldsFor();
-    const names = () => ds()[kind === "color" ? "colors" : kind === "spacing" ? "spacing" : kind === "radius" ? "radii" : kind === "shadow" ? "shadows" : "typography"].filter((t) => t.setId === set.id).map((t) => t.name);
-    const initial = () => ({ name: suggest(kind, group, names()), value: "", size: "" });
+    const names = () => (ds()[LIST[kind]] as { setId: string; name: string }[]).filter((t) => t.setId === set.id).map((t) => t.name);
+    const initial = () => ({ name: suggest(kind, group, names()), value: "", size: "", unit: "px", use: "" });
     return (
       <AddRow
         fields={fields}
@@ -152,6 +169,8 @@ export default function KindPane({ kind, set, sets }: { kind: TokenKind; set: To
             else if (kind === "spacing") s.addSpacing({ name: unique, value: parseFloat(v.value), group, setId: set.id });
             else if (kind === "radius") s.addRadius({ name: unique, value: parseFloat(v.value), group, setId: set.id });
             else if (kind === "shadow") s.addShadow({ name: unique, x: 0, y: 4, blur: 8, spread: 0, color: "rgba(0,0,0,0.1)", group, setId: set.id });
+            else if (kind === "number") s.addNumber({ name: unique, value: parseFloat(v.value), unit: isUnit(v.unit) ? v.unit : "px", ...(v.use ? { use: v.use } : {}), group, setId: set.id });
+            else if (kind === "string") s.addString({ name: unique, value: v.value.trim(), ...(v.use ? { use: v.use } : {}), group, setId: set.id });
             else s.addTypography({ name: unique, fontFamily: "Inter", fontSize: parseFloat(v.size) || 14, fontWeight: 400, lineHeight: Math.round((parseFloat(v.size) || 14) * 1.5), group, setId: set.id });
           });
           return initial();

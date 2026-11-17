@@ -4,6 +4,7 @@ import { normalizeColor } from "@/lib/token-sync/color";
 import { deriveGroup, uniqueName } from "@/lib/tokens/organize";
 import { darkOf } from "@/lib/tokens/theme-gen";
 import { detachMissing, refreshAliases, renameAlias, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
+import type { Unit } from "@/lib/tokens/model";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
 
@@ -89,6 +90,31 @@ export interface ShadowToken {
   raw?: string;
 }
 
+// A number that isn't a spacing or a radius in pixels (those are tokens of their own kind, which the repository's sync reads and writes): a
+// font size in rem, a line height, a font weight, a ratio. Motif's own until the repository's sync knows them.
+export interface NumberToken {
+  id: string;
+  name: string;
+  value: number;
+  unit: Unit;
+  // Where it belongs: font-size, line-height, font-weight, letter-spacing, or nothing said.
+  use?: string;
+  group?: string;
+  setId: string;
+  repoName?: string;
+}
+
+export interface StringToken {
+  id: string;
+  name: string;
+  value: string;
+  // Where it belongs: font-family, or nothing said.
+  use?: string;
+  group?: string;
+  setId: string;
+  repoName?: string;
+}
+
 export interface ComponentDefinition {
   id: string;
   name: string;
@@ -97,7 +123,7 @@ export interface ComponentDefinition {
   defaultProps: Record<string, unknown>;
 }
 
-export type TokenKind = "color" | "typography" | "spacing" | "radius" | "shadow";
+export type TokenKind = "color" | "typography" | "spacing" | "radius" | "shadow" | "number" | "string";
 
 // What a token is in a group when nothing says.
 export const DEFAULT_GROUP = "base";
@@ -111,6 +137,8 @@ interface DesignSystemStore {
   spacing: SpacingToken[];
   radii: RadiusToken[];
   shadows: ShadowToken[];
+  numbers: NumberToken[];
+  strings: StringToken[];
   components: ComponentDefinition[];
 
   // Set management
@@ -146,6 +174,14 @@ interface DesignSystemStore {
   addRadius: (token: Omit<RadiusToken, "id">) => void;
   updateRadius: (id: string, updates: Partial<RadiusToken>) => void;
   deleteRadius: (id: string) => void;
+
+  // Numbers and strings that aren't a spacing or a radius. Each add returns the id of the token it made.
+  addNumber: (token: Omit<NumberToken, "id">) => string;
+  updateNumber: (id: string, updates: Partial<NumberToken>) => void;
+  deleteNumber: (id: string) => void;
+  addString: (token: Omit<StringToken, "id">) => string;
+  updateString: (id: string, updates: Partial<StringToken>) => void;
+  deleteString: (id: string) => void;
 
   addShadow: (token: Omit<ShadowToken, "id">) => void;
   updateShadow: (id: string, updates: Partial<ShadowToken>) => void;
@@ -213,6 +249,8 @@ export interface TokenData {
   spacing: SpacingToken[];
   radii: RadiusToken[];
   shadows: ShadowToken[];
+  numbers: NumberToken[];
+  strings: StringToken[];
   components: ComponentDefinition[];
 }
 
@@ -224,6 +262,8 @@ export function emptyTokenData(): TokenData {
     spacing: [],
     radii: [],
     shadows: [],
+    numbers: [],
+    strings: [],
     components: [],
   };
 }
@@ -235,6 +275,8 @@ export const snapshotTokens = (s: TokenData): TokenData => ({
   spacing: s.spacing,
   radii: s.radii,
   shadows: s.shadows,
+  numbers: s.numbers,
+  strings: s.strings,
   components: s.components,
 });
 
@@ -253,7 +295,7 @@ function toKebab(name: string): string {
 }
 
 
-const SLICE = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows" } as const;
+const SLICE = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows", number: "numbers", string: "strings" } as const;
 
 type Arranged = { id: string; name: string; setId: string; group?: string; repoName?: string };
 const listOf = (s: TokenData, kind: TokenKind) => s[SLICE[kind]] as unknown as Arranged[];
@@ -302,6 +344,8 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           spacing: s.spacing.filter((sp) => sp.setId !== setId),
           radii: s.radii.filter((r) => r.setId !== setId),
           shadows: s.shadows.filter((sh) => sh.setId !== setId),
+          numbers: s.numbers.filter((n) => n.setId !== setId),
+          strings: s.strings.filter((t) => t.setId !== setId),
         })),
 
       // ── Theme management ────────────────────────────────────────────────────
@@ -476,6 +520,26 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       deleteShadow: (id) =>
         set((s) => ({ shadows: s.shadows.filter((sh) => sh.id !== id) })),
 
+      addNumber: (token) => {
+        const id = nanoid(6);
+        set((s) => ({ numbers: [...s.numbers, { ...token, id, setId: token.setId ?? s.sets[0]?.id ?? DEFAULT_SET_ID }] }));
+        return id;
+      },
+      updateNumber: (id, updates) =>
+        set((s) => ({ numbers: s.numbers.map((n) => (n.id === id ? { ...n, ...updates } : n)) })),
+      deleteNumber: (id) =>
+        set((s) => ({ numbers: s.numbers.filter((n) => n.id !== id) })),
+
+      addString: (token) => {
+        const id = nanoid(6);
+        set((s) => ({ strings: [...s.strings, { ...token, id, setId: token.setId ?? s.sets[0]?.id ?? DEFAULT_SET_ID }] }));
+        return id;
+      },
+      updateString: (id, updates) =>
+        set((s) => ({ strings: s.strings.map((t) => (t.id === id ? { ...t, ...updates } : t)) })),
+      deleteString: (id) =>
+        set((s) => ({ strings: s.strings.filter((t) => t.id !== id) })),
+
       // ── Arranging ────────────────────────────────────────────────────────
 
       renameToken: (kind, id, name) => {
@@ -625,7 +689,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       },
 
       replaceTokenData: (data) =>
-        set({ sets: data.sets, colors: data.colors, typography: data.typography, spacing: data.spacing, radii: data.radii, shadows: data.shadows, components: data.components }),
+        set({ sets: data.sets, colors: data.colors, typography: data.typography, spacing: data.spacing, radii: data.radii, shadows: data.shadows, numbers: data.numbers ?? [], strings: data.strings ?? [], components: data.components }),
 
       // ── Load / Export / Import ──────────────────────────────────────────────
 
@@ -676,6 +740,17 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
             $value: { x: sh.x, y: sh.y, blur: sh.blur, spread: sh.spread, color: sh.color },
           };
         }
+        const { numbers, strings } = get();
+        if (numbers.length) {
+          const group: Record<string, unknown> = {};
+          for (const n of numbers) group[n.name] = n.unit ? { $value: `${n.value}${n.unit}`, $type: "dimension" } : { $value: n.value, $type: "number" };
+          tokens.number = group;
+        }
+        if (strings.length) {
+          const group: Record<string, unknown> = {};
+          for (const t of strings) group[t.name] = t.use === "font-family" ? { $value: t.value, $type: "fontFamily" } : { $value: t.value, $type: "string" };
+          tokens.string = group;
+        }
         return JSON.stringify(tokens, null, 2);
       },
 
@@ -690,6 +765,8 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         for (const sp of spacing) lines.push(`  --spacing-${toKebab(sp.name.replace(/^space-/, ""))}: ${sp.value}px;`);
         for (const r of radii) lines.push(`  --radius-${toKebab(r.name.replace(/^radius-/, ""))}: ${r.value === 9999 ? "9999px" : `${r.value}px`};`);
         for (const sh of shadows) lines.push(`  --shadow-${toKebab(sh.name.replace(/^shadow-/, ""))}: ${sh.x}px ${sh.y}px ${sh.blur}px ${sh.spread}px ${sh.color};`);
+        for (const n of get().numbers) lines.push(`  --${toKebab(n.name)}: ${n.value}${n.unit};`);
+        for (const t of get().strings) lines.push(`  --${toKebab(t.name)}: ${t.value};`);
         lines.push("}");
         return lines.join("\n");
       },

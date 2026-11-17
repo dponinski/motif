@@ -12,7 +12,7 @@ export const useTokenHistory = create<History>(() => ({ past: [], future: [] }))
 const LIMIT = 100;
 let own = false;
 
-const KEYS = ["sets", "colors", "typography", "spacing", "radii", "shadows"] as const;
+const KEYS = ["sets", "colors", "typography", "spacing", "radii", "shadows", "numbers", "strings"] as const;
 
 // Which theme of a set is open is where the user is looking, not a change to the tokens: it neither ends the history nor is a step of it.
 // A color's `value` is what it is in the open theme, so it follows that and is left out of the comparison too (its values in each theme
