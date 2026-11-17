@@ -147,7 +147,7 @@ async function convertExport(input: { host: GitHost & RepoReader; link: DtcgLink
   }
   // The check is of the conversion: the stylesheet the repository's own values come to, not one with what Motif changed since (those are the
   // token changes listed above it).
-  const edit = await editStylesheets({ sheets, conversion: convert, entry: state.analysis.tailwindEntry ?? null, tailwind: exported.link.tailwind, output: exported.link.output, generated: generateCss(link.base) });
+  const edit = await editStylesheets({ sheets, conversion: convert, entry: state.analysis.tailwindEntry ?? null, tailwind: exported.link.tailwind, output: exported.link.output, generated: generateCss(applyRenames(link.base, link.renamed)), renamed: Object.fromEntries(Object.entries(link.renamed ?? {}).map(([a, b]) => [a.split(".").join("-"), b.split(".").join("-")])) });
 
   const notes = [
     `Check: ${describeCheck(edit.check)}`,

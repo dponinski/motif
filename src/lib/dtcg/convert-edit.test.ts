@@ -91,6 +91,13 @@ describe("editStylesheets", () => {
     expect(check.differences).toEqual([]);
   });
 
+  it("looks for a variable that was renamed under its new name", async () => {
+    const before = [{ path: "a.css", text: ":root { --a: #111; --b: var(--a); }" }];
+    const after = [{ path: "a.css", text: ":root { --c: #111; --b: var(--c); }" }];
+    expect((await checkConversion(before, after)).differences.length).toBeGreaterThan(0);
+    expect((await checkConversion(before, after, { a: "c" })).differences).toEqual([]);
+  });
+
   it("imports into a stylesheet without Tailwind after its own imports", async () => {
     const { edit } = await run(`@import url("x.css");\n:root { --a: #111; }\n.btn { color: var(--a); }\n`, false);
     expect(edit.files["src/app.css"].text.startsWith('@import url("x.css");\n@import "./styles/tokens.css";')).toBe(true);

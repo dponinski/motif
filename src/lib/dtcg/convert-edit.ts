@@ -94,7 +94,8 @@ function resolve(tokens: Map<string, RepoToken>, name: string, theme: string, ba
   return depth < 8 ? resolve(tokens, next, theme, base, depth + 1) ?? value : value;
 }
 
-export async function checkConversion(before: TokenFile[], after: TokenFile[]): Promise<ConversionCheck> {
+// `renamed` is the variables that were renamed (by their old name) since the stylesheets were read: each is looked for under its new name.
+export async function checkConversion(before: TokenFile[], after: TokenFile[], renamed: Record<string, string> = {}): Promise<ConversionCheck> {
   const read = async (files: TokenFile[]) => {
     const acc = newAccumulator();
     await scanCss(files, acc, []);
@@ -107,11 +108,12 @@ export async function checkConversion(before: TokenFile[], after: TokenFile[]): 
   for (const [name, t] of was.tokens) {
     const mine = differences.length;
     const place = (tok: RepoToken) => Object.values(tok.locations)[0]?.container;
-    const there = now.tokens.get(name);
+    const to = renamed[name] ?? name;
+    const there = now.tokens.get(to);
     if (!there) { differences.push({ name, theme: was.base, before: Object.values(t.values)[0] ?? "", after: "(missing)" }); continue; }
     if (place(t) !== place(there)) differences.push({ name, theme: was.base, before: `${place(t)}`, after: `${place(there)}` });
     for (const theme of new Set([...Object.keys(t.values), ...Object.keys(there.values)])) {
-      const [a, b] = [resolve(was.tokens, name, theme, was.base), resolve(now.tokens, name, theme, now.base)];
+      const [a, b] = [resolve(was.tokens, name, theme, was.base), resolve(now.tokens, to, theme, now.base)];
       if (a === null || b === null || !sameValue(t.kind, a, b)) differences.push({ name, theme, before: a ?? "(none)", after: b ?? "(none)" });
     }
     if (differences.length === mine) identical++;
@@ -135,6 +137,8 @@ export async function editStylesheets(input: {
   // The generated stylesheet and its text.
   output: string;
   generated: string;
+  // Variables renamed since the stylesheets were read (old name -> new name).
+  renamed?: Record<string, string>;
 }): Promise<ConversionEdit> {
   const postcss = (await import("postcss")).default as unknown as Postcss;
   const { conversion, output } = input;
@@ -158,6 +162,6 @@ export async function editStylesheets(input: {
   const files: ConversionEdit["files"] = {};
   for (const s of input.sheets) if (next.get(s.path)!.text !== s.text) files[s.path] = { text: next.get(s.path)!.text, sha: s.sha };
   // The check reads the stylesheets as they will be, with the generated one among them.
-  const check = await checkConversion(input.sheets, [...[...next.values()].map((s) => ({ path: s.path, text: s.text })), { path: output, text: input.generated }]);
+  const check = await checkConversion(input.sheets, [...[...next.values()].map((s) => ({ path: s.path, text: s.text })), { path: output, text: input.generated }], input.renamed);
   return { files, removed, imported, check };
 }

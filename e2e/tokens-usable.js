@@ -206,9 +206,10 @@ const check = (name, ok, detail = "") => {
   await page.waitForFunction(() => /In sync with pull request #\d+/.test(document.querySelector('[aria-label="Sync status"]')?.textContent ?? ""), null, { timeout: 40000 });
   const pushed = Object.keys(repos["acme/ds"]).filter((b) => b !== "main");
   const tree = repos["acme/ds"][pushed[0]];
-  const css = tree.get("src/styles/motif.css") ?? "";
-  check("the radius is in the repository's @theme as radius-card, which is what gives it a class", /@theme\s*\{[^}]*--radius-card:\s*(14px|0\.875rem)/.test(css), css.slice(-500));
-  check("the spacing is in an @theme block that was made for it, as spacing-gutter", /@theme\s*\{[^}]*--spacing-gutter:\s*(22px|1\.375rem)/.test(css), css.slice(-500));
+  // (The variables are generated from design tokens files now, in `@theme` of the stylesheet they build.)
+  const css = tree.get("src/styles/tokens.css") ?? "";
+  check("the radius is in @theme as radius-card, which is what gives it a class", /@theme\s*\{[^}]*--radius-card:\s*(14px|0\.875rem)/.test(css), css.slice(-500));
+  check("the spacing is in @theme as spacing-gutter", /@theme\s*\{[^}]*--spacing-gutter:\s*(22px|1\.375rem)/.test(css), css.slice(-500));
   check("and the component uses the class", /rounded-card/.test(tree.get("src/components/Button.tsx") ?? ""));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
