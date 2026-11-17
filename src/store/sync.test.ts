@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readPayload, type ProjectPayload } from "../lib/sync/payload";
-import { emptyTokenData } from "./design-system";
+import { emptyStoredTokenData } from "../lib/tokens/migrate";
 import { useProjectsStore, type Project } from "./projects";
 import { TEAMS_EVERY, shouldRefreshTeams, useSync } from "./sync";
 import { useTeams } from "./teams";
@@ -82,7 +82,7 @@ const project = (id: string, over: Partial<Project> = {}): Project => ({
   id, name: `Project ${id}`, createdAt: 1, updatedAt: 1,
   repo: { connection: { owner: "acme", repo: id, token: "ghp_" + "S".repeat(36), defaultBranch: "main" }, analysis: null, tokenLink: null },
   library: { source: null, components: [] },
-  tokens: emptyTokenData(),
+  tokens: emptyStoredTokenData(),
   docs: [],
   ...over,
 });
@@ -237,7 +237,7 @@ describe("changes made elsewhere", () => {
   });
 
   it("two people editing different tokens at once both keep their edits", async () => {
-    const withColors = (a: string, b: string) => ({ ...emptyTokenData(), colors: [{ id: "c1", name: "primary", value: a }, { id: "c2", name: "surface", value: b }] }) as never;
+    const withColors = (a: string, b: string) => ({ ...emptyStoredTokenData(), tokens: [{ id: "c1", name: "primary", type: "color", value: a }, { id: "c2", name: "surface", type: "color", value: b }] }) as never;
     useProjectsStore.setState({ projects: [] });
     useProjectsStore.getState().put(project("a", { tokens: withColors("#111111", "#222222") }));
     await sync();
@@ -247,9 +247,9 @@ describe("changes made elsewhere", () => {
     server.put("a", payloadOf(project("a"), { tokens: withColors("#111111", "#BBBBBB") as never }));
     await sync();
     expect(useSync.getState().conflicts).toEqual({});
-    const merged = (server.rows.get("a")!.data!.tokens as unknown as { colors: { value: string }[] }).colors.map((c) => c.value);
+    const merged = (server.rows.get("a")!.data!.tokens as unknown as { tokens: { value: string }[] }).tokens.map((c) => c.value);
     expect(merged).toEqual(["#AAAAAA", "#BBBBBB"]);
-    expect(local("a")!.tokens.colors.map((c) => c.value)).toEqual(["#AAAAAA", "#BBBBBB"]);
+    expect(local("a")!.tokens.tokens.map((c) => c.value)).toEqual(["#AAAAAA", "#BBBBBB"]);
   });
 
   it("a page deleted by one and edited by the other is asked about, by name, and the rest is merged", async () => {

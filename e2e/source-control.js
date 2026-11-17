@@ -73,8 +73,8 @@ const check = (name, ok, detail = "") => {
   await editMotif((state) => {
     const set = state.sets[0];
     const light = set.themes[0].id;
-    const c = state.colors.find((x) => x.setId === set.id && x.name === "primary");
-    c.themeValues[light] = "#ff0000";
+    const c = state.tokens.find((x) => x.type === "color" && x.setId === set.id && x.name === "primary");
+    c.values[light] = "#ff0000";
     c.value = "#ff0000";
   });
   await openSourceControl(page);
@@ -99,8 +99,8 @@ const check = (name, ok, detail = "") => {
   await page.waitForTimeout(1800);
   const surface = await page.evaluate(() => {
     const p = JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].tokens;
-    const c = p.colors.find((x) => x.name === "surface");
-    return Object.values(c.themeValues)[0];
+    const c = p.tokens.find((x) => x.type === "color" && x.name === "surface");
+    return Object.values(c.values)[0];
   });
   check("the token in Motif has the repository's value", surface === "#fafafa", surface);
   await page.screenshot({ path: `${OUT}/source-control-pulled.png` });

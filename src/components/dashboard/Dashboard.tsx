@@ -61,7 +61,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
   const move = async (teamId: string | null) => { setMenu(false); setMoveError(null); const e = await useSync.getState().move(project.id, teamId); if (e) setMoveError(e); };
   const connection = project.repo.connection;
   const t = project.tokens;
-  const tokenCount = t.colors.length + t.typography.length + t.spacing.length + t.radii.length + t.shadows.length;
+  const tokenCount = t.tokens.length + t.compositions.length;
   const commit = () => { setEditing(false); rename(project.id, name.trim() || project.name); };
 
   return (

@@ -132,7 +132,7 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
 
   const tokensIn = (id) => JSON.parse(sql(`SELECT data FROM ${DB}.team_projects WHERE id='${id}'`)).tokens;
   const docsIn = (id) => JSON.parse(sql(`SELECT data FROM ${DB}.team_projects WHERE id='${id}'`)).docs;
-  const colorValue = (tokens, id) => tokens.colors.find((c) => c.id === id).value;
+  const colorValue = (tokens, id) => tokens.tokens.find((c) => c.id === id).value;
   const titles = (docs) => docs.map((d) => `${d.id}:${d.title}`).join(",");
 
   const baseTokens = { sets: [{ id: "set-global", name: "Global", themes: [{ id: "theme-default", name: "Default" }], activeThemeId: "theme-default" }], colors: [{ id: "c1", name: "primary", value: "#111111", group: "base", setId: "set-global", themeValues: { "theme-default": "#111111" } }, { id: "c2", name: "surface", value: "#222222", group: "base", setId: "set-global", themeValues: { "theme-default": "#222222" } }], typography: [], spacing: [], radii: [], shadows: [], components: [] };
@@ -160,31 +160,31 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   await card(grace.page, "merge001").waitFor({ timeout: 60000 });
   check("both have it, and both remember what each item was when they last agreed", await until(async () => {
     const a = (await storage(ada.page, "motif-sync")).state.meta.merge001, g = (await storage(grace.page, "motif-sync")).state.meta.merge001;
-    return !!a?.items?.tokens?.["colors/c1"] && !!g?.items?.docs?.d1 && a.version === g.version;
+    return !!a?.items?.tokens?.["tokens/c1"] && !!g?.items?.docs?.d1 && a.version === g.version;
   }));
 
   // Changes made while a browser isn't open, as in the sync suite.
   const editBoth = async (who, fn) => { await editStored(who.page, fn); };
 
   // ── Different items of the same parts, by two people ──────────────────────
-  await editBoth(grace, `const p = projects.find((x) => x.id === "merge001"); p.tokens.colors.find((c) => c.id === "c2").value = "#BBBBBB"; p.tokens.colors.find((c) => c.id === "c2").themeValues["theme-default"] = "#BBBBBB"; p.docs.find((d) => d.id === "d2").title = "Guide by Grace"; p.updatedAt = Date.now();`);
+  await editBoth(grace, `const p = projects.find((x) => x.id === "merge001"); p.tokens.tokens.find((c) => c.id === "c2").value = "#BBBBBB"; p.tokens.tokens.find((c) => c.id === "c2").values["theme-default"] = "#BBBBBB"; p.docs.find((d) => d.id === "d2").title = "Guide by Grace"; p.updatedAt = Date.now();`);
   await grace.page.goto(`${APP}/`);
   check("Grace's edits (the second color, the second page) are saved", await until(() => colorValue(tokensIn("merge001"), "c2") === "#BBBBBB" && titles(docsIn("merge001")).includes("Guide by Grace")));
-  await editBoth(ada, `const p = projects.find((x) => x.id === "merge001"); p.tokens.colors.find((c) => c.id === "c1").value = "#AAAAAA"; p.tokens.colors.find((c) => c.id === "c1").themeValues["theme-default"] = "#AAAAAA"; p.docs.find((d) => d.id === "d1").title = "Intro by Ada"; p.updatedAt = Date.now();`);
+  await editBoth(ada, `const p = projects.find((x) => x.id === "merge001"); p.tokens.tokens.find((c) => c.id === "c1").value = "#AAAAAA"; p.tokens.tokens.find((c) => c.id === "c1").values["theme-default"] = "#AAAAAA"; p.docs.find((d) => d.id === "d1").title = "Intro by Ada"; p.updatedAt = Date.now();`);
   await ada.page.goto(`${APP}/`);
   check("Ada, who changed the first color and the first page meanwhile, is asked nothing", await until(async () => colorValue(tokensIn("merge001"), "c1") === "#AAAAAA") && (await ada.page.locator("[data-sync-conflict]").count()) === 0);
   check("the server has both people's edits, in the tokens and in the documentation", colorValue(tokensIn("merge001"), "c1") === "#AAAAAA" && colorValue(tokensIn("merge001"), "c2") === "#BBBBBB" && titles(docsIn("merge001")) === "d1:Intro by Ada,d2:Guide by Grace", titles(docsIn("merge001")));
   const onAda = (await projectsOf(ada.page)).find((p) => p.id === "merge001");
-  check("and so has Ada's browser", onAda.tokens.colors.map((c) => c.value).join() === "#AAAAAA,#BBBBBB" && titles(onAda.docs) === "d1:Intro by Ada,d2:Guide by Grace");
+  check("and so has Ada's browser", onAda.tokens.tokens.map((c) => c.value).join() === "#AAAAAA,#BBBBBB" && titles(onAda.docs) === "d1:Intro by Ada,d2:Guide by Grace");
   await focus(grace.page);
-  check("and Grace's, after her next look", await until(async () => { const g = (await projectsOf(grace.page)).find((p) => p.id === "merge001"); return g.tokens.colors[0].value === "#AAAAAA" && titles(g.docs).includes("Intro by Ada"); }));
+  check("and Grace's, after her next look", await until(async () => { const g = (await projectsOf(grace.page)).find((p) => p.id === "merge001"); return g.tokens.tokens[0].value === "#AAAAAA" && titles(g.docs).includes("Intro by Ada"); }));
   await ada.page.screenshot({ path: `${OUT}/merge-both-kept.png` });
 
   // ── The same item, by two people ──────────────────────────────────────────
-  await editBoth(grace, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.colors.find((x) => x.id === "c1"); c.value = "#6A6A6A"; c.themeValues["theme-default"] = "#6A6A6A"; p.docs.find((d) => d.id === "d2").title = "Guide, Grace's second edit"; p.updatedAt = Date.now();`);
+  await editBoth(grace, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.tokens.find((x) => x.id === "c1"); c.value = "#6A6A6A"; c.values["theme-default"] = "#6A6A6A"; p.docs.find((d) => d.id === "d2").title = "Guide, Grace's second edit"; p.updatedAt = Date.now();`);
   await grace.page.goto(`${APP}/`);
   await until(() => colorValue(tokensIn("merge001"), "c1") === "#6A6A6A");
-  await editBoth(ada, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.colors.find((x) => x.id === "c1"); c.value = "#1A1A1A"; c.themeValues["theme-default"] = "#1A1A1A"; p.docs.find((d) => d.id === "d1").title = "Intro, Ada's second edit"; p.updatedAt = Date.now();`);
+  await editBoth(ada, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.tokens.find((x) => x.id === "c1"); c.value = "#1A1A1A"; c.values["theme-default"] = "#1A1A1A"; p.docs.find((d) => d.id === "d1").title = "Intro, Ada's second edit"; p.updatedAt = Date.now();`);
   await ada.page.goto(`${APP}/`);
   await ada.page.locator("[data-sync-conflict]").waitFor({ timeout: 30000 });
   const text = await ada.page.locator("[data-sync-conflict]").innerText();
@@ -195,17 +195,17 @@ const stopApp = () => { try { if (app) process.kill(-app.pid, "SIGTERM"); } catc
   check("keeping Ada's version sends it, with Grace's other edit still there", await until(() => colorValue(tokensIn("merge001"), "c1") === "#1A1A1A") && titles(docsIn("merge001")) === "d1:Intro, Ada's second edit,d2:Guide, Grace's second edit", titles(docsIn("merge001")));
   check("the question goes away", (await ada.page.locator("[data-sync-conflict]").count()) === 0);
   await focus(grace.page);
-  check("Grace gets it all", await until(async () => { const g = (await projectsOf(grace.page)).find((p) => p.id === "merge001"); return g.tokens.colors[0].value === "#1A1A1A" && titles(g.docs).includes("Intro, Ada's second edit"); }));
+  check("Grace gets it all", await until(async () => { const g = (await projectsOf(grace.page)).find((p) => p.id === "merge001"); return g.tokens.tokens[0].value === "#1A1A1A" && titles(g.docs).includes("Intro, Ada's second edit"); }));
 
   // ── And choosing the other person's version ──────────────────────────────
-  await editBoth(grace, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.colors.find((x) => x.id === "c1"); c.value = "#7B7B7B"; c.themeValues["theme-default"] = "#7B7B7B"; p.updatedAt = Date.now();`);
+  await editBoth(grace, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.tokens.find((x) => x.id === "c1"); c.value = "#7B7B7B"; c.values["theme-default"] = "#7B7B7B"; p.updatedAt = Date.now();`);
   await grace.page.goto(`${APP}/`);
   await until(() => colorValue(tokensIn("merge001"), "c1") === "#7B7B7B");
-  await editBoth(ada, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.colors.find((x) => x.id === "c1"); c.value = "#2B2B2B"; c.themeValues["theme-default"] = "#2B2B2B"; p.docs.find((d) => d.id === "d1").title = "Ada's last page edit"; p.updatedAt = Date.now();`);
+  await editBoth(ada, `const p = projects.find((x) => x.id === "merge001"); const c = p.tokens.tokens.find((x) => x.id === "c1"); c.value = "#2B2B2B"; c.values["theme-default"] = "#2B2B2B"; p.docs.find((d) => d.id === "d1").title = "Ada's last page edit"; p.updatedAt = Date.now();`);
   await ada.page.goto(`${APP}/`);
   await ada.page.locator("[data-sync-conflict]").waitFor({ timeout: 30000 });
   await ada.page.locator("[data-keep=server]").click();
-  check("using the other version takes Grace's color, and Ada's page edit is not lost", await until(async () => { const a = (await projectsOf(ada.page)).find((p) => p.id === "merge001"); return a.tokens.colors[0].value === "#7B7B7B"; }));
+  check("using the other version takes Grace's color, and Ada's page edit is not lost", await until(async () => { const a = (await projectsOf(ada.page)).find((p) => p.id === "merge001"); return a.tokens.tokens[0].value === "#7B7B7B"; }));
   check("it is then saved with both", await until(() => colorValue(tokensIn("merge001"), "c1") === "#7B7B7B" && titles(docsIn("merge001")).includes("Ada's last page edit")), titles(docsIn("merge001")));
 
   check("no errors in the page's console", errors.length === 0, errors.join(" | "));

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAIStore } from "./ai";
+import { legacyOf, toStored } from "../lib/tokens/migrate";
 import { useDesignSystemStore, snapshotTokens } from "./design-system";
 import { useDocsStore } from "./docs";
 import { useGitStore } from "./git";
@@ -15,7 +16,7 @@ export function loadProject(project: Project) {
   useAIStore.getState().clearMessages();
   useGitStore.getState().load(project.repo);
   useLibraryStore.getState().load(project.library);
-  useDesignSystemStore.setState(project.tokens);
+  useDesignSystemStore.setState(legacyOf(project.tokens));
   useDocsStore.getState().setPages(project.docs);
 }
 
@@ -25,7 +26,7 @@ export function snapshotProject(): ProjectData {
   return {
     repo: { connection, analysis, tokenLink, work, pulledSha },
     library: { source, components, drafts },
-    tokens: snapshotTokens(useDesignSystemStore.getState()),
+    tokens: toStored(snapshotTokens(useDesignSystemStore.getState())),
     docs: useDocsStore.getState().pages,
   };
 }

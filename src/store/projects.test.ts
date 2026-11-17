@@ -18,7 +18,8 @@ describe("projects", () => {
     expect(p.name).toBe("ui");
     expect(p.repo.connection).toEqual(connection("ui"));
     expect(p.library.components).toEqual([]);
-    expect(p.tokens.colors).toEqual([]);
+    expect(p.tokens.tokens).toEqual([]);
+    expect(p.tokens.compositions).toEqual([]);
     expect(p.tokens.sets).toHaveLength(1);
     expect(p.docs).toEqual([]);
   });

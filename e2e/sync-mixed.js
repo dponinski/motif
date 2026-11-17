@@ -56,8 +56,8 @@ const check = (name, ok, detail = "") => {
     const t = raw.state.projects[0].tokens;
     const set = t.sets.find((s) => s.name === "acme/new");
     const light = set.themes[0].id;
-    const c = t.colors.find((x) => x.setId === set.id && x.name === "primary");
-    c.themeValues[light] = "#ff0000";
+    const c = t.tokens.find((x) => x.type === "color" && x.setId === set.id && x.name === "primary");
+    c.values[light] = "#ff0000";
     c.value = "#ff0000";
     localStorage.setItem("motif-projects", JSON.stringify(raw));
   });
