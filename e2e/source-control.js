@@ -58,7 +58,7 @@ const check = (name, ok, detail = "") => {
 
   // ── Connected: read with nothing pressed, nothing to send ─────────────────
   await openSourceControl(page);
-  check("the repository is linked and its link is said", (await page.locator("[data-token-link]").innerText()).includes("linked to this repository"));
+  check("the repository's tokens are read, and it says they move into design tokens files with the first push", /move into design tokens files/.test(await page.locator("[data-token-link]").innerText()));
   check("the repository and its branch are shown", (await page.getByRole("link", { name: "acme/ds" }).isVisible()) && (await page.getByText("main", { exact: true }).first().isVisible()));
   check("Pull and Push sit side by side", (await page.getByRole("button", { name: "Pull", exact: true }).isVisible()) && (await page.getByRole("button", { name: "Push" }).isVisible()));
   check("there is nothing to push, so Push is off", (await page.getByRole("button", { name: "Push" }).isDisabled()) && (await status().innerText()).includes("Nothing to sync"));
@@ -85,7 +85,7 @@ const check = (name, ok, detail = "") => {
   await syncNow(page, 1);
   check("Push opens one pull request, and the panel links it", gh.repo.prs.length === 1 && (await page.getByRole("link", { name: /#1/ }).first().isVisible()));
   check("the status says it is in sync with it", (await status().innerText()).includes("In sync with pull request #1"));
-  check("the pull request carries the token's new value", gh.files(gh.repo.prs[0].head).get("src/styles/tokens.css").includes("--primary: #ff0000;"));
+  check("the pull request carries the token's new value", gh.files(gh.repo.prs[0].head).get("src/styles/motif-tokens.css").includes("--primary: #ff0000;"));
   await page.screenshot({ path: `${OUT}/source-control-sent.png` });
 
   // ── The repository moves: Pull brings it in ───────────────────────────────

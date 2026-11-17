@@ -159,11 +159,11 @@ const check = (name, ok, detail = "") => {
   check("the components come in on their own", await settle(async () => (await page.locator("aside button[title*='src/']").filter({ hasText: /^Button$/ }).count()) === 1, 60000));
   await nav("Tokens");
   check("and the tokens, as a set named for the repository (not left beside an empty one)", await settle(async () => (await sidebar.getByText("acme/ds", { exact: true }).count()) === 1 && (await sidebar.getByText("Global", { exact: true }).count()) === 0));
-  check("with its colors, radii and shadows", await settle(async () => (await page.getByRole("tab", { name: /Colors/ }).innerText()).includes("17") && (await page.getByRole("tab", { name: /Radii/ }).innerText()).includes("4") && (await page.getByRole("tab", { name: /Shadows/ }).innerText()).includes("2")));
+  check("with its colors, radii and shadows (which are compositions, in design tokens files)", await settle(async () => (await page.getByRole("tab", { name: /Colors/ }).innerText()).includes("17") && (await page.getByRole("tab", { name: /Radii/ }).innerText()).includes("4") && (await page.getByRole("tab", { name: /Compositions/ }).innerText()).includes("2")));
   await page.getByRole("button", { name: "List", exact: true }).click();
   await primaryLight().waitFor();
   const first = await primaryLight().inputValue();
-  check("a token has the repository's value", /^#[0-9a-f]{6}$/.test(first), first);
+  check("a token has the repository's value, as it is written there", first === "oklch(0.52 0.21 270)", first);
   await nav("Source control");
   check("and the set is linked: the panel says so", await page.locator("[data-token-link]").waitFor({ timeout: 30000 }).then(() => true, () => false));
 
@@ -177,7 +177,7 @@ const check = (name, ok, detail = "") => {
   check("a pull takes its change in, and says so", await settle(async () => ((await page.locator("[data-pull-notice]").innerText().catch(() => "")) ?? "").includes("token change")), await page.locator("[data-pull-notice]").innerText().catch(() => ""));
   await nav("Tokens");
   await page.getByRole("button", { name: "List", exact: true }).click().catch(() => {});
-  check("the token has the repository's new value", await settle(async () => (await primaryLight().inputValue()) === "#de3e2d"), await primaryLight().inputValue());
+  check("the token has the repository's new value", await settle(async () => (await primaryLight().inputValue()) === "oklch(0.6 0.2 30)"), await primaryLight().inputValue());
   check("and no longer says the repository has changed", (await (async () => { await nav("Source control"); return page.locator("[data-behind-note]").count(); })()) === 0);
 
   // ── Changed in both places: Pull asks ─────────────────────────────────────
