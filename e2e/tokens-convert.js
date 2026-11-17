@@ -87,10 +87,12 @@ const check = (name, ok, detail = "") => {
   check("the link is to design tokens files that don't exist yet", link.format === "dtcg" && !!link.convert && link.convert.converted.includes("primary") && link.convert.converted.includes("color-brand"), JSON.stringify(link.convert).slice(0, 200));
   check("what stays in the stylesheet is listed", link.convert.left.some((l) => l.name === "radius-sm" || /calc/.test(l.reason)) || link.convert.left.length === 0, JSON.stringify(link.convert.left));
   check("the tokens are in Motif under the names the variables have, with light and dark", project.tokens.tokens.some((t) => t.name === "primary" && t.type === "color" && Object.keys(t.values).length === 2) && project.tokens.sets[0].themes.length === 2, JSON.stringify(project.tokens.tokens.map((t) => t.name)));
-  check("it counts them as waiting to be sent", await settle(async () => /waiting/.test(await status())), await status());
+  check("nothing is waiting: the conversion goes with the first push", await settle(async () => (await status()).includes("Nothing to sync")), await status());
   await page.screenshot({ path: `${OUT}/tokens-convert-waiting.png` });
 
   // ── The first push ────────────────────────────────────────────────────────
+  await page.getByRole("button", { name: "Add to pull request" }).click();
+  check("Add to pull request puts the conversion among the changes", await settle(async () => /waiting/.test(await status())), await status());
   await page.getByRole("button", { name: "Push" }).click();
   check("Push opens a pull request", await settle(async () => repo.prs.length === 1 && (await status()).includes("In sync with pull request #1")), await status());
   const head = gh.files(repo.prs[0].head);

@@ -18,6 +18,8 @@ async function seedAt(base, page, id, { repo = "acme/ds", token = "t", name = "A
     localStorage.setItem("motif-tour-done", "1");
     localStorage.setItem("motif-theme", JSON.stringify({ state: { mode: "light" }, version: 0 }));
   }, [id, repo, token, name, extra]);
+  // E2E_CONVERT=1 runs a suite with a repository's stylesheet tokens converted on pull (lib/dtcg/convert-flag.ts).
+  if (process.env.E2E_CONVERT) await page.evaluate(() => localStorage.setItem("motif-convert-tokens", "1"));
 }
 // For the suites that use the shared server, and for those that start their own.
 const seed = (page, id, options) => seedAt(APP_URL, page, id, options);

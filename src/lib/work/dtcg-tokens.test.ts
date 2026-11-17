@@ -237,11 +237,11 @@ describe("the first push of a repository whose tokens are variables in its style
   beforeEach(() => { setConvertOnPull(true); useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
   afterEach(() => setConvertOnPull(null));
 
-  it("counts every token as waiting, and the pull wrote nothing to the repository", async () => {
+  it("has nothing waiting yet (the conversion goes with the first push), and the pull wrote nothing to the repository", async () => {
     const { repo, link, model } = await pulled();
     expect(link.convert?.converted).toEqual(expect.arrayContaining(["radius", "background", "primary", "color-brand"]));
     expect(repo.files["src/app.css"]).toBe(APP_CSS);
-    expect(waitingDtcgChanges(link, model).length).toBeGreaterThanOrEqual(5);
+    expect(waitingDtcgChanges(link, model)).toEqual([]);
   });
 
   it("puts the files, the generated stylesheet and the edited stylesheet in the editor as one step, with the check in its lines", async () => {

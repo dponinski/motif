@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useDesignSystemStore, DEFAULT_GROUP, type ColorToken, type NumberToken, type RadiusToken, type ShadowToken, type SpacingToken, type StringToken, type TokenKind, type TypographyToken } from "@/store/design-system";
-import { useGitStore } from "@/store/git";
+import { isDtcgLink, useGitStore } from "@/store/git";
+import { COMPOSITION_NAMESPACE, leafOf, pathOf, placeOf } from "@/lib/dtcg/names";
 import { useTokenChanges } from "@/components/work/useWork";
 import { cssName, readRepoTokens, type SyncKind } from "@/lib/token-sync/doc";
 import { keyPrefixes, repoKey } from "@/lib/token-sync/keys";
@@ -50,12 +51,32 @@ function searchText(kind: TokenKind, t: Token, themes: { id: string }[], data: C
   }
 }
 
-export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]): Row[] {
-  const list = useDesignSystemStore(useShallow((s) => (kind === "color" ? s.colors : kind === "spacing" ? s.spacing : kind === "radius" ? s.radii : kind === "shadow" ? s.shadows : kind === "number" ? s.numbers : kind === "string" ? s.strings : kind === "composition" ? s.compositions : s.typography)));
+// Where a token is in the design tokens files: the path its variable is named by (`color.brand` is `--color-brand`).
+function pathInFiles(kind: TokenKind, t: Token): string[] | null {
+  const repoName = (t as { repoName?: string }).repoName;
+  const placed = placeOf(repoName);
+  if (placed) return placed;
+  const name = (t as { name: string }).name;
+  switch (kind) {
+    case "color": return pathOf("color", undefined, name);
+    case "spacing": case "radius": return pathOf("number", kind, name);
+    case "number": case "string": return pathOf(kind, (t as NumberToken | StringToken).use, name);
+    case "shadow": return [COMPOSITION_NAMESPACE.shadow, leafOf(name, COMPOSITION_NAMESPACE.shadow)];
+    default: return null;
+  }
+}
+
+export function useRows(outer: TokenKind, setId: string, themes: { id: string }[]): Row[] {
+  const kind = outer;
+  // The spacing and radius tabs also have the numbers that are used as one (a length in rem or em, which the lists of px lengths don't hold),
+  // and the numbers tab has the others.
+  const list = useDesignSystemStore(useShallow((s): Token[] => (kind === "color" ? s.colors : kind === "spacing" ? [...s.spacing, ...s.numbers.filter((n) => n.use === "spacing")] : kind === "radius" ? [...s.radii, ...s.numbers.filter((n) => n.use === "radius")] : kind === "shadow" ? s.shadows : kind === "number" ? s.numbers.filter((n) => n.use !== "spacing" && n.use !== "radius") : kind === "string" ? s.strings : kind === "composition" ? s.compositions : s.typography)));
   // What a composition's slots can be (read for the compositions only).
   const data = useDesignSystemStore(useShallow((s): ComposeData => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
   const changes = useTokenChanges();
   const analysis = useGitStore((s) => s.analysis);
+  // The tokens are design tokens files: each token is a place in them, and the variable it makes is named by it.
+  const inFiles = useGitStore((s) => isDtcgLink(s.tokenLink));
   const changed = useMemo(() => new Set(changes.map((c) => c.name)), [changes]);
   // The names tokens made here have in the repository (a radius `card` is `radius-card` there).
   const prefixes = useMemo(() => (analysis ? keyPrefixes(analysis) : undefined), [analysis]);
@@ -68,16 +89,19 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
   return useMemo(
     () => (list as Token[]).filter((t) => t.setId === setId).map((t) => {
       const repoName = (t as { repoName?: string }).repoName;
-      const key = kind === "typography" || kind === "number" || kind === "string" || kind === "composition" ? (repoName ?? cssName(t.name)) : repoKey(kind as SyncKind, t as { name: string; repoName?: string }, prefixes);
+      // (A number in the radius or spacing tab is a number: what edits it is the number's.)
+      const kind: TokenKind = (outer === "radius" || outer === "spacing") && "unit" in t ? "number" : outer;
+      const place = inFiles ? pathInFiles(kind, t) : null;
+      const key = place ? place.join("-") : kind === "typography" || kind === "number" || kind === "string" || kind === "composition" ? (repoName ?? cssName(t.name)) : repoKey(kind as SyncKind, t as { name: string; repoName?: string }, prefixes);
       // Only a token the repository has can be looked for in its code, and only once a scan has counted.
-      const counted = analysis?.tokenUsage && repoName && analysis.tokens.some((x) => x.name === key) ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
+      const counted = analysis?.tokenUsage && (repoName || place) && analysis.tokens.some((x) => x.name === key) ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
       const use = counted ? { ...counted, components: [...new Set(counted.files.flatMap((f) => componentsIn.get(f) ?? []))] } : null;
       return {
         id: t.id, kind, name: t.name, group: (t as { group?: string }).group || DEFAULT_GROUP,
-        text: searchText(kind, t, themes, data), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
+        text: searchText(kind, t, themes, data), linked: !!repoName || (!!place && !!analysis?.tokens.some((x) => x.name === key)), changed: changed.has(place ? place.join(".") : key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
         differs: kind === "color" && themes.length > 1 && new Set(themes.map((th) => { const c = t as ColorToken; return hexOf(c.themeValues[th.id] ?? c.value).toLowerCase(); })).size > 1,
       };
     }),
-    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes, data]
+    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes, data, inFiles]
   );
 }

@@ -54,7 +54,11 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
     sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions,
     exportTokens: s.exportTokens, exportCSS: s.exportCSS, exportTailwind: s.exportTailwind,
   })));
-  const counts = { color: colors, typography, spacing, radius: radii, shadow: shadows, number: numbers, string: strings, composition: compositions };
+  const counts = {
+    color: colors, typography, shadow: shadows, string: strings, composition: compositions,
+    spacing: [...spacing, ...numbers.filter((n) => n.use === "spacing")], radius: [...radii, ...numbers.filter((n) => n.use === "radius")],
+    number: numbers.filter((n) => n.use !== "spacing" && n.use !== "radius"),
+  };
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   const [kind, setKind] = useState<TokenKind>("color");
   // A kind chosen from New token opens with its add row ready.
