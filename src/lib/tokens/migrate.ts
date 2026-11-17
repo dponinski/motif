@@ -2,7 +2,7 @@ import {
   emptyTokenData,
   type ColorToken, type ComponentDefinition, type NumberToken, type RadiusToken, type ShadowToken, type SpacingToken, type StringToken, type TokenData, type TokenSet, type TypographyToken,
 } from "../../store/design-system";
-import { tokenKey } from "./alias-colors";
+import { targetKey, targetOf } from "./alias-colors";
 import { ALL_THEMES, TOKENS_VERSION, type Composition, type Slot, type StoredTokenData, type Token } from "./model";
 
 // Turning the token store's five lists (colors, typography, spacing, radii, shadows) into the typed model a project keeps (tokens and
@@ -17,9 +17,9 @@ function refsOf(color: ColorToken, colors: ColorToken[]): Record<string, string>
   if (!color.themeAlias) return undefined;
   const out: Record<string, string> = {};
   for (const [theme, key] of Object.entries(color.themeAlias)) {
-    const target = colors.find((o) => o.id !== color.id && o.setId === color.setId && tokenKey(o) === key);
+    const target = targetOf(colors, color, key);
     // An alias to a token that isn't there is no alias: the color it came to stays.
-    if (target) out[theme] = target.id;
+    if (target && target.id !== color.id) out[theme] = target.id;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -97,7 +97,7 @@ export function fromStored(data: StoredTokenData): TokenData {
     let themeAlias: Record<string, string> | undefined;
     for (const [theme, id] of Object.entries(t.ref ?? {})) {
       const target = byId.get(id);
-      if (target && target.id !== t.id) (themeAlias ??= {})[theme] = tokenKey(target);
+      if (target && target.id !== t.id) (themeAlias ??= {})[theme] = targetKey(target, t.setId);
     }
     return {
       id: t.id, name: t.name, value: t.value ?? Object.values(t.values)[0] ?? "", group: t.group ?? "base", setId: t.setId, themeValues: { ...t.values },

@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 import { contrastRatio, gradeOf, hexOf } from "@/lib/tokens/contrast";
 import { cssName } from "@/lib/token-sync/doc";
 import { normalizeColor } from "@/lib/token-sync/color";
-import { dependentsOf, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
-import type { ColorToken, TokenTheme } from "@/store/design-system";
+import { dependentsOf, targetKey, targetOf, wouldLoop } from "@/lib/tokens/alias-colors";
+import type { ColorToken, TokenSet, TokenTheme } from "@/store/design-system";
 import { CommitInput, InlineName } from "./fields";
 import type { Row } from "./rows";
 import type { Selection } from "./useSelection";
@@ -43,15 +43,22 @@ export interface ColorCtx {
   rename?: (row: Row) => void;
   // Every color of the set, for what a color can be (an alias) and what is it.
   all: ColorToken[];
+  // Every color of every set (a color can be a color of another set), and the sets, for their names and their themes.
+  every: ColorToken[];
+  sets: TokenSet[];
+}
+
+// What a token an alias names is called: its name, with the name of its set when that is another set than the color's own.
+function aliasLabel(c: ColorToken, target: string, ctx: Pick<ColorCtx, "every" | "sets">): string {
+  const named = targetOf(ctx.every, c, target);
+  if (!named) return target;
+  return named.setId === c.setId ? named.name : `${ctx.sets.find((s) => s.id === named.setId)?.name ?? "Another set"} / ${named.name}`;
 }
 
 const valueIn = (c: ColorToken, themeId: string) => c.themeValues[themeId] ?? c.value;
 // "Light: gray-50 · Dark: gray-900" for the themes in which a color is another token.
-function aliasTitle(c: ColorToken, ctx: Pick<ColorCtx, "themes" | "all">): string {
-  return ctx.themes.filter((t) => c.themeAlias?.[t.id]).map((t) => {
-    const key = c.themeAlias![t.id];
-    return `${t.name}: ${ctx.all.find((x) => tokenKey(x) === key)?.name ?? key}`;
-  }).join(" · ");
+function aliasTitle(c: ColorToken, ctx: Pick<ColorCtx, "themes" | "every" | "sets">): string {
+  return ctx.themes.filter((t) => c.themeAlias?.[t.id]).map((t) => `${t.name}: ${aliasLabel(c, c.themeAlias![t.id], ctx)}`).join(" · ");
 }
 const copy = (text: string) => { void navigator.clipboard?.writeText(text).catch(() => undefined); };
 
@@ -105,25 +112,35 @@ function Contrast({ value }: { value: string }) {
 // In one theme: the token this color is, or a way to make it one.
 function AliasField({ token, theme, ctx }: { token: ColorToken; theme: TokenTheme; ctx: ColorCtx }) {
   const target = token.themeAlias?.[theme.id];
-  const named = target ? ctx.all.find((c) => tokenKey(c) === target) : undefined;
-  const options = ctx.all.filter((c) => c.id !== token.id && !wouldLoop(ctx.all, token, theme.id, tokenKey(c)));
+  const label = target ? aliasLabel(token, target, ctx) : "";
+  // The colors it can be: those of its own set first, then those of each other set, none that would lead back to it.
+  const options = ctx.every.filter((c) => c.id !== token.id && !wouldLoop(ctx.every, token, theme.id, targetKey(c, token.setId), ctx.sets));
+  const groups = [token.setId, ...ctx.sets.map((s) => s.id).filter((id) => id !== token.setId)]
+    .map((id) => ({ id, name: ctx.sets.find((s) => s.id === id)?.name ?? "", colors: options.filter((c) => c.setId === id) }))
+    .filter((g) => g.colors.length > 0);
+  const choices = (
+    <>
+      {groups.length <= 1 ? groups[0]?.colors.map((c) => <option key={c.id} value={targetKey(c, token.setId)}>{c.name}</option>)
+        : groups.map((g) => <optgroup key={g.id} label={g.name}>{g.colors.map((c) => <option key={c.id} value={targetKey(c, token.setId)}>{c.name}</option>)}</optgroup>)}
+    </>
+  );
   return (
     <div className="flex items-center gap-1.5 pl-[3.75rem]" data-alias-field={theme.id}>
       {target ? (
         <>
-          <span className="flex min-w-0 items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent" title={`${theme.name} is the token ${named?.name ?? target}`} data-alias-chip>
-            <CornerDownRight size={10} aria-hidden /><span className="truncate">{named?.name ?? target}</span>
+          <span className="flex min-w-0 items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent" title={`${theme.name} is the token ${label}`} data-alias-chip>
+            <CornerDownRight size={10} aria-hidden /><span className="truncate">{label}</span>
           </span>
           <select aria-label={`Token that ${token.name} is in ${theme.name}`} value={target} onChange={(e) => ctx.act.setAlias(token.id, theme.id, e.target.value)} className="w-5 flex-shrink-0 rounded border border-surface-border bg-surface-base text-2xs text-text-primary outline-none">
-            {options.map((c) => <option key={c.id} value={tokenKey(c)}>{c.name}</option>)}
-            {!options.some((c) => tokenKey(c) === target) && <option value={target}>{named?.name ?? target}</option>}
+            {choices}
+            {!options.some((c) => targetKey(c, token.setId) === target) && <option value={target}>{label}</option>}
           </select>
-          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${named?.name ?? target}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
+          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${label}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
         </>
       ) : (
         <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none">
           <option value="">Make it another token…</option>
-          {options.map((c) => <option key={c.id} value={tokenKey(c)}>{c.name}</option>)}
+          {choices}
         </select>
       )}
     </div>
@@ -132,7 +149,7 @@ function AliasField({ token, theme, ctx }: { token: ColorToken; theme: TokenThem
 
 export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
   const token = row.token as ColorToken;
-  const used = dependentsOf(ctx.all, token);
+  const used = dependentsOf(ctx.every, token);
   return (
     <div className="flex flex-col gap-2.5" data-color-editor>
       <div className="flex items-center gap-2">
@@ -174,7 +191,7 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       )}
       {used.length > 0 && (
         <p className="text-2xs text-text-tertiary" data-used-by>
-          Used by {used.map((c) => c.name).join(", ")}. If this is deleted they keep the color they are now.
+          Used by {used.map((c) => (c.setId === token.setId ? c.name : `${ctx.sets.find((s) => s.id === c.setId)?.name ?? "Another set"} / ${c.name}`)).join(", ")}. If this is deleted they keep the color they are now.
         </p>
       )}
       {row.linked && (
@@ -271,7 +288,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
               </Popover.Portal>
             </Popover.Root>
             <CommitInput value={value} label={`${theme.name} value of ${row.name}`} mono className="w-full" onCommit={(t) => ctx.act.setColor(row.id, theme.id, t)} invalidHint="Not a color Motif can read" />
-            {token.themeAlias?.[theme.id] && <span data-alias-chip title={`${theme.name} is the token ${token.themeAlias[theme.id]}`} className="flex flex-shrink-0 items-center gap-0.5 text-2xs text-accent"><CornerDownRight size={10} aria-hidden />{ctx.all.find((x) => tokenKey(x) === token.themeAlias![theme.id])?.name ?? token.themeAlias[theme.id]}</span>}
+            {token.themeAlias?.[theme.id] && <span data-alias-chip title={`${theme.name} is the token ${aliasLabel(token, token.themeAlias[theme.id], ctx)}`} className="flex flex-shrink-0 items-center gap-0.5 text-2xs text-accent"><CornerDownRight size={10} aria-hidden />{aliasLabel(token, token.themeAlias[theme.id], ctx)}</span>}
           </div>
         );
       })}
