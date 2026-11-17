@@ -61,6 +61,7 @@ const check = (name, ok, detail = "") => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|Content Security Policy|violates|status of 40\d|status of 50\d|status of 422/i.test(m.text())) errors.push(m.text()); });
+  await context.addInitScript(() => { try { localStorage.setItem("motif-convert-tokens", "1"); } catch {} });
   await context.route("https://api.github.com/**", (r) => gh.handler(r));
   await context.route(/^https:\/\/(esm\.sh|cdn\.jsdelivr\.net)\//, async (route) => {
     const out = await serve(route.request().url());
