@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { GitHost, RepoReader } from "./github";
 import { memoryReader } from "./repo-scan";
 import { loadFixture } from "./repo-scan/fixtures";
 import { finishPull, pullRepository } from "./pull";
-import { setConvertOnPull } from "./dtcg/convert-flag";
+import { readRepoState } from "./token-sync/flow";
+import { importRepoTokens } from "../store/token-sync";
 import { emptyTokenData, useDesignSystemStore } from "../store/design-system";
 import { isDtcgLink, stylesheetLink, useGitStore, type GitConnection } from "../store/git";
 import { useLibraryStore } from "../store/library";
@@ -18,6 +19,13 @@ const sheetLink = () => stylesheetLink(git().tokenLink);
 const color = (name: string) => ds().colors.find((c) => c.name === name || c.repoName === name)!;
 const light = () => ds().sets[0].themes[0].id;
 
+// A project that was linked to the repository's stylesheets before tokens were converted on pull: it stays as it is.
+async function linkedBefore(files: Record<string, string>) {
+  const state = await readRepoState(memoryReader(files), "acme/ds", "main");
+  git().setAnalysis(state.analysis);
+  importRepoTokens("acme/ds", "main", state, { reuseEmpty: true });
+}
+
 beforeEach(() => {
   useDesignSystemStore.setState({ ...emptyTokenData() });
   useLibraryStore.getState().clear();
@@ -26,28 +34,6 @@ beforeEach(() => {
 
 describe("the first pull of a repository", () => {
   const files = loadFixture("motif-test-system");
-
-  it("brings in its components and its tokens, as the set it was given to start with, linked to the repository", async () => {
-    const out = await pullRepository(host(files), connection);
-    expect(out.conflicts).toBeNull();
-    expect(useLibraryStore.getState().components.length).toBeGreaterThan(5);
-    // The set every project starts with is the repository's, not left empty beside another.
-    expect(ds().sets).toHaveLength(1);
-    expect(ds().sets[0].name).toBe("acme/ds");
-    expect(sheetLink()).toMatchObject({ repo: "acme/ds", branch: "main", setId: ds().sets[0].id });
-    expect(Object.keys(sheetLink()!.themes)).toEqual(expect.arrayContaining(["light", "dark"]));
-    expect(color("primary").themeValues[light()]).toBe("#3e55df");
-    expect(git().pulledSha).toBe("sha-1");
-    expect(out.notes.join(" ")).toMatch(/tokens brought in/);
-  });
-
-  it("keeps the tokens that were made before it, in a set of their own, when the project had some", async () => {
-    ds().addColor({ name: "mine", value: "#123456", group: "base", setId: ds().sets[0].id });
-    await pullRepository(host(files), connection);
-    expect(ds().sets).toHaveLength(2);
-    expect(ds().colors.some((c) => c.name === "mine" && c.setId === ds().sets[0].id)).toBe(true);
-    expect(sheetLink()!.setId).toBe(ds().sets[1].id);
-  });
 
   it("links the set that has tokens when the repository has none, to be sent with the first push", async () => {
     // (Tailwind 3: the stylesheet sync stays; a repository with no tokens that isn't, starts with design tokens files: see pull-dtcg.test.ts.)
@@ -68,12 +54,12 @@ describe("the first pull of a repository", () => {
   });
 });
 
-describe("a later pull", () => {
+describe("a project that was linked to the stylesheets before, on a later pull", () => {
   const files = loadFixture("motif-test-system");
   const changedRepo = (to: string) => ({ ...files, [CSS]: files[CSS].replace("--primary: oklch(0.52 0.21 270);", `--primary: ${to};`) });
 
   it("takes in what the repository changed, and nothing else moves", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     const before = color("secondary").themeValues[light()];
     const out = await pullRepository(host(changedRepo("oklch(0.6 0.2 30)"), "sha-2"), connection);
     expect(out.conflicts).toBeNull();
@@ -84,7 +70,7 @@ describe("a later pull", () => {
   });
 
   it("keeps a token changed here that the repository didn't change", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     ds().setColorText(color("secondary").id, light(), "#ff0000");
     await pullRepository(host(changedRepo("oklch(0.6 0.2 30)"), "sha-2"), connection);
     expect(color("secondary").themeValues[light()]).toBe("#ff0000");
@@ -92,7 +78,7 @@ describe("a later pull", () => {
   });
 
   it("asks about a value changed in both places, and takes nothing of the tokens until it is answered", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     ds().setColorText(color("primary").id, light(), "#ff0000");
     const out = await pullRepository(host(changedRepo("oklch(0.6 0.2 30)"), "sha-2"), connection);
     expect(out.conflicts?.plan.merge.conflicts.length).toBe(1);
@@ -103,7 +89,7 @@ describe("a later pull", () => {
   });
 
   it("keeps Motif's value when that is the choice, to be sent with the next push", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     ds().setColorText(color("primary").id, light(), "#ff0000");
     const out = await pullRepository(host(changedRepo("oklch(0.6 0.2 30)"), "sha-2"), connection);
     finishPull(out.conflicts!, []);
@@ -111,7 +97,7 @@ describe("a later pull", () => {
   });
 
   it("is up to date when nothing changed", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     const out = await pullRepository(host(files), connection);
     expect(out.conflicts).toBeNull();
     expect(out.notes).toEqual([]);
@@ -123,7 +109,7 @@ describe("a theme deleted here that the repository has", () => {
   const themeOf = (name: string) => ds().sets[0].themes.find((t) => t.name === name);
 
   it("comes back with the next pull, as a theme of the set that the repository's values go to, and the link maps it again", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     const dark = themeOf("Dark")!;
     const before = color("background").themeValues[dark.id];
     ds().deleteThemeFromSet(ds().sets[0].id, dark.id);
@@ -140,7 +126,7 @@ describe("a theme deleted here that the repository has", () => {
   });
 
   it("is not left as values of a theme that isn't there, when the theme is not brought back", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     const dark = themeOf("Dark")!;
     ds().deleteThemeFromSet(ds().sets[0].id, dark.id);
     await pullRepository(host(files, "sha-2"), connection);
@@ -149,7 +135,7 @@ describe("a theme deleted here that the repository has", () => {
   });
 
   it("changes nothing in the repository: the deleted theme's values are not sent as removed", async () => {
-    await pullRepository(host(files), connection);
+    await linkedBefore(files);
     const dark = themeOf("Dark")!;
     ds().deleteThemeFromSet(ds().sets[0].id, dark.id);
     const out = await pullRepository(host(files, "sha-2"), connection);
@@ -160,11 +146,8 @@ describe("a theme deleted here that the repository has", () => {
   });
 });
 
-// Converting a repository's stylesheet tokens on pull is switched on for these (lib/dtcg/convert-flag.ts).
-describe("the first pull of a repository whose tokens are variables in its stylesheets, with conversion on", () => {
+describe("the first pull of a repository whose tokens are variables in its stylesheets", () => {
   const files = loadFixture("motif-test-system");
-  beforeEach(() => setConvertOnPull(true));
-  afterEach(() => setConvertOnPull(null));
 
   it("brings in its components and its tokens as design tokens, with the names the variables have, nothing written to the repository", async () => {
     const out = await pullRepository(host(files), connection);
@@ -195,9 +178,7 @@ describe("the first pull of a repository whose tokens are variables in its style
   });
 });
 
-describe("a repository whose tokens are variables in its stylesheets, on a later pull, with conversion on", () => {
-  beforeEach(() => setConvertOnPull(true));
-  afterEach(() => setConvertOnPull(null));
+describe("a repository whose tokens are variables in its stylesheets, on a later pull", () => {
   const files = loadFixture("motif-test-system");
   const changedRepo = (to: string) => ({ ...files, [CSS]: files[CSS].replace("--primary: oklch(0.52 0.21 270);", `--primary: ${to};`) });
   const dtcgLink = () => git().tokenLink as Extract<NonNullable<ReturnType<typeof git>["tokenLink"]>, { format: "dtcg" }>;

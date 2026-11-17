@@ -10,7 +10,6 @@ import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "../../stor
 import { useGitStore } from "../../store/git";
 import { useLibraryStore } from "../../store/library";
 import { pullRepository } from "../pull";
-import { setConvertOnPull } from "../dtcg/convert-flag";
 import { toStored } from "../tokens/migrate";
 import { overlayOf } from "./overlay";
 import { dtcgSummary, stageDtcgTokens, waitingDtcgChanges } from "./dtcg-tokens";
@@ -264,8 +263,7 @@ describe("the first push of a repository whose tokens are variables in its style
     return { repo: { ...repo, host }, link, model: toStored(snapshotTokens(useDesignSystemStore.getState())) };
   }
 
-  beforeEach(() => { setConvertOnPull(true); useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
-  afterEach(() => setConvertOnPull(null));
+  beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
 
   it("has nothing waiting yet (the conversion goes with the first push), and the pull wrote nothing to the repository", async () => {
     const { repo, link, model } = await pulled();

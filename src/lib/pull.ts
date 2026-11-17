@@ -3,7 +3,6 @@ import { describeUpdate } from "./preview/library";
 import { scanBranch } from "./read-repository";
 import type { RepoAnalysis } from "./repo-scan/types";
 import { convertAnalysis } from "./dtcg/convert";
-import { convertOnPull } from "./dtcg/convert-flag";
 import { readRepoTokenFiles, type RepoTokenFiles } from "./dtcg/repo";
 import { planDtcgSync, resolveDtcg, takeDtcg, type DtcgLink, type DtcgPlan } from "./dtcg/sync";
 import type { DtcgFiles } from "./dtcg/types";
@@ -65,7 +64,7 @@ async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection, a
 
   let found: RepoTokenFiles | null = real;
   let convert: DtcgLink["convert"];
-  if (!real && (!stored || stored.convert) && convertOnPull()) {
+  if (!real && (!stored || stored.convert)) {
     const conv = convertAnalysis(analysis, slug);
     if (conv) {
       const configPath = `${conv.dir}/tokens.config.json`;
