@@ -89,10 +89,13 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
     }),
   });
 
+  // A row can be of another kind than the tab (a number used as a radius is in the radius tab): what is done to it is done as its own.
+  const kindOf = (id: string): TokenKind => rows.find((r) => r.id === id)?.kind ?? kind;
+  const eachKind = (ids: string[]) => [...new Set(ids.map(kindOf))].map((k) => [k, ids.filter((id) => kindOf(id) === k)] as const);
   const common = {
-    rename: (id: string, name: string) => { editTokens(() => ds().renameToken(kind, id, name)); },
-    duplicate: (ids: string[]) => { const made = editTokens(() => ds().duplicateTokens(kind, ids)); selection.selectAll(made); },
-    remove: (ids: string[]) => { editTokens(() => ds().deleteTokens(kind, ids)); selection.clear(); },
+    rename: (id: string, name: string) => { editTokens(() => ds().renameToken(kindOf(id), id, name)); },
+    duplicate: (ids: string[]) => { const made = editTokens(() => eachKind(ids).flatMap(([k, group]) => ds().duplicateTokens(k, group))); selection.selectAll(made); },
+    remove: (ids: string[]) => { editTokens(() => { for (const [k, group] of eachKind(ids)) ds().deleteTokens(k, group); }); selection.clear(); },
   };
   const colorCtx: ColorCtx = {
     themes: set.themes, shown, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo, rename: setRenaming,

@@ -66,8 +66,11 @@ function pathInFiles(kind: TokenKind, t: Token): string[] | null {
   }
 }
 
-export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]): Row[] {
-  const list = useDesignSystemStore(useShallow((s) => (kind === "color" ? s.colors : kind === "spacing" ? s.spacing : kind === "radius" ? s.radii : kind === "shadow" ? s.shadows : kind === "number" ? s.numbers : kind === "string" ? s.strings : kind === "composition" ? s.compositions : s.typography)));
+export function useRows(outer: TokenKind, setId: string, themes: { id: string }[]): Row[] {
+  const kind = outer;
+  // The spacing and radius tabs also have the numbers that are used as one (a length in rem or em, which the lists of px lengths don't hold),
+  // and the numbers tab has the others.
+  const list = useDesignSystemStore(useShallow((s): Token[] => (kind === "color" ? s.colors : kind === "spacing" ? [...s.spacing, ...s.numbers.filter((n) => n.use === "spacing")] : kind === "radius" ? [...s.radii, ...s.numbers.filter((n) => n.use === "radius")] : kind === "shadow" ? s.shadows : kind === "number" ? s.numbers.filter((n) => n.use !== "spacing" && n.use !== "radius") : kind === "string" ? s.strings : kind === "composition" ? s.compositions : s.typography)));
   // What a composition's slots can be (read for the compositions only).
   const data = useDesignSystemStore(useShallow((s): ComposeData => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
   const changes = useTokenChanges();
@@ -86,6 +89,8 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
   return useMemo(
     () => (list as Token[]).filter((t) => t.setId === setId).map((t) => {
       const repoName = (t as { repoName?: string }).repoName;
+      // (A number in the radius or spacing tab is a number: what edits it is the number's.)
+      const kind: TokenKind = (outer === "radius" || outer === "spacing") && "unit" in t ? "number" : outer;
       const place = inFiles ? pathInFiles(kind, t) : null;
       const key = place ? place.join("-") : kind === "typography" || kind === "number" || kind === "string" || kind === "composition" ? (repoName ?? cssName(t.name)) : repoKey(kind as SyncKind, t as { name: string; repoName?: string }, prefixes);
       // Only a token the repository has can be looked for in its code, and only once a scan has counted.
