@@ -11,6 +11,7 @@ import { motifOnlyTokens } from "@/lib/edit/motif-tokens";
 import type { RepoToken } from "@/lib/repo-scan/types";
 import { aliasTarget } from "@/lib/tokens/alias";
 import { EMPTY_INDEX, buildTokenIndex, type TokenIndex } from "@/lib/edit/tokens";
+import { motifOnlyFromFiles } from "@/lib/dtcg/motif-only";
 import { dtcgOverrides } from "@/lib/dtcg/overrides";
 import { toStored } from "@/lib/tokens/migrate";
 import { snapshotTokens, useDesignSystemStore } from "@/store/design-system";
@@ -130,11 +131,15 @@ export function useTokenIndex(repo: string | null): TokenIndex {
   const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const motifTokens = usePreviewStore((s) => s.motifTokens);
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
+  const files = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink : null));
+  const tokens = useDesignSystemStore(useShallow((s) => ({ sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions })));
   return useMemo(() => {
     if (!analysis || !repo || analysis.repo !== repo) return EMPTY_INDEX;
     let overrides: Record<string, Record<string, string>> = {};
     let extra: RepoToken[] = [];
-    if (link && link.repo === repo) {
+    // Tokens that are design tokens files: the ones Motif has made and the repository's stylesheets haven't got are offered like any other.
+    if (files && files.repo === repo) extra = motifOnlyFromFiles(toStored(snapshotTokens({ ...useDesignSystemStore.getState(), ...tokens })), new Set(analysis.tokens.map((t) => t.name)), analysis.stack.tailwindVersion);
+    else if (link && link.repo === repo) {
       const current = readMotifTokens({ colors, spacing, radii, shadows }, { ...link, prefixes: keyPrefixes(analysis) });
       // The tokens Motif has made and the repository hasn't got yet are offered like any other.
       extra = motifOnlyTokens(current, analysis.tokens, analysis.stack.tailwindVersion).tokens;
@@ -151,5 +156,5 @@ export function useTokenIndex(repo: string | null): TokenIndex {
     }
     // Without Tailwind the tokens are the repository's CSS variables, and a stylesheet's controls offer them by name.
     return buildTokenIndex([...analysis.tokens, ...extra], analysis.themes, analysis.stack.tailwindVersion, overrides, analysis.stack.tailwindVersion === null);
-  }, [analysis, repo, link, motifTokens, colors, spacing, radii, shadows]);
+  }, [analysis, repo, link, files, tokens, motifTokens, colors, spacing, radii, shadows]);
 }
