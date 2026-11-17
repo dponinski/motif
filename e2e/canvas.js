@@ -173,7 +173,22 @@ const check = (name, ok, detail = "") => {
 
   // ── Dragging the frame's edge ────────────────────────────────────────────
   const handle = page.locator("[data-width-handle]");
-  const box = await handle.boundingBox();
+  // The canvas fits itself again after a width changes, so the edge is taken where it stays, not where it was first seen.
+  const stable = async () => {
+    let last = await handle.boundingBox();
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(150);
+      const now = await handle.boundingBox();
+      if (last && now && last.x === now.x && last.y === now.y && last.width === now.width && last.height === now.height) return now;
+      last = now;
+    }
+    return last;
+  };
+  // And the edge is what is at that point: nothing (a loading cover, a menu) is over it.
+  const topAt = (b) => page.evaluate(({ x, y }) => { const el = document.elementFromPoint(x, y); return { handle: !!el?.closest("[data-width-handle]"), what: el ? `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? "." + el.className.split(" ").slice(0, 3).join(".") : ""}` : "nothing" }; }, { x: b.x + b.width / 2, y: b.y + b.height / 2 });
+  let box = await stable();
+  let hit = await topAt(box);
+  for (let i = 0; i < 50 && !hit.handle; i++) { await page.waitForTimeout(200); box = await stable(); hit = await topAt(box); }
   const z = await zoom();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
@@ -181,7 +196,7 @@ const check = (name, ok, detail = "") => {
   await settle(async () => (await frameWidth()) < 640);
   const during = await frameWidth();
   await page.mouse.up();
-  check("dragging the right edge changes the width, live", during < 640 && Math.abs(during - Math.round(640 - 100 / z)) <= 3, `${during} at zoom ${z}`);
+  check("dragging the right edge changes the width, live", during < 640 && Math.abs(during - Math.round(640 - 100 / z)) <= 3, `${during} at zoom ${z}; at the edge: ${hit.what}${hit.handle ? "" : " (not the handle)"}`);
   check("and the field follows the frame", await settle(async () => Number(await widthInput.inputValue()) === (await frameWidth())));
   await page.getByRole("button", { name: "Preview width: Auto" }).click();
 

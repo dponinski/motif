@@ -138,3 +138,37 @@ describe("drafts that are other tokens", () => {
     expect(made.themeValues[L]).toBe("#f9fafb");
   });
 });
+
+describe("numbers and strings", () => {
+  const withTyped = (): TokenData => ({
+    ...base(),
+    numbers: [{ id: "n1", name: "text-lg", value: 1.125, unit: "rem", use: "font-size", setId: "set-global" }],
+    strings: [{ id: "g1", name: "font-sans", value: "Inter", use: "font-family", setId: "set-global" }],
+  });
+  const number = (name: string, value: number, unit: "rem" | "px" | "em" | "", use?: string): Draft => ({ kind: "number", name, value, unit, ...(use ? { use } : {}) });
+  const string = (name: string, value: string): Draft => ({ kind: "string", name, value });
+
+  it("are new, an update or the same, by what they are", () => {
+    const plan = planDrafts([number("fresh", 2, "rem"), number("text-lg", 1.5, "rem"), number("text-lg", 1.125, "rem"), number("text-lg", 1.125, "px"), string("font-sans", "Georgia"), string("font-sans", "Inter"), string("label", "Save")], withTyped(), "set-global");
+    expect(plan.map((p) => p.status)).toEqual(["new", "update", "same", "update", "update", "same", "new"]);
+    expect(plan[1].targetId).toBe("n1");
+    expect(plan[4].targetId).toBe("g1");
+  });
+
+  it("are added to their own lists, in the set, with the unit and use they had", () => {
+    const state = withTyped();
+    const out = applyPlan(state, "set-global", planDrafts([number("text-xl", 1.25, "rem", "font-size"), string("label", "Save")], state, "set-global"));
+    expect(out.numbers.map((n) => [n.name, n.value, n.unit, n.use])).toEqual([["text-lg", 1.125, "rem", "font-size"], ["text-xl", 1.25, "rem", "font-size"]]);
+    expect(out.strings.map((n) => n.name)).toEqual(["font-sans", "label"]);
+    expect(out.numbers[1].setId).toBe("set-global");
+    // The state it was given is as it was.
+    expect(state.numbers).toHaveLength(1);
+  });
+
+  it("are changed where they are", () => {
+    const state = withTyped();
+    const out = applyPlan(state, "set-global", planDrafts([number("text-lg", 1.5, "em"), string("font-sans", "Georgia")], state, "set-global"));
+    expect(out.numbers[0]).toMatchObject({ id: "n1", value: 1.5, unit: "em", use: "font-size" });
+    expect(out.strings[0]).toMatchObject({ id: "g1", value: "Georgia", use: "font-family" });
+  });
+});
