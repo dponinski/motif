@@ -105,6 +105,7 @@ const extra = {
   // ── Deleting the set a color was a color of ───────────────────────────────
   await sidebar.locator(".group").filter({ hasText: "Primitives" }).hover();
   await sidebar.locator(".group").filter({ hasText: "Primitives" }).locator('button[title="Delete set"]').click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete set" }).click();
   await settle(async () => (await sidebar.getByText("Primitives", { exact: true }).count()) === 0);
   await openSet("Semantic");
   check("a color that was a color of a set that is deleted keeps the color it came to", await settle(async () => (await label("text")).includes("#111827")) && (await label("surface")).includes("#f9fafb"), await label("text"));

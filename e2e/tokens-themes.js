@@ -41,6 +41,8 @@ const extra = {
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
   const redo = () => page.getByRole("button", { name: "Redo", exact: true }).click();
   const menu = async (theme, item) => { await bar.getByLabel(`Theme menu: ${theme}`).click(); await page.getByRole("menuitem", { name: item }).click(); };
+  // Deleting a theme asks first.
+  const remove = async (theme) => { await menu(theme, "Delete"); await page.getByRole("dialog").getByRole("button", { name: "Delete theme" }).click(); await page.getByRole("dialog").waitFor({ state: "detached" }); };
   const value = (theme) => page.getByLabel(`${theme} value of background`, { exact: true }).inputValue();
 
   // ── Where the themes are ──────────────────────────────────────────────────
@@ -90,6 +92,8 @@ const extra = {
 
   // ── Deleting ──────────────────────────────────────────────────────────────
   await menu("Dark copy", "Delete");
+  check("it asks first, and Cancel leaves the theme", (await page.getByRole("dialog").innerText()).includes("Delete the Dark copy theme?") && await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click().then(() => true) && (await segments()).join() === "Light,Dark,Dark copy,Sepia");
+  await remove("Dark copy");
   check("a theme is deleted from its menu", await settle(async () => (await segments()).join() === "Light,Dark,Sepia"));
   await undo();
   check("and deleting is a step of undo", await settle(async () => (await segments()).join() === "Light,Dark,Dark copy,Sepia"));
@@ -101,7 +105,7 @@ const extra = {
   await page.keyboard.press("Escape");
 
   // ── The last theme can't be deleted ───────────────────────────────────────
-  for (const name of ["Sepia", "Dark"]) await menu(name, "Delete");
+  for (const name of ["Sepia", "Dark"]) await remove(name);
   await settle(async () => (await segments()).join() === "Light");
   await bar.getByLabel("Theme menu: Light").click();
   check("a set keeps at least one theme", (await page.getByRole("menuitem", { name: /Delete/ }).getAttribute("data-disabled")) !== null);

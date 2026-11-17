@@ -6,7 +6,10 @@ import * as Popover from "@radix-ui/react-popover";
 import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenSet, type TokenTheme } from "@/store/design-system";
+import { useGitStore } from "@/store/git";
 import { editTokens } from "@/store/token-history";
+import { targetOf } from "@/lib/tokens/alias-colors";
+import ConfirmDelete from "./ConfirmDelete";
 
 // The themes of the open set, over its colors (the only tokens that differ by theme): which one is shown (or all of them side by side),
 // and making, renaming, copying and deleting them. Each of those is a step of the Tokens screen's undo.
@@ -51,14 +54,30 @@ function NameField({ initial, label, taken, onDone, onCancel }: { initial: strin
   );
 }
 
+// Where a theme is in the repository, when the set is the one that is synced with it: the repository's name for it (`dark`), or nothing when
+// it is Motif's own (it goes into the repository at the next Push). Null when the set isn't synced.
+function useRepoTheme(set: TokenSet, theme: TokenTheme): { key: string | null } | null {
+  const synced = useGitStore((s) => !!s.tokenLink && s.tokenLink.setId === set.id);
+  const key = useGitStore((s) => (s.tokenLink && s.tokenLink.setId === set.id ? Object.entries(s.tokenLink.themes).find(([, id]) => id === theme.id)?.[0] ?? null : null));
+  return synced ? { key } : null;
+}
+
 function Segment({ set, theme, on, onShow, onRename, onDuplicate, onDelete }: {
   set: TokenSet; theme: TokenTheme; on: boolean; onShow: () => void; onRename: () => void; onDuplicate: () => void; onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const only = set.themes.length === 1;
+  const repo = useRepoTheme(set, theme);
   return (
     <span className={cn("group/theme flex items-center rounded", on ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")} data-theme-segment={theme.id} onContextMenu={(e) => { e.preventDefault(); setOpen(true); }}>
       <button type="button" aria-pressed={on} onClick={onShow} onDoubleClick={onRename} className="rounded-l px-2 py-1 text-xs" title={`Show ${theme.name}. Double-click to rename`}>{theme.name}</button>
+      {repo && (
+        <span
+          data-theme-repo={repo.key ?? "motif-only"}
+          title={repo.key ? `In the repository this theme is "${repo.key}"` : "Only in Motif: it goes into the repository at the next Push"}
+          className={cn("-ml-0.5 mr-0.5 rounded px-1 text-2xs leading-4", repo.key ? "bg-surface-subtle text-text-tertiary" : "border border-dashed border-surface-border text-text-tertiary")}
+        >{repo.key ?? "Motif only"}</span>
+      )}
       <Menu.Root open={open} onOpenChange={setOpen}>
         <Menu.Trigger asChild>
           <button type="button" aria-label={`Theme menu: ${theme.name}`} className={cn("rounded-r px-1 py-1 text-text-tertiary hover:text-text-primary focus-visible:opacity-100", on || open ? "opacity-100" : "opacity-0 group-hover/theme:opacity-100")}>
@@ -141,6 +160,7 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
 export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown: ThemeShown; onShow: (id: ThemeShown) => void }) {
   const ds = () => useDesignSystemStore.getState();
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<TokenTheme | null>(null);
   const taken = (except?: string) => (name: string) => nameTaken(set.themes, name, except);
 
   return (
@@ -161,7 +181,7 @@ export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown:
             onShow={() => onShow(t.id)}
             onRename={() => setRenaming(t.id)}
             onDuplicate={() => { const id = editTokens(() => ds().duplicateTheme(set.id, t.id)); onShow(id); }}
-            onDelete={() => { editTokens(() => ds().deleteThemeFromSet(set.id, t.id)); if (shown === t.id) onShow("all"); }}
+            onDelete={() => setDeleting(t)}
           />
         ))}
       </div>
@@ -170,6 +190,30 @@ export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown:
         startFrom={shown !== "all" ? shown : set.activeThemeId ?? set.themes[0].id}
         onAdd={(name, from, dark) => { const id = editTokens(() => ds().addThemeToSet(set.id, name, { from, dark })); onShow(id); }}
       />
+      {deleting && (
+        <DeleteTheme
+          set={set}
+          theme={deleting}
+          onClose={() => setDeleting(null)}
+          onDelete={() => { const gone = deleting; setDeleting(null); editTokens(() => ds().deleteThemeFromSet(set.id, gone.id)); if (shown === gone.id) onShow("all"); }}
+        />
+      )}
     </div>
+  );
+}
+
+// Asking before a theme goes: its colors are lost, and what that means for the repository and for the colors of other sets that follow it.
+function DeleteTheme({ set, theme, onClose, onDelete }: { set: TokenSet; theme: TokenTheme; onClose: () => void; onDelete: () => void }) {
+  const colors = useDesignSystemStore((s) => s.colors);
+  const repo = useRepoTheme(set, theme);
+  const own = colors.filter((c) => c.setId === set.id).length;
+  const followed = colors.some((c) => c.setId !== set.id && Object.values(c.themeAlias ?? {}).some((t) => targetOf(colors, c, t)?.setId === set.id));
+  return (
+    <ConfirmDelete title={`Delete the ${theme.name} theme?`} confirm="Delete theme" onConfirm={onDelete} onClose={onClose}>
+      <p data-delete-contents>{own > 0 ? `This takes away the ${theme.name} colors of ${own === 1 ? "its 1 color" : `its ${own} colors`}.` : "It has no colors yet."} The other themes of {set.name} are not changed.</p>
+      {followed && <p>Colors of other sets that follow {set.name} by theme name will follow the theme it has open instead.</p>}
+      {repo?.key && <p data-delete-repo>The repository keeps its &quot;{repo.key}&quot; theme: the next Pull brings it back as a theme of this set, with the repository&apos;s values.</p>}
+      <p className="text-text-tertiary">You can undo this.</p>
+    </ConfirmDelete>
   );
 }
