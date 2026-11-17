@@ -18,6 +18,8 @@ export interface TokenSet {
   name: string;
   themes: TokenTheme[];
   activeThemeId: string;
+  // What the collection is for ("Primitives", "Semantic colors that follow them"); Motif's own note, never sent to a repository.
+  description?: string;
 }
 
 // ── Token types ───────────────────────────────────────────────────────────────
@@ -144,6 +146,10 @@ interface DesignSystemStore {
   // Set management
   createSet: (name: string) => string;
   renameSet: (setId: string, name: string) => void;
+  // What the set is for; empty takes the note away.
+  setSetDescription: (setId: string, description: string) => void;
+  // Moves a set one place earlier (-1) or later (1) in the list of sets.
+  moveSet: (setId: string, direction: -1 | 1) => void;
   // Takes the set and its tokens away. Colors of other sets that were tokens of it keep the colors they came to; says how many aliases that was.
   deleteSet: (setId: string) => number;
 
@@ -326,6 +332,26 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       renameSet: (setId, name) =>
         set((s) => ({ sets: s.sets.map((st) => (st.id === setId ? { ...st, name } : st)) })),
 
+      setSetDescription: (setId, description) =>
+        set((s) => ({
+          sets: s.sets.map((st) => {
+            if (st.id !== setId) return st;
+            const { description: _, ...rest } = st;
+            const text = description.trim();
+            return text ? { ...rest, description: text } : rest;
+          }),
+        })),
+
+      moveSet: (setId, direction) =>
+        set((s) => {
+          const at = s.sets.findIndex((st) => st.id === setId);
+          const to = at + direction;
+          if (at < 0 || to < 0 || to >= s.sets.length) return s;
+          const sets = [...s.sets];
+          [sets[at], sets[to]] = [sets[to], sets[at]];
+          return { sets };
+        }),
+
       deleteSet: (setId) => {
         const aliasesIn = (colors: ColorToken[]) => colors.reduce((n, c) => n + Object.keys(c.themeAlias ?? {}).length, 0);
         const before = aliasesIn(get().colors.filter((c) => c.setId !== setId));
@@ -392,21 +418,25 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       },
 
       deleteThemeFromSet: (setId, themeId) =>
-        set((s) => ({
-          sets: s.sets.map((st) => {
+        set((s) => {
+          const sets = s.sets.map((st) => {
             if (st.id !== setId) return st;
             const themes = st.themes.filter((t) => t.id !== themeId);
             const activeThemeId =
               st.activeThemeId === themeId ? (themes[0]?.id ?? "") : st.activeThemeId;
             return { ...st, themes, activeThemeId };
-          }),
-          colors: s.colors.map((c) => {
-            if (c.setId !== setId) return c;
-            const { [themeId]: _, ...rest } = c.themeValues;
-            const { [themeId]: __, ...aliases } = c.themeAlias ?? {};
-            return { ...c, themeValues: rest, themeAlias: Object.keys(aliases).length ? aliases : undefined };
-          }),
-        })),
+          });
+          return {
+            sets,
+            // Colors of other sets that followed this theme by its name now follow the theme their set has open, so they are brought up to date.
+            colors: refreshAliases(s.colors.map((c) => {
+              if (c.setId !== setId) return c;
+              const { [themeId]: _, ...rest } = c.themeValues;
+              const { [themeId]: __, ...aliases } = c.themeAlias ?? {};
+              return { ...c, themeValues: rest, themeAlias: Object.keys(aliases).length ? aliases : undefined };
+            }), sets),
+          };
+        }),
 
       renameTheme: (setId, themeId, name) =>
         set((s) => ({

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { readMotifTokens } from "../lib/token-sync/doc";
 import { fromStored, toStored } from "../lib/tokens/migrate";
-import { dependentsOf, targetKey } from "../lib/tokens/alias-colors";
+import { dependentsOf, detachedBy, targetKey } from "../lib/tokens/alias-colors";
 import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "./design-system";
 import { editTokens, redoTokens, undoTokens, useTokenHistory } from "./token-history";
 
@@ -180,5 +180,59 @@ describe("saved and sent", () => {
     store().setActiveTheme(SEM, sl);
     const json = JSON.parse(store().exportTokens());
     expect(json.color.semantic.surface.$value).toBe("{color.gray.gray-50}");
+  });
+});
+
+describe("sets as collections", () => {
+  it("has a note of what a set is for, which an empty text takes away", () => {
+    store().setSetDescription(PRIM, "  Raw colors  ");
+    expect(store().sets[0].description).toBe("Raw colors");
+    store().setSetDescription(PRIM, "   ");
+    expect("description" in store().sets[0]).toBe(false);
+  });
+
+  it("moves a set one place earlier or later, and not past either end", () => {
+    store().moveSet(SEM, -1);
+    expect(store().sets.map((s) => s.id)).toEqual([SEM, PRIM]);
+    store().moveSet(SEM, -1);
+    expect(store().sets.map((s) => s.id)).toEqual([SEM, PRIM]);
+    store().moveSet(SEM, 1);
+    store().moveSet(SEM, 1);
+    expect(store().sets.map((s) => s.id)).toEqual([PRIM, SEM]);
+  });
+
+  it("keeps the order and the notes after a trip through the saved form", () => {
+    store().setSetDescription(SEM, "Follows the primitives");
+    store().moveSet(SEM, -1);
+    const back = fromStored(JSON.parse(JSON.stringify(toStored(snapshotTokens(store())))));
+    expect(back.sets.map((s) => [s.id, s.description])).toEqual([[SEM, "Follows the primitives"], [PRIM, undefined]]);
+  });
+
+  it("says how many aliases deleting a set would end, and that is how many it does", () => {
+    store().setColorAlias(color("surface").id, sl, `${PRIM}/gray-50`);
+    store().setColorAlias(color("surface").id, sd, `${PRIM}/gray-50`);
+    store().setColorAlias(color("text").id, sl, `${PRIM}/gray-900`);
+    expect(detachedBy(store().colors, PRIM)).toBe(3);
+    expect(detachedBy(store().colors, SEM)).toBe(0);
+    expect(editTokens(() => store().deleteSet(PRIM))).toBe(3);
+    expect(color("surface").themeAlias).toBeUndefined();
+  });
+
+  it("brings the colors that followed a deleted theme by its name up to date", () => {
+    store().setColorAlias(color("surface").id, sd, `${PRIM}/gray-50`);
+    expect(color("surface").themeValues[sd]).toBe("#1f2937");
+    // Dark of Primitives goes: Semantic's Dark now has no Dark to follow by name, so it follows the one Primitives has open.
+    store().deleteThemeFromSet(PRIM, pd);
+    expect(color("surface").themeValues[sd]).toBe("#f9fafb");
+  });
+
+  it("is one step of undo to delete a theme", () => {
+    editTokens(() => store().deleteThemeFromSet(PRIM, pd));
+    expect(store().sets[0].themes).toHaveLength(1);
+    undoTokens();
+    expect(store().sets[0].themes).toHaveLength(2);
+    expect(color("gray-50").themeValues[pd]).toBe("#1f2937");
+    redoTokens();
+    expect(store().sets[0].themes).toHaveLength(1);
   });
 });

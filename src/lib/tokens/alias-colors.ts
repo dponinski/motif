@@ -149,3 +149,11 @@ export function moveColors(colors: ColorToken[], movedIds: string[], toSetId: st
   });
   return refreshAliases(clear, sets);
 }
+
+// How many aliases (one per theme) would stop being aliases if the set `setId` and its colors were gone: the ones of colors of other sets
+// that are colors of it.
+export function detachedBy(colors: ColorToken[], setId: string): number {
+  const aliasesIn = (list: ColorToken[]) => list.reduce((n, c) => n + Object.keys(c.themeAlias ?? {}).length, 0);
+  const rest = colors.filter((c) => c.setId !== setId);
+  return aliasesIn(rest) - aliasesIn(detachMissing(rest));
+}
