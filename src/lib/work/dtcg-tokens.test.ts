@@ -1,0 +1,139 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { gitBlobSha, type GitHost, type RepoReader } from "../github";
+import { fixture } from "../dtcg/fixture";
+import { generateCss, HEADER } from "../dtcg/generate";
+import { writeDtcg } from "../dtcg/write";
+import type { DtcgLink } from "../dtcg/sync";
+import type { StoredTokenData } from "../tokens/model";
+import { useEditStore } from "../../store/edit";
+import { overlayOf } from "./overlay";
+import { dtcgSummary, stageDtcgTokens, waitingDtcgChanges } from "./dtcg-tokens";
+
+const scope = "a/b@main";
+const OPTS = { files: "per-set" as const, dir: "src/tokens", output: "src/styles/tokens.css", tailwind: true };
+const PRIM = "src/tokens/primitives.json";
+const CSS = "src/styles/tokens.css";
+
+const repoOf = (initial: Record<string, string>) => {
+  const files = { ...initial };
+  const host = {
+    listTree: async () => ({ paths: Object.keys(files), truncated: false }),
+    readText: async (path: string) => files[path] ?? null,
+    getFile: async (path: string) => (path in files ? { text: files[path], sha: await gitBlobSha(files[path]) } : null),
+  } as unknown as GitHost & RepoReader;
+  return { files, host };
+};
+
+// A repository that has what Motif wrote, linked to the tokens as they are.
+function linked() {
+  const model = fixture();
+  const written = writeDtcg(model, OPTS).files;
+  const repo = repoOf({ ...written, [CSS]: generateCss(written) });
+  const link: DtcgLink = { format: "dtcg", repo: "a/b", branch: "main", ...OPTS, base: written, staged: null, syncedAt: 0 };
+  return { repo, link, model };
+}
+const withColor = (m: StoredTokenData, id: string, theme: string, value: string): StoredTokenData => ({
+  ...m, tokens: m.tokens.map((t) => (t.id === id ? { ...t, values: { ...t.values, [theme]: value }, ...(theme === "p-l" ? { value } : {}) } : t)),
+});
+const stage = (repo: ReturnType<typeof repoOf>, link: DtcgLink, model: StoredTokenData) =>
+  stageDtcgTokens({ host: repo.host, link, model, overlay: overlayOf(useEditStore.getState()), scope });
+const edits = () => { const s = useEditStore.getState(); return s.history[s.index].texts; };
+
+describe("staging token changes when the tokens are design tokens files", () => {
+  beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
+
+  it("counts what is waiting without asking the repository, and stops once it is staged", async () => {
+    const { repo, link, model } = linked();
+    expect(waitingDtcgChanges(link, model)).toEqual([]);
+    const edited = withColor(model, "g50", "p-l", "#ff0000");
+    expect(waitingDtcgChanges(link, edited).map((c) => `${c.name} ${c.theme ?? "base"}`)).toEqual(["color.gray-50 base"]);
+    const r = await stage(repo, link, edited);
+    expect(r.attention).toBeNull();
+    expect(r.staged).toBe(1);
+    expect(waitingDtcgChanges(r.link, edited)).toEqual([]);
+    expect(r.link.staged?.paths.sort()).toEqual([CSS, PRIM]);
+  });
+
+  it("writes the token and the stylesheet into the editor, not the repository", async () => {
+    const { repo, link, model } = linked();
+    const before = { ...repo.files };
+    await stage(repo, link, withColor(model, "g50", "p-l", "#ff0000"));
+    expect(repo.files).toEqual(before);
+    expect(JSON.parse(edits()[PRIM]).color["gray-50"].$value.hex).toBe("#ff0000");
+    expect(edits()[CSS]).toContain("--color-gray-50: #ff0000;");
+    expect(edits()[CSS].startsWith(HEADER)).toBe(true);
+    // Only what changed: the other tokens' text, and the other files, are as they were.
+    expect(Object.keys(edits()).sort()).toEqual([CSS, PRIM]);
+    expect(edits()[PRIM].includes('"g900"')).toBe(false);
+  });
+
+  it("is one step to undo, and a second sync builds on the first", async () => {
+    const { repo, link, model } = linked();
+    const first = await stage(repo, link, withColor(model, "g50", "p-l", "#ff0000"));
+    const second = await stage(repo, first.link, withColor(withColor(model, "g50", "p-l", "#ff0000"), "g900", "p-l", "#00ff00"));
+    expect(second.staged).toBe(1);
+    expect(JSON.parse(edits()[PRIM]).color["gray-50"].$value.hex).toBe("#ff0000");
+    expect(JSON.parse(edits()[PRIM]).color["gray-900"].$value.hex).toBe("#00ff00");
+    useEditStore.getState().undo();
+    expect(JSON.parse(edits()[PRIM]).color["gray-50"].$value.hex).toBe("#ff0000");
+    expect(edits()[PRIM]).not.toContain("#00ff00");
+  });
+
+  it("puts a change of another theme in that theme's file", async () => {
+    const { repo, link, model } = linked();
+    await stage(repo, link, withColor(model, "g50", "p-d", "#222222"));
+    expect(JSON.parse(edits()["src/tokens/primitives.dark.json"]).color["gray-50"].$value.hex).toBe("#222222");
+    expect(Object.keys(edits())).not.toContain(PRIM);
+  });
+
+  it("has nothing to stage when the tokens are as the files say", async () => {
+    const { repo, link, model } = linked();
+    const r = await stage(repo, link, model);
+    expect(r.staged).toBe(0);
+    expect(Object.keys(edits())).toEqual([]);
+  });
+
+  it("holds off when the repository has token changes Motif hasn't taken, and says so", async () => {
+    const { repo, link, model } = linked();
+    const tree = JSON.parse(repo.files[PRIM]);
+    tree.color["gray-900"].$value = { colorSpace: "srgb", components: [0, 0, 1], hex: "#0000ff" };
+    repo.files[PRIM] = JSON.stringify(tree, null, 2);
+    const r = await stage(repo, link, withColor(model, "g50", "p-l", "#ff0000"));
+    expect(r.staged).toBe(0);
+    expect(r.attention).toMatch(/Pull to bring them in/);
+    expect(Object.keys(edits())).toEqual([]);
+  });
+
+  it("leaves a stylesheet that isn't one Motif's build writes, and says so", async () => {
+    const { repo, link, model } = linked();
+    repo.files[CSS] = ":root { --color-gray-50: #f9fafb; }\n";
+    const r = await stage(repo, link, withColor(model, "g50", "p-l", "#ff0000"));
+    expect(r.staged).toBe(1);
+    expect(r.attention).toMatch(/isn't a file Motif's build writes/);
+    expect(Object.keys(edits())).toEqual([PRIM]);
+  });
+
+  it("says when the files aren't in the repository any more", async () => {
+    const { link, model } = linked();
+    const r = await stage(repoOf({ "README.md": "x" }), link, withColor(model, "g50", "p-l", "#ff0000"));
+    expect(r.staged).toBe(0);
+    expect(r.attention).toMatch(/aren't in the repository/);
+  });
+
+  it("builds on a pull request that is already open: the editor's files are what is planned against", async () => {
+    const { repo, link, model } = linked();
+    const first = await stage(repo, link, withColor(model, "g50", "p-l", "#ff0000"));
+    // The stylesheet is already regenerated in the editor, so it is changed once more, not written afresh.
+    const again = await stage(repo, first.link, withColor(withColor(model, "g50", "p-l", "#ff0000"), "brand", "p-l", "#00ff00"));
+    expect(again.link.staged?.paths).toEqual(expect.arrayContaining([PRIM, CSS]));
+    expect(edits()[CSS]).toContain("--color-gray-50: #ff0000;");
+    expect(edits()[CSS]).toContain("--color-brand: #00ff00;");
+  });
+});
+
+describe("what the pull request says", () => {
+  it("lists the token changes under the first line", () => {
+    const text = dtcgSummary([{ name: "color.brand", theme: "dark", type: "changed", before: "#fff", after: "#000" }, { name: "ratio", theme: null, type: "added", after: "2" }], ["Not changed: `x`"]);
+    expect(text.split("\n")).toEqual(["Update 2 design tokens from Motif", "`color.brand` (dark): `#fff` → `#000`", "`ratio`: `2`", "Not changed: `x`"]);
+  });
+});

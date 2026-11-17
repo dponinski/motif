@@ -1,7 +1,7 @@
 import type { Composition, Slot, StoredTokenData, Token, TokenType } from "../tokens/model";
 import { ALL_THEMES } from "../tokens/model";
 import { cssToColor } from "./color";
-import { COMPOSITION_NAMESPACE, leafOf, namespaceOf, pathOf, refOf, slug, themeKey } from "./names";
+import { COMPOSITION_NAMESPACE, leafOf, namespaceOf, pathOf, placeOf, refOf, slug, themeKey } from "./names";
 import { EXT, type DtcgConfig, type DtcgFiles, type Skipped } from "./types";
 
 // Motif's tokens as design tokens (DTCG 2025.10) files: the base values of each set in a file (all the sets in one, or a file each), and the
@@ -49,10 +49,9 @@ export const stringify = (value: unknown): string =>
 const extension = (e: Obj): Obj => (Object.keys(e).length ? { $extensions: { [EXT]: e } } : {});
 
 // Unique keys for a list of names.
-function uniqueKeys(names: string[]): string[] {
+function uniqueKeys(keys: string[]): string[] {
   const used = new Set<string>();
-  return names.map((name) => {
-    const base = slug(name);
+  return keys.map((base) => {
     let key = base;
     for (let n = 2; used.has(key); n++) key = `${base}-${n}`;
     used.add(key);
@@ -65,10 +64,11 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
   const dir = (options.dir ?? "src/tokens").replace(/\/+$/, "");
   const skipped: Skipped[] = [];
 
-  const setKeys = uniqueKeys(data.sets.map((s) => s.name));
+  // A set and a theme keep the key the repository's config gave them.
+  const setKeys = uniqueKeys(data.sets.map((s) => s.repoKey ?? slug(s.name)));
   const keyOfSet = new Map(data.sets.map((s, i) => [s.id, setKeys[i]]));
   const themesOfSet = new Map(data.sets.map((s) => {
-    const keys = uniqueKeys(s.themes.map((t) => themeKey(t.name)));
+    const keys = uniqueKeys(s.themes.map((t) => t.repoKey ?? themeKey(t.name)));
     return [s.id, s.themes.map((t, i) => ({ id: t.id, name: t.name, key: keys[i] }))] as const;
   }));
   const baseOf = (setId: string) => themesOfSet.get(setId)?.[0];
@@ -100,7 +100,7 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
   const placed: { token: Token; path: string[] }[] = [];
   for (const t of data.tokens) {
     if (t.type === "color" && Object.keys(t.values).length === 0) continue;
-    const path = pathOf(t.type, t.use, t.name);
+    const path = placeOf(t.repoName) ?? pathOf(t.type, t.use, t.name);
     if (t.type === "color" && !Object.entries(t.values).every(([, v]) => cssToColor(v) !== null) && !t.ref) { skipped.push({ name: t.name, reason: "Its color isn't one Motif can write as a design token" }); continue; }
     if (claim(t.id, t.name, path)) placed.push({ token: t, path });
   }
@@ -118,8 +118,8 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
     const ns = namespaceOf(t.type, t.use);
     // The name is written when the path doesn't say it (the namespace took a prefix off, or the slug changed it).
     const ext = common(t.setId, t.group, {
-      ...(t.name !== path[path.length - 1] ? { name: t.name } : {}),
-      ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+      ...(t.name !== path[path.length - 1] && !placeOf(t.repoName) ? { name: t.name } : {}),
+      ...(t.repoName !== undefined && !placeOf(t.repoName) ? { repoName: t.repoName } : {}),
       ...(ns === "" && t.use ? { use: t.use } : {}),
     });
 

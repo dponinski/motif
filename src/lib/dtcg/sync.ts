@@ -1,6 +1,6 @@
 import { mergeJson, setAt } from "../motif-document";
 import type { StoredTokenData } from "../tokens/model";
-import { colorToCss, isColorValue } from "./color";
+import { colorToCss, cssToColor, isColorValue } from "./color";
 import { walk, type Flat } from "./flat";
 import { readDtcg, type Read } from "./read";
 import { stringify, writeDtcg, type WriteOptions } from "./write";
@@ -27,6 +27,29 @@ function thaw(v: unknown): unknown {
   if (typeof v === "string" && v.startsWith(FROZEN)) return JSON.parse(v.slice(FROZEN.length));
   if (isObject(v)) return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, thaw(x)]));
   return v;
+}
+
+// A value in the one form Motif writes it in: a color as the color its CSS is (a hex gets its hex, the components are rounded), so two
+// files that say the same thing in different words are the same.
+export function canonicalValue(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonicalValue);
+  if (isObject(v)) {
+    if (isColorValue(v)) { const css = colorToCss(v); const back = css === null ? null : cssToColor(css); return back ?? v; }
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, canonicalValue(x)]));
+  }
+  return v;
+}
+
+// The tree of a file with its values in that form (names, groups and extensions as they were).
+export function canonicalTree(tree: Obj): Obj {
+  return Object.fromEntries(Object.entries(tree).map(([k, v]) => [k, k === "$value" ? canonicalValue(v) : isObject(v) && !k.startsWith("$") ? canonicalTree(v) : v]));
+}
+
+export function canonicalFiles(files: DtcgFiles): DtcgFiles {
+  return Object.fromEntries(Object.entries(files).map(([f, text]) => {
+    if (!isTokenFile(f) || f.endsWith("tokens.config.json")) return [f, text];
+    try { const tree = JSON.parse(text); return [f, isObject(tree) ? stringify(canonicalTree(tree)) : text]; } catch { return [f, text]; }
+  }));
 }
 
 function parse(files: DtcgFiles, file: string): Obj {
@@ -89,7 +112,9 @@ function nameOf(path: string[]): string {
   return (at === -1 ? path : path.slice(0, at)).join(".");
 }
 
-export function mergeDtcg(base: DtcgFiles, mine: DtcgFiles, theirs: DtcgFiles): DtcgMerge {
+export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: DtcgFiles): DtcgMerge {
+  // The three sides in the same form, so a color written differently isn't a change.
+  const [base, mine, theirs] = [canonicalFiles(rawBase), canonicalFiles(rawMine), canonicalFiles(rawTheirs)];
   const trees: Record<string, unknown> = {};
   const conflicts: DtcgConflict[] = [];
   const restored: string[] = [];
@@ -161,7 +186,7 @@ function valuesOf(files: DtcgFiles): Map<string, { name: string; theme: string |
     for (const f of flat) {
       const name = f.path.join(".");
       const kids = f.children ?? [f];
-      for (const k of kids) out.set(`${theme ?? ""}\0${k.path.join(".")}`, { name: k.path.join("."), theme, text: JSON.stringify(thaw(freeze(k.value))) });
+      for (const k of kids) out.set(`${theme ?? ""}\0${k.path.join(".")}`, { name: k.path.join("."), theme, text: JSON.stringify(canonicalValue(k.value)) });
       if (f.children && f.children.length === 0) out.set(`${theme ?? ""}\0${name}`, { name, theme, text: "{}" });
     }
   }
@@ -200,6 +225,10 @@ export interface DtcgLink {
   tailwind: boolean;
   // The files as of the last sync: the common ancestor for the next merge.
   base: DtcgFiles;
+  // The files Motif's tokens were last put among the editor's changes as, and which of them were written: what is waiting is the difference
+  // between this (or, before anything is staged, `base`) and Motif's tokens. Cleared when the pull request is merged or one of the files is
+  // given up. Only a hint for the status; Sync plans from the real state.
+  staged?: { files: DtcgFiles; paths: string[] } | null;
   syncedAt: number;
 }
 

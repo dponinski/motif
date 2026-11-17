@@ -12,11 +12,15 @@ import { previewStyle, releaseSlots, resolve, type ComposeData } from "@/lib/tok
 export interface TokenTheme {
   id: string;
   name: string;
+  // The key of the theme in the repository's tokens.config.json, when it isn't the one its name gives.
+  repoKey?: string;
 }
 
 export interface TokenSet {
   id: string;
   name: string;
+  // The key of the set in the repository's tokens.config.json, when it isn't the one its name gives.
+  repoKey?: string;
   themes: TokenTheme[];
   activeThemeId: string;
   // What the collection is for ("Primitives", "Semantic colors that follow them"); Motif's own note, never sent to a repository.
