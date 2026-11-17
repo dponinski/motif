@@ -159,52 +159,53 @@ const check = (name, ok, detail = "") => {
 
   // ── Import: the repository's tokens come in with the first pull, with nothing pressed ──
   await status().getByText(/Nothing to sync/).waitFor({ timeout: 60000 });
-  let ds = await designSystem();
+  const typed = async () => (await project()).tokens;
+  let ds = await typed();
   const set = ds.sets.find((s) => s.name === "acme/ds");
+  const lightOf = (t) => t.sets.find((x) => x.id === set.id).themes.find((x) => x.name === "Light").id;
+  const tok = (t, name) => t.tokens.find((x) => x.setId === set.id && x.name === name);
   check("a set is created with a Light and a Dark theme", !!set && set.themes.map((t) => t.name).join() === "Light,Dark");
-  check("its tokens are imported", ds.colors.filter((c) => c.setId === set.id).length === 17 && ds.radii.filter((r) => r.setId === set.id).length === 4 && ds.shadows.filter((s) => s.setId === set.id).length === 2);
-  const primary = ds.colors.find((c) => c.setId === set.id && c.name === "primary");
-  check("colors are read into hex per theme, and grouped", /^#[0-9a-f]{6}$/.test(primary.themeValues[lightId(ds, "acme/ds")]) && primary.group === "primary");
+  check("its tokens are imported: colors, radii, and shadows (which are compositions in design tokens files)", ds.tokens.filter((c) => c.setId === set.id && c.type === "color").length === 17 && ds.tokens.filter((r) => r.setId === set.id && r.use === "radius").length === 4 && ds.compositions.filter((s) => s.setId === set.id && s.kind === "shadow").length === 2);
+  check("colors are read as the repository writes them, per theme, and grouped", tok(ds, "primary").values[lightOf(ds)] === "oklch(0.52 0.21 270)" && tok(ds, "primary").group === "primary");
   check("a fresh import has nothing to send or receive", (await page.getByLabel("Token changes").count()) === 0 && (await page.locator("[data-behind-note]").count()) === 0);
   await page.screenshot({ path: `${OUT}/tokens-synced.png` });
 
-  // ── Edit in Motif → pull request ──────────────────────────────────────────
+  // ── Edit in Motif → pull request (the first push also moves the variables into design tokens files) ──
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     const light = set.themes.find((t) => t.name === "Light").id;
     const c = state.tokens.find((x) => x.type === "color" && x.setId === set.id && x.name === "primary");
     c.values[light] = "#ff0000";
     c.value = "#ff0000";
-    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "radius-md").values["*"] = "10";
+    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "md").values["*"] = "0.625";
   });
   await openSourceControl(page);
   await status().getByText(/2 token changes waiting to sync/).waitFor({ timeout: 30000 });
   const changes = page.getByLabel("Token changes");
-  check("Motif's edits are listed as waiting, with no pull request of their own to open", (await changes.locator("li").filter({ hasText: /^primary/ }).count()) === 1 && (await changes.locator("li").filter({ hasText: /^radius-md/ }).count()) === 1 && (await page.getByRole("button", { name: "Create pull request" }).count()) === 0);
+  check("Motif's edits are listed as waiting, with no pull request of their own to open", (await changes.locator("li").filter({ hasText: /^primary/ }).count()) === 1 && (await changes.locator("li").filter({ hasText: /^radius\.md/ }).count()) === 1 && (await page.getByRole("button", { name: "Create pull request" }).count()) === 0);
   await page.screenshot({ path: `${OUT}/tokens-changes.png` });
   check("nothing has been sent", !!repos["acme/ds"].main && prs.length === 0);
   await syncNow(page, 1);
   const pr = prs[0];
   check("one branch and one pull request, from the working branch", prs.length === 1 && /^motif\/changes-/.test(pr.head) && pr.base === "main" && pr.title === "Changes from Motif");
-  const original = [...repos["acme/ds"].main.get("src/styles/motif.css").split("\n")];
-  const edited = repos["acme/ds"][pr.head].get("src/styles/motif.css").split("\n");
-  const diff = edited.flatMap((l, i) => (l === original[i] ? [] : [`${original[i].trim()} => ${l.trim()}`]));
-  check("the pull request changes only the two values, in the file's own notation", edited.length === original.length && diff.length === 2 && diff[0].startsWith("--primary: oklch(0.52 0.21 270); => --primary: oklch(0.628") && diff[1] === "--radius-md: 0.5rem; => --radius-md: 0.625rem;", diff.join(" | "));
-  check("the base branch is untouched", repos["acme/ds"].main.get("src/styles/motif.css").includes("--primary: oklch(0.52 0.21 270);"));
-  check("the description lists the changes under the step that made them", pr.body.includes("- Update 2 design tokens from Motif") && pr.body.includes("  - `primary` (light): `#3e55df` → `#ff0000`") && pr.body.includes("  - `radius-md` (light): `8px` → `10px`") && pr.body.includes("- `src/styles/motif.css`"), pr.body.slice(0, 400));
-  check("the link remembers what was staged", (await gitState()).tokenLink.staged?.paths?.join() === "src/styles/motif.css");
+  const head1 = repos["acme/ds"][pr.head];
+  check("the tokens are in design tokens files, and the stylesheet they build has the two values", head1.has("src/tokens/tokens.json") && /--primary:\s*#ff0000;/.test(head1.get("src/styles/tokens.css")) && head1.get("src/styles/tokens.css").includes("--radius-md: 0.625rem;"), head1.get("src/styles/tokens.css"));
+  check("the variables are out of the repository's own stylesheet, which keeps what isn't a token", !/--primary:/.test(head1.get("src/styles/motif.css")) && head1.get("src/styles/motif.css").includes("@theme inline"));
+  check("the base branch is untouched", repos["acme/ds"].main.get("src/styles/motif.css").includes("--primary: oklch(0.52 0.21 270);") && !repos["acme/ds"].main.has("src/tokens/tokens.json"));
+  check("the description says what moved, with the check, and the changes", /- Move \d+ design tokens from the stylesheets into design tokens files/.test(pr.body) && /Check: \d+ variables, all identical/.test(pr.body) && pr.body.includes("  - `primary`: `#ff0000`") && pr.body.includes("  - `radius.md`: `0.625rem`"), pr.body.slice(0, 600));
+  check("the link remembers what was staged", ((await gitState()).tokenLink.staged?.paths ?? []).includes("src/tokens/tokens.json") && ((await gitState()).tokenLink.staged?.paths ?? []).includes("src/styles/motif.css"));
   check("and nothing is waiting any more", await page.getByRole("status", { name: "Sync status" }).getByText(/In sync with pull request #1/).isVisible());
   await page.screenshot({ path: `${OUT}/tokens-pr.png` });
 
   // A second edit goes into the same pull request.
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
-    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "radius-sm").values["*"] = "5";
+    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "sm").values["*"] = "0.3125";
   });
   await openSourceControl(page);
   await page.getByRole("status", { name: "Sync status" }).getByText(/1 token change waiting to sync/).waitFor({ timeout: 15000 });
   await syncNow(page, 1);
-  const edited2 = repos["acme/ds"][pr.head].get("src/styles/motif.css");
+  const edited2 = repos["acme/ds"][pr.head].get("src/styles/tokens.css");
   check("a second token edit goes into the same pull request, on top of the first", prs.length === 1 && edited2.includes("--radius-sm: 0.3125rem;") && edited2.includes("--radius-md: 0.625rem;"), edited2.split("\n").filter((l) => l.includes("radius")).join(" | "));
 
   // ── The pull request is merged ────────────────────────────────────────────
@@ -213,18 +214,22 @@ const check = (name, ok, detail = "") => {
   await page.getByText(/was merged/).first().waitFor({ timeout: 30000 });
   await pull();
   await upToDate();
-  check("once merged, the two sides agree exactly (no false conflicts), and nothing is staged", (await page.getByRole("dialog").count()) === 0 && (await gitState()).tokenLink.staged === null);
+  check("once merged, the two sides agree exactly (no false conflicts), and nothing is staged", (await page.getByRole("dialog").count()) === 0 && (await gitState()).tokenLink.staged === null && !(await gitState()).tokenLink.convert);
 
   // ── Edit in the repository → pull ─────────────────────────────────────────
   const main = repos["acme/ds"].main;
-  main.set("src/styles/motif.css", main.get("src/styles/motif.css").replace("--radius-lg: 0.75rem;", "--radius-lg: 1rem;").replace("--background: oklch(0.17 0.015 265);", "--background: oklch(0.2 0.015 265);"));
+  const tokensJson = () => main.get("src/tokens/tokens.json");
+  const darkJson = () => main.get("src/tokens/tokens.dark.json");
+  const lg = tokensJson().match(/"lg": \{[^}]*\{[^}]*\}[^}]*\}/);
+  main.set("src/tokens/tokens.json", tokensJson().replace(/("lg": \{\s*"\$type": "dimension",\s*"\$value": \{\s*"value": )0\.75/, "$11"));
+  main.set("src/tokens/tokens.dark.json", darkJson().replace("0.17, 0.015, 265", "0.2, 0.015, 265"));
   await pull();
   await page.locator("[data-pull-notice]").getByText(/2 token changes from the repository/).waitFor({ timeout: 30000 });
-  ds = await designSystem();
-  check("the repository's changes arrive in Motif", ds.radii.find((r) => r.name === "radius-lg" && r.setId === set.id).value === 16 && ds.colors.find((c) => c.name === "background" && c.setId === set.id).themeValues[ds.sets.find((s) => s.id === set.id).themes.find((t) => t.name === "Dark").id] !== undefined);
+  ds = await typed();
+  check("the repository's changes arrive in Motif", tok(ds, "lg").values["*"] === "1" && /0\.2 0\.015 265/.test(tok(ds, "background").values[ds.sets.find((s) => s.id === set.id).themes.find((t) => t.name === "Dark").id]), `${lg} ${JSON.stringify(tok(ds, "lg"))}`);
 
   // ── The same value changed on both sides ──────────────────────────────────
-  main.set("src/styles/motif.css", main.get("src/styles/motif.css").replace("--success: oklch(0.56 0.14 155);", "--success: oklch(0.6 0.2 100);"));
+  main.set("src/tokens/tokens.json", tokensJson().replace("0.56, 0.14, 155", "0.6, 0.2, 100"));
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     const light = set.themes.find((t) => t.name === "Light").id;
@@ -234,14 +239,13 @@ const check = (name, ok, detail = "") => {
   });
   await pull();
   await dialog.getByText("1 value changed in both places").waitFor({ timeout: 30000 });
-  check("a clash shows both values", (await dialog.getByText("success · light").isVisible()) && (await dialog.getByText("#00ff00").first().isVisible()));
+  check("a clash shows both values", (await dialog.getByText("success", { exact: true }).isVisible()) && (await dialog.getByText("#00ff00").first().isVisible()));
   await page.screenshot({ path: `${OUT}/tokens-conflict.png` });
   await dialog.getByRole("button", { name: /Repository/ }).click();
   await dialog.getByRole("button", { name: "Apply my choices" }).click();
   await dialog.waitFor({ state: "hidden" });
-  ds = await designSystem();
-  const success = ds.colors.find((c) => c.name === "success" && c.setId === set.id);
-  check("choosing the repository's value puts it in Motif", success.themeValues[lightId(ds, "acme/ds")] !== "#00ff00");
+  ds = await typed();
+  check("choosing the repository's value puts it in Motif", tok(ds, "success").values[lightOf(ds)] !== "#00ff00");
 
   // ── Deleting in Motif never deletes from the repository ───────────────────
   await editMotif((state) => {
@@ -250,14 +254,14 @@ const check = (name, ok, detail = "") => {
   });
   await pull();
   await page.locator("[data-pull-notice]").getByText(/token changes? from the repository/).waitFor({ timeout: 30000 });
-  check("it is restored, and the repository still has it", (await designSystem()).colors.some((c) => c.name === "ring" && c.setId === set.id) && repos["acme/ds"].main.get("src/styles/motif.css").includes("--ring:"));
+  check("it is restored, and the repository still has it", !!tok(await typed(), "ring") && repos["acme/ds"].main.get("src/tokens/tokens.json").includes('"ring"'));
 
   // ── A token without Pull requests access ──────────────────────────────────
   await project();
   await setToken("ro");
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
-    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "radius-sm").values["*"] = "7";
+    state.tokens.find((r) => r.use === "radius" && r.setId === set.id && r.name === "sm").values["*"] = "0.4375";
   });
   await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("button", { name: "Push" }).click();
@@ -269,7 +273,7 @@ const check = (name, ok, detail = "") => {
   await page.locator('nav button[title="Source control"]').click();
   await page.getByRole("button", { name: "Push" }).click();
   await page.getByRole("status", { name: "Sync status" }).getByText(/In sync with pull request #2/).waitFor({ timeout: 30000 });
-  check("with a token that can, the same changes carry on and open it", prs.length === 2 && repos["acme/ds"][prs[1].head].get("src/styles/motif.css").includes("--radius-sm: 0.4375rem;"));
+  check("with a token that can, the same changes carry on and open it", prs.length === 2 && repos["acme/ds"][prs[1].head].get("src/styles/tokens.css").includes("--radius-sm: 0.4375rem;"));
 
   // ── Entry from the Tokens view ────────────────────────────────────────────
   await page.goto("http://localhost:3000/editor/tok00001");
@@ -277,7 +281,7 @@ const check = (name, ok, detail = "") => {
   await nav("Tokens");
   await page.getByRole("button", { name: "Repo sync" }).click();
   await page.locator("[data-token-link]").waitFor({ timeout: 30000 });
-  check("the Tokens view opens the Source control panel, with the set linked to the repository", await page.locator("[data-token-link]").getByText(/acme\/ds/).first().isVisible());
+  check("the Tokens view opens the Source control panel, with the tokens linked to the repository's files", await page.locator("[data-token-link]").getByText(/design tokens files in src\/tokens/).first().isVisible());
 
   // ── A repository with no tokens ───────────────────────────────────────────
   await seed(page, "tok00002", { repo: "acme/bare", name: "Bare", extra: { tokens: {

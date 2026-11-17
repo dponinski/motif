@@ -9,6 +9,7 @@ const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
 const { openSync, syncNow } = require("./support/sync-helpers");
 
+const { withoutConversion } = require("./support/conversion");
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
 const blobSha = (text) => {
@@ -213,10 +214,12 @@ const check = (name, ok, detail = "") => {
   const pushed = Object.keys(repos["acme/ds"]).filter((b) => b !== "main");
   check("Sync sends one branch", pushed.length === 1, pushed.join());
   const tree = repos["acme/ds"][pushed[0]];
-  const css = tree.get("src/styles/motif.css");
-  check("with the token declared under its new name in every theme", /--brand:/.test(css) && !/(?<![\w-])--primary(?![\w-])/.test(css) && /--color-brand: var\(--brand\)/.test(css), css.split("\n").filter((l) => /brand|primary/.test(l)).slice(0, 6).join(" | "));
+  // (The variables are in design tokens files now, and in the stylesheet they build; the repository's own stylesheet keeps the alias Tailwind reads.)
+  const css = tree.get("src/styles/tokens.css") + tree.get("src/styles/motif.css");
+  const built = tree.get("src/styles/tokens.css");
+  check("with the token declared under its new name in every theme", /--brand:/.test(built) && /\.dark \{[^}]*--brand:/.test(built) && !/(?<![\w-])--primary(?![\w-])/.test(css) && /--color-brand: var\(--brand\)/.test(css), css.split("\n").filter((l) => /brand|primary/.test(l)).slice(0, 6).join(" | "));
   check("the components use the class by its new name", /bg-brand/.test(tree.get("src/components/Button.tsx")) && ![...tree.entries()].some(([p, t]) => !p.endsWith(".md") && /(?<![\w-])(bg|text|ring|accent)-primary(?![\w-])/.test(t)));
-  check("and every file that changed is one the rename plans", [...tree.entries()].every(([p, t]) => repos["acme/ds"].main.get(p) === t || /(?<![\w-])(--)?(brand|primary)(?![\w-])|-brand/.test(t)));
+  check("and every file that changed is one the rename plans", [...tree.entries()].every(([p, t]) => repos["acme/ds"].main.get(p) === t || !withoutConversion([p]).length || /(?<![\w-])(--)?(brand|primary)(?![\w-])|-brand/.test(t)));
   check("the token is not flagged as changed, nor made twice", await (async () => { await nav("Tokens"); await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click(); await page.getByRole("tab", { name: /Colors/ }).click(); return (await row("brand").locator("text=changed").count()) === 0 && (await row("brand").count()) === 1; })());
 
   const real = errors.filter((e) => !/hydrat/i.test(e));

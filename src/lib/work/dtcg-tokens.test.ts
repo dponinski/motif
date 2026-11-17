@@ -10,7 +10,6 @@ import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "../../stor
 import { useGitStore } from "../../store/git";
 import { useLibraryStore } from "../../store/library";
 import { pullRepository } from "../pull";
-import { setConvertOnPull } from "../dtcg/convert-flag";
 import { toStored } from "../tokens/migrate";
 import { overlayOf } from "./overlay";
 import { dtcgSummary, stageDtcgTokens, waitingDtcgChanges } from "./dtcg-tokens";
@@ -264,8 +263,7 @@ describe("the first push of a repository whose tokens are variables in its style
     return { repo: { ...repo, host }, link, model: toStored(snapshotTokens(useDesignSystemStore.getState())) };
   }
 
-  beforeEach(() => { setConvertOnPull(true); useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
-  afterEach(() => setConvertOnPull(null));
+  beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
 
   it("has nothing waiting yet (the conversion goes with the first push), and the pull wrote nothing to the repository", async () => {
     const { repo, link, model } = await pulled();
@@ -294,6 +292,17 @@ describe("the first push of a repository whose tokens are variables in its style
     expect(r.link.staged?.paths).toContain("src/app.css");
     expect(r.link.convert).toBeDefined();
     expect(waitingDtcgChanges(r.link, model)).toEqual([]);
+  });
+
+  it("checks the conversion, not what Motif changed since: an edited token doesn't make the check fail", async () => {
+    const { repo, link, model } = await pulled();
+    const primary = model.tokens.find((t) => t.name === "primary")!;
+    const edited = { ...model, tokens: model.tokens.map((t) => (t.id === primary.id ? { ...t, values: Object.fromEntries(Object.keys(t.values).map((k) => [k, "#ff0000"])), value: "#ff0000" } : t)) };
+    const r = await stage(repo, link, edited);
+    expect(r.attention).toBeNull();
+    const step = useEditStore.getState().history[useEditStore.getState().index].summary ?? "";
+    expect(step).toMatch(/Check: \d+ variables, all identical/);
+    expect(edits()["src/tokens.css"]).toContain("--primary: #ff0000;");
   });
 
   it("holds off when the stylesheets changed since they were pulled", async () => {

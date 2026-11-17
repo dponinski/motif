@@ -193,7 +193,7 @@ const check = (name, ok, detail = "") => {
 
   // ── Other kinds ───────────────────────────────────────────────────────────
   await page.getByRole("tab", { name: /Radii/ }).click();
-  check("radii say it too", await settle(async () => /used \d+×/.test(await page.locator("[data-token-id]").filter({ hasText: "radius-md" }).first().innerText())));
+  check("radii say it too", await settle(async () => /used \d+×/.test(await page.locator("[data-token-id]").filter({ hasText: "md" }).first().innerText())));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

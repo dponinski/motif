@@ -92,8 +92,6 @@ const check = (name, ok, detail = "") => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource|evil\.test|Content Security Policy|violates/i.test(m.text())) errors.push(m.text()); });
-  // The repository's tokens are converted to design tokens files when it is pulled; the previews show Motif's changes to them.
-  await context.addInitScript(() => { try { localStorage.setItem("motif-convert-tokens", "1"); } catch {} });
   await context.route("https://api.github.com/**", github);
   await context.route(/^https:\/\/(esm\.sh|cdn\.jsdelivr\.net)\//, async (route) => {
     const out = await serve(route.request().url());

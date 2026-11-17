@@ -11,6 +11,7 @@ const { openSync, syncNow } = require("./support/sync-helpers");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
+const { withoutConversion } = require("./support/conversion");
 const blobSha = (text) => {
   const body = Buffer.from(text, "utf8");
   return crypto.createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
@@ -222,7 +223,7 @@ const check = (name, ok, detail = "") => {
   check("the file has the new option, the new default, the group and the prop", badge.includes('ghost: "bg-transparent text-foreground"') && badge.includes("tone: {") && badge.includes("soft:") && badge.includes("rounded?: boolean;") && /\{ className, variant, tone, rounded/.test(badge), badge.slice(0, 900));
   check("with the removed option gone and the renamed one renamed", !badge.includes("outline:") && badge.includes("destructive:") && !badge.includes("danger:"));
   check("and wired into the cva call", badge.includes("badgeVariants({ variant, tone })"));
-  check("only Badge changed", [...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)).map(([p]) => p).join() === "src/components/Badge.tsx");
+  check("only Badge changed", [...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)).map(([p]) => p).filter((p) => withoutConversion([p]).length).join() === "src/components/Badge.tsx");
   check("the description lists them", pr.body.includes("added option ghost") && pr.body.includes("added variant group tone") && pr.body.includes("added prop rounded"), pr.body.slice(0, 500));
   check("the edits stay in the editor while the pull request is open", (await group.getByLabel("Rename variant ghost").count()) === 1);
   // Merged: the repository has them now, and the editor shows the repository's file.
