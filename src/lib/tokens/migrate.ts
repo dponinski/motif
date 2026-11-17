@@ -79,7 +79,8 @@ export function toStored(data: TokenData): StoredTokenData {
       ...data.numbers.map(numberToken),
       ...data.strings.map(stringToken),
     ],
-    compositions: [...data.typography.map(typographyComposition), ...data.shadows.map(shadowComposition)],
+    // The compositions made as compositions (their slots can be tokens) are marked, so they come back as such and not as a text style or a shadow.
+    compositions: [...data.typography.map(typographyComposition), ...data.shadows.map(shadowComposition), ...data.compositions.map((c) => ({ ...c, own: true }))],
     components: data.components,
   };
 }
@@ -112,7 +113,9 @@ export function fromStored(data: StoredTokenData): TokenData {
     ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
   }));
 
-  const typography: TypographyToken[] = data.compositions.filter((c) => c.kind === "typography").map((c) => {
+  // A text style or a shadow of the fixed shape is in its own list; a composition made as one (or of another kind) in the compositions.
+  const fixed = (c: Composition) => !c.own && (c.kind === "typography" || c.kind === "shadow");
+  const typography: TypographyToken[] = data.compositions.filter((c) => fixed(c) && c.kind === "typography").map((c) => {
     const letter = slotOf(c, "letter-spacing");
     return {
       id: c.id, name: c.name, setId: c.setId, ...(c.group !== undefined ? { group: c.group } : {}),
@@ -121,7 +124,7 @@ export function fromStored(data: StoredTokenData): TokenData {
     };
   });
 
-  const shadows: ShadowToken[] = data.compositions.filter((c) => c.kind === "shadow").map((c) => ({
+  const shadows: ShadowToken[] = data.compositions.filter((c) => fixed(c) && c.kind === "shadow").map((c) => ({
     id: c.id, name: c.name, setId: c.setId, group: c.group ?? "default",
     x: numberOf(slotOf(c, "x")), y: numberOf(slotOf(c, "y")), blur: numberOf(slotOf(c, "blur")), spread: numberOf(slotOf(c, "spread")),
     color: slotOf(c, "color")?.value ?? "#00000000",
@@ -137,8 +140,9 @@ export function fromStored(data: StoredTokenData): TokenData {
     ...(t.use !== undefined ? { use: t.use } : {}), ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
   }));
 
-  // (The other kinds of composition have no list in the store yet.)
-  return { sets: data.sets, colors, typography, spacing: lengths("spacing"), radii: lengths("radius"), shadows, numbers, strings, components: data.components };
+  const compositions: Composition[] = data.compositions.filter((c) => !fixed(c)).map(({ own: _, ...c }) => c);
+
+  return { sets: data.sets, colors, typography, spacing: lengths("spacing"), radii: lengths("radius"), shadows, numbers, strings, compositions, components: data.components };
 }
 
 // ── Whatever a project holds ──────────────────────────────────────────────────
@@ -165,6 +169,7 @@ export function migrateTokenData(raw: unknown): StoredTokenData {
     shadows: list<ShadowToken>(raw.shadows),
     numbers: list<NumberToken>(raw.numbers),
     strings: list<StringToken>(raw.strings),
+    compositions: list<Composition>(raw.compositions),
     components,
   });
 }

@@ -56,6 +56,9 @@ export interface Composition {
   // Shadows: an inner shadow, and the whole value of a multi-layer shadow as canonical text (the slots hold its first layer).
   inset?: boolean;
   raw?: string;
+  // Made as a composition, whose slots can be other tokens. Without it a typography or shadow composition is one of the fixed text styles and
+  // shadows (the store keeps those in lists of their own, which the repository's sync reads and writes).
+  own?: boolean;
 }
 
 export interface StoredTokenData {

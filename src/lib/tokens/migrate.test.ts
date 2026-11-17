@@ -35,6 +35,7 @@ function rich(): TokenData {
       { id: "n2", name: "text-lg", value: 1.125, unit: "rem", use: "font-size", group: "type", setId: "set-a", repoName: "text-lg" },
       { id: "n3", name: "gap-rem", value: 2, unit: "rem", use: "spacing", setId: "set-b" },
     ],
+    compositions: [],
     strings: [{ id: "g1", name: "font-sans", value: "Inter, sans-serif", use: "font-family", group: "type", setId: "set-a" }, { id: "g2", name: "label", value: "Save", setId: "set-b" }],
     components: [{ id: "k1", name: "Button", category: "ui", description: "", defaultProps: { label: "Hi" } }],
   };

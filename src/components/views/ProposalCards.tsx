@@ -148,6 +148,9 @@ export function TokenProposal({ message }: { message: AIMessage }) {
     ...proposal.spacing.map((s) => ({ kind: "spacing", name: s.name, value: `${s.value}px`, swatch: null })),
     ...proposal.radii.map((r) => ({ kind: "radius", name: r.name, value: `${r.value}px`, swatch: null })),
     ...proposal.shadows.map((s) => ({ kind: "shadow", name: s.name, value: `${s.x} ${s.y} ${s.blur} ${s.spread} ${s.color}`, swatch: null })),
+    ...proposal.numbers.map((n) => ({ kind: "number", name: n.name, value: `${n.value}${n.unit}${n.use ? ` · ${n.use}` : ""}`, swatch: null })),
+    ...proposal.strings.map((t) => ({ kind: "string", name: t.name, value: t.value, swatch: null })),
+    ...proposal.compositions.map((c) => ({ kind: c.kind === "custom" ? "composition" : c.kind, name: c.name, value: c.slots.map((p) => `${p.name} ${p.token ? `→ ${p.token}` : p.value}`).join(" · "), swatch: null })),
   ];
   if (lines.length === 0) return <Notes items={parsed.rejected.length ? parsed.rejected : ["There were no tokens in it"]} />;
 
@@ -155,7 +158,13 @@ export function TokenProposal({ message }: { message: AIMessage }) {
     if (!preview) return;
     useDesignSystemStore.setState(preview.next);
     const skipped = preview.skipped.length ? ` ${preview.skipped.length} already existed and were left as they are.` : "";
-    setOutcome(message.id, preview.added > 0 ? `Added ${preview.added} token${preview.added === 1 ? "" : "s"} to ${set?.name ?? "the token set"}.${skipped} They go to the repository, in your pull request, with your next Sync (once the token set is linked to it).` : `Nothing added.${skipped}`);
+    // Numbers, strings and compositions are Motif's own until the repository's sync carries them.
+    const own = (preview.next.numbers.length - ds.numbers.length) + (preview.next.strings.length - ds.strings.length) + (preview.next.compositions.length - ds.compositions.length);
+    const goes = preview.added - own;
+    const where = own === 0 ? " They go to the repository, in your pull request, with your next Sync (once the token set is linked to it)."
+      : goes === 0 ? " They stay in Motif for now: the repository's sync doesn't carry numbers, strings or compositions yet."
+      : ` ${goes} go to the repository, in your pull request, with your next Sync (once the token set is linked to it); the ${own} number, string or composition stay in Motif for now.`;
+    setOutcome(message.id, preview.added > 0 ? `Added ${preview.added} token${preview.added === 1 ? "" : "s"} to ${set?.name ?? "the token set"}.${skipped}${where}` : `Nothing added.${skipped}`);
   };
 
   return (

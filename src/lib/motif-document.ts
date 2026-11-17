@@ -1,4 +1,4 @@
-export type TokenKind = "colors" | "typography" | "spacing" | "radii" | "shadows";
+export type TokenKind = "colors" | "typography" | "spacing" | "radii" | "shadows" | "numbers" | "strings" | "compositions";
 
 // A component of the connected repository, by where it is declared and what it is called.
 export interface RepoRef {

@@ -274,3 +274,75 @@ describe("new tokens", () => {
     expect(targetFor([{ ...sets[0], themes: [{ id: "only", name: "Default" }], activeThemeId: "only" }], null)).toEqual({ setId: "s1", darkThemeId: null });
   });
 });
+
+describe("proposed numbers, strings and compositions", () => {
+  const sets = [{ id: "s1", name: "ds", themes: [{ id: "t-light", name: "Light" }], activeThemeId: "t-light" }];
+  const state = { sets, colors: [], spacing: [], radii: [], shadows: [] };
+  const target = targetFor(sets, null)!;
+  const proposal = (tokens: Record<string, unknown>) => parseTokenProposal({ action: "tokens", tokens })!;
+
+  it("reads a number with its unit and use, and a string with its use, and drops what isn't one", () => {
+    const parsed = proposal({
+      numbers: [{ name: "text-xl", value: 1.5, unit: "rem", use: "font-size" }, { name: "ratio", value: 1.25 }, { name: "bad", value: "x" }, { value: 3 }],
+      strings: [{ name: "font-serif", value: "Georgia, serif", use: "font-family" }, { name: "empty", value: "" }],
+    });
+    expect(parsed.proposal.numbers).toEqual([{ name: "text-xl", value: 1.5, unit: "rem", use: "font-size" }, { name: "ratio", value: 1.25, unit: "", use: null }]);
+    expect(parsed.proposal.strings).toEqual([{ name: "font-serif", value: "Georgia, serif", use: "font-family" }]);
+    expect(parsed.rejected).toHaveLength(3);
+    expect(parsed.count).toBe(3);
+  });
+
+  it("reads a composition whose parts are tokens or values", () => {
+    const parsed = proposal({ compositions: [{ name: "heading", kind: "typography", slots: [{ name: "font-family", token: "font-serif" }, { name: "font-weight", value: "700" }] }] });
+    expect(parsed.proposal.compositions[0]).toMatchObject({ name: "heading", kind: "typography", inset: false });
+    expect(parsed.proposal.compositions[0].slots).toEqual([
+      { name: "font-family", type: "string", value: null, unit: null, token: "font-serif" },
+      { name: "font-weight", type: "number", value: "700", unit: null, token: null },
+    ]);
+  });
+
+  it("refuses a composition without a kind, a custom one without parts, and a part that is nothing", () => {
+    const parsed = proposal({ compositions: [{ name: "a", kind: "other" }, { name: "b", kind: "custom", slots: [] }, { name: "c", kind: "custom", slots: [{ name: "p", type: "color" }, { name: "q", type: "color", value: "nope" }] }] });
+    expect(parsed.proposal.compositions).toEqual([]);
+    expect(parsed.rejected.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("adds them, with a part that names a token (also one proposed with it) following it", () => {
+    const parsed = proposal({
+      numbers: [{ name: "text-xl", value: 1.5, unit: "rem", use: "font-size" }],
+      strings: [{ name: "font-serif", value: "Georgia, serif", use: "font-family" }],
+      compositions: [{ name: "heading", kind: "typography", slots: [{ name: "font-family", token: "font-serif" }, { name: "font-size", token: "text-xl" }, { name: "font-weight", value: "700" }] }],
+    });
+    const out = addProposedTokens(state, parsed.proposal, target);
+    expect(out.added).toBe(3);
+    const [heading] = out.next.compositions;
+    const by = (n: string) => heading.slots.find((s) => s.name === n)!;
+    expect(by("font-family").ref).toBe(out.next.strings[0].id);
+    expect(by("font-size").ref).toBe(out.next.numbers[0].id);
+    expect(by("font-weight")).toMatchObject({ value: "700", type: "number" });
+    // The parts that weren't given have their defaults.
+    expect(heading.slots.map((s) => s.name)).toEqual(["font-family", "font-size", "font-weight", "line-height", "letter-spacing"]);
+    expect(out.next.numbers[0]).toMatchObject({ name: "text-xl", unit: "rem", use: "font-size", setId: "s1" });
+  });
+
+  it("uses the value of a part whose token isn't there, and says when it has none", () => {
+    const parsed = proposal({ compositions: [{ name: "pair", kind: "custom", slots: [{ name: "a", type: "string", token: "missing", value: "fallback" }, { name: "b", type: "string", token: "missing" }] }] });
+    const out = addProposedTokens(state, parsed.proposal, target);
+    expect(out.next.compositions[0].slots).toEqual([{ name: "a", type: "string", value: "fallback" }]);
+    expect(out.skipped).toEqual([{ name: "pair: b", reason: "no such token" }]);
+  });
+
+  it("leaves out a name the set already has", () => {
+    const parsed = proposal({ numbers: [{ name: "text-xl", value: 2, unit: "rem" }] });
+    const have = { ...state, numbers: [{ id: "n", name: "text-xl", value: 1, unit: "rem" as const, setId: "s1" }] };
+    const out = addProposedTokens(have, parsed.proposal, target);
+    expect(out.added).toBe(0);
+    expect(out.next.numbers).toEqual(have.numbers);
+  });
+
+  it("is told about them", () => {
+    const prompt = systemPrompt();
+    expect(prompt).toContain('"numbers"');
+    expect(prompt).toContain('"compositions"');
+  });
+});
