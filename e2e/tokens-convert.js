@@ -113,7 +113,6 @@ const check = (name, ok, detail = "") => {
   check("when the pull request is merged nothing is waiting", await settle(async () => (await status()).includes("Nothing to sync")), await status());
   const after = await saved();
   check("the link is to the files now, with nothing staged", after.repo.tokenLink.format === "dtcg" && !after.repo.tokenLink.convert && !after.repo.tokenLink.staged && "src/tokens/tokens.json" in after.repo.tokenLink.base, Object.keys(after.repo.tokenLink.base).join());
-  await page.locator('nav button[title="Source control"]').click();
   const settled = await page.locator("[data-token-link][data-dtcg]").first().innerText();
   check("the panel talks about the files, not the conversion", /design tokens files in src\/tokens/.test(settled) && !/variables in your stylesheets/.test(settled), settled);
 
