@@ -20,9 +20,9 @@ function Body() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs leading-relaxed text-text-secondary">
-        Components are up to date. These token values were changed in the repository and here, so the choice is yours; the token changes that don&apos;t clash come in with it. Keeping Motif&apos;s value sends it to the repository in the next push.
+        Components are up to date. These token values were changed in the repository and here, so the choice is yours; the token changes that don&apos;t clash come in with it. {pending.format === "dtcg" ? "Keeping Motif's value keeps it here." : "Keeping Motif's value sends it to the repository in the next push."}
       </p>
-      <Conflicts conflicts={conflicts} takeTheirs={takeTheirs} onToggle={(i, theirs) => setTakeTheirs((prev) => { const n = new Set(prev); if (theirs) n.add(i); else n.delete(i); return n; })} />
+      <Conflicts keeping={pending.format === "dtcg" ? "Keeping Motif's value keeps it here." : undefined} conflicts={conflicts} takeTheirs={takeTheirs} onToggle={(i, theirs) => setTakeTheirs((prev) => { const n = new Set(prev); if (theirs) n.add(i); else n.delete(i); return n; })} />
       {others.length > 0 && <ChangeList changes={others} label="Also coming from the repository" />}
       <div className="flex gap-2">
         <button className="h-7 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90" onClick={done}>Apply my choices</button>

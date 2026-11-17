@@ -6,6 +6,10 @@ import { cn } from "@/lib/utils";
 import { isColorValue } from "@/lib/repo-scan/summary";
 import { displayValue, type TokenChange, type TokenConflict } from "@/lib/token-sync/merge";
 
+// What is shown of a change and of a clash, which the sync of stylesheets and the sync of design tokens files both give.
+export type ShownChange = Omit<TokenChange, "kind"> & { kind?: TokenChange["kind"] };
+export type ShownConflict = Pick<TokenConflict, "path" | "label" | "mine" | "theirs">;
+
 // How token changes and clashes are shown: what a pull brings in, and the values that were changed in both places.
 
 export function Value({ value }: { value: string | undefined }) {
@@ -18,7 +22,7 @@ export function Value({ value }: { value: string | undefined }) {
   );
 }
 
-export function ChangeList({ changes, label }: { changes: TokenChange[]; label: string }) {
+export function ChangeList({ changes, label }: { changes: ShownChange[]; label: string }) {
   const [all, setAll] = useState(false);
   const shown = all ? changes : changes.slice(0, 8);
   return (
@@ -33,8 +37,8 @@ export function ChangeList({ changes, label }: { changes: TokenChange[]; label: 
               <span className="text-text-tertiary">removed</span>
             ) : (
               <span className="flex min-w-0 items-center gap-1.5">
-                {c.type === "changed" && <><Value value={displayValue(c.kind, c.before)} /><ArrowRight size={10} className="flex-shrink-0 text-text-tertiary" /></>}
-                <Value value={displayValue(c.kind, c.after)} />
+                {c.type === "changed" && <><Value value={displayValue(c.kind ?? "color", c.before)} /><ArrowRight size={10} className="flex-shrink-0 text-text-tertiary" /></>}
+                <Value value={displayValue(c.kind ?? "color", c.after)} />
                 {c.type === "added" && <span className="text-2xs text-text-tertiary">new</span>}
               </span>
             )}
@@ -50,11 +54,11 @@ export function ChangeList({ changes, label }: { changes: TokenChange[]; label: 
   );
 }
 
-export function Conflicts({ conflicts, takeTheirs, onToggle }: { conflicts: TokenConflict[]; takeTheirs: Set<number>; onToggle: (i: number, theirs: boolean) => void }) {
+export function Conflicts({ conflicts, takeTheirs, onToggle, keeping = "Keeping Motif's value sends it to the repository in the next pull request." }: { conflicts: ShownConflict[]; takeTheirs: Set<number>; onToggle: (i: number, theirs: boolean) => void; keeping?: string }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-text-primary">{conflicts.length} value{conflicts.length === 1 ? "" : "s"} changed in both places</p>
-      <p className="mb-2 text-2xs leading-relaxed text-text-tertiary">Choose which to keep. Keeping Motif&apos;s value sends it to the repository in the next pull request.</p>
+      <p className="mb-2 text-2xs leading-relaxed text-text-tertiary">Choose which to keep. {keeping}</p>
       <div className="flex flex-col gap-2">
         {conflicts.map((c, i) => (
           <div key={c.path.join("/")} className="rounded-md border border-surface-border p-2">

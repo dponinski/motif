@@ -2,11 +2,15 @@ import type { GitHost, RepoReader } from "./github";
 import { describeUpdate } from "./preview/library";
 import { scanBranch } from "./read-repository";
 import type { RepoAnalysis } from "./repo-scan/types";
+import { readRepoTokenFiles } from "./dtcg/repo";
+import { planDtcgSync, resolveDtcg, takeDtcg, type DtcgLink, type DtcgPlan } from "./dtcg/sync";
+import type { DtcgFiles } from "./dtcg/types";
+import { fromStored, toStored } from "./tokens/migrate";
 import { readRepoTokens } from "./token-sync/doc";
 import { healLink, linkShapeFor, planSync, themeLabel, type RepoState, type SyncPlan, type TokenLink } from "./token-sync/flow";
 import { keyPrefixes } from "./token-sync/keys";
-import { useDesignSystemStore } from "../store/design-system";
-import { repoSlug, useGitStore, type GitConnection } from "../store/git";
+import { snapshotTokens, useDesignSystemStore } from "../store/design-system";
+import { isDtcgLink, repoSlug, stylesheetLink, useGitStore, type GitConnection } from "../store/git";
 import { useLibraryStore } from "../store/library";
 import { applySyncPlan, importRepoTokens, tokenSlices } from "../store/token-sync";
 
@@ -15,11 +19,10 @@ import { applySyncPlan, importRepoTokens, tokenSlices } from "../store/token-syn
 // other changes). After that it brings in what changed in the repository and leaves what was changed here, asking only about a value that
 // was changed in both places.
 
-export interface PendingConflicts {
-  link: TokenLink;
-  plan: SyncPlan;
-  state: RepoState;
-}
+// What a pull waits to be told: the clashes of a repository whose tokens are in its stylesheets, or of one whose tokens are design tokens files.
+export type PendingConflicts =
+  | { format: "stylesheet"; link: TokenLink; plan: SyncPlan; state: RepoState }
+  | { format: "dtcg"; link: DtcgLink; plan: DtcgPlan; theirs: DtcgFiles };
 
 export interface PullOutcome {
   analysis: RepoAnalysis;
@@ -31,12 +34,56 @@ export interface PullOutcome {
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+// Design tokens files in Motif: the tokens as the files say, with the link moved forward to the files as the repository has them.
+function applyDtcg(link: DtcgLink, files: DtcgFiles, theirs: DtcgFiles): number {
+  const model = toStored(snapshotTokens(useDesignSystemStore.getState()));
+  const taken = takeDtcg(files, model);
+  useDesignSystemStore.getState().replaceTokenData(fromStored(taken.data));
+  useGitStore.getState().setTokenLink({ ...link, base: theirs, syncedAt: Date.now() });
+  return taken.data.tokens.length + taken.data.compositions.length;
+}
+
+const hasTokens = () => {
+  const ds = useDesignSystemStore.getState();
+  return [ds.colors, ds.typography, ds.spacing, ds.radii, ds.shadows, ds.numbers, ds.strings, ds.compositions].some((list) => list.length > 0);
+};
+
+// A repository whose tokens are design tokens files: merged with Motif's tokens as a whole (every set), and asking only about a value that
+// was changed in both places. The first time, an empty project takes the repository's tokens as they are.
+async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection): Promise<{ notes: string[]; conflicts: PendingConflicts | null }> {
+  const slug = repoSlug(connection);
+  const git = useGitStore.getState();
+  const stored = isDtcgLink(git.tokenLink) && git.tokenLink.repo === slug ? git.tokenLink : null;
+  // A link to another branch than the one pull requests are made from isn't followed.
+  if (stored && stored.branch !== connection.defaultBranch) return { notes: [], conflicts: null };
+  const found = await readRepoTokenFiles(host, connection.defaultBranch);
+  if (!found) return { notes: stored ? ["The design tokens files aren't in the repository any more"] : [], conflicts: null };
+
+  const first: DtcgLink = { format: "dtcg", repo: slug, branch: connection.defaultBranch, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind, base: {}, syncedAt: Date.now() };
+  if (!stored) {
+    if (hasTokens()) return { notes: ["The repository has design tokens files, but this project already has tokens of its own, so they weren't brought in. Use a project with no tokens to bring them in."], conflicts: null };
+    const n = applyDtcg(first, found.files, found.files);
+    return { notes: [`${plural(n, "token")} brought in`], conflicts: null };
+  }
+
+  const link: DtcgLink = { ...stored, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind };
+  const plan = planDtcgSync(link, toStored(snapshotTokens(useDesignSystemStore.getState())), found.files);
+  if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { format: "dtcg", link, plan, theirs: found.files } };
+  if (plan.toMotif.length > 0 || plan.merge.restored.length > 0) {
+    applyDtcg(link, plan.merge.files, found.files);
+    return { notes: [`${plural(plan.toMotif.length, "token change")} from the repository`], conflicts: null };
+  }
+  // Nothing to take: what has changed in the repository since is Motif's to send, so the link moves on to the files as they are.
+  if (JSON.stringify(link.base) !== JSON.stringify(found.files)) git.setTokenLink({ ...link, base: found.files, syncedAt: Date.now() });
+  return { notes: [], conflicts: null };
+}
+
 function pullTokens(analysis: RepoAnalysis, connection: GitConnection): { notes: string[]; conflicts: PendingConflicts | null } {
   const slug = repoSlug(connection);
   const git = useGitStore.getState();
   const ds = useDesignSystemStore.getState();
   const state: RepoState = { analysis, snapshot: readRepoTokens(analysis.tokens, analysis.themes) };
-  const stored = git.tokenLink;
+  const stored = stylesheetLink(git.tokenLink);
   const link = stored && stored.repo === slug && ds.sets.some((s) => s.id === stored.setId) ? stored : null;
 
   if (stored && link) {
@@ -45,7 +92,7 @@ function pullTokens(analysis: RepoAnalysis, connection: GitConnection): { notes:
     // A theme of the repository that was deleted from the set here is not mapped to anything any more: it comes back, as the repository has it.
     const live = healLink(link, ds.sets);
     const plan = planSync(live, tokenSlices(), state);
-    if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { link: live, plan, state } };
+    if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { format: "stylesheet", link: live, plan, state } };
     const prefixes = keyPrefixes(analysis);
     // (Only for a theme that was deleted here: any other theme the repository has is brought in with its values, as a change.)
     const back = live !== link ? analysis.themes.filter((key) => !(key in live.themes)) : [];
@@ -94,13 +141,22 @@ export async function pullRepository(host: GitHost & RepoReader, connection: Git
     library.importComponents(analysis);
   }
 
-  const tokens = pullTokens(analysis, connection);
+  // Design tokens files in the repository (and no link to its stylesheets) are what the tokens are; else the stylesheets are.
+  const sheet = stylesheetLink(git.tokenLink);
+  const dtcg = !(sheet && sheet.repo === slug) ? await pullDtcg(host, connection) : null;
+  const tokens = dtcg && (dtcg.notes.length > 0 || dtcg.conflicts || isDtcgLink(useGitStore.getState().tokenLink)) ? dtcg : pullTokens(analysis, connection);
   notes.push(...tokens.notes);
   return { analysis, notes, conflicts: tokens.conflicts };
 }
 
 // The tokens after the person has chosen a side for each value changed in both places (the indexes of the ones that take the repository's).
 export function finishPull(pending: PendingConflicts, takeTheirs: number[]): string {
+  if (pending.format === "dtcg") {
+    const { link, plan, theirs } = pending;
+    applyDtcg(link, resolveDtcg(plan.merge, takeTheirs), theirs);
+    const n = plan.toMotif.length + plan.merge.conflicts.length;
+    return `${plural(n, "token change")} taken, ${takeTheirs.length} of the ${plural(plan.merge.conflicts.length, "clash", "clashes")} in favour of the repository`;
+  }
   const { link, plan, state } = pending;
   applySyncPlan(link, plan, takeTheirs, state);
   const n = plan.toMotif.length + plan.merge.conflicts.length;
