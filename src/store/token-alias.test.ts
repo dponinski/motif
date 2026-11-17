@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { emptyTokenData, useDesignSystemStore } from "./design-system";
 import { editTokens, undoTokens, useTokenHistory } from "./token-history";
+import { exportCss, exportTokens } from "../lib/tokens/exports";
 
 const store = () => useDesignSystemStore.getState();
 const SET = "set-global";
@@ -103,9 +104,9 @@ describe("exports", () => {
   it("write an alias as a reference", () => {
     const [light] = themes();
     store().setColorAlias(color("background").id, light, "gray-50");
-    expect(store().exportCSS()).toContain("--color-background: var(--color-gray-50);");
-    const json = JSON.parse(store().exportTokens());
-    expect(json.color.base.background.$value).toBe("{color.gray.gray-50}");
+    expect(exportCss(store())).toContain("--color-background: var(--color-gray-50);");
+    const json = JSON.parse(exportTokens(store()));
+    expect(json.color.background.$value).toBe("{color.gray-50}");
   });
 });
 

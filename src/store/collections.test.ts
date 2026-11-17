@@ -4,6 +4,7 @@ import { fromStored, toStored } from "../lib/tokens/migrate";
 import { dependentsOf, detachedBy, targetKey } from "../lib/tokens/alias-colors";
 import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "./design-system";
 import { editTokens, redoTokens, undoTokens, useTokenHistory } from "./token-history";
+import { exportCss, exportTokens } from "../lib/tokens/exports";
 
 // Two sets that work together: primitive colors, and semantic ones that are those colors.
 
@@ -178,8 +179,8 @@ describe("saved and sent", () => {
   it("is exported as a reference to the other color", () => {
     store().setColorAlias(color("surface").id, sl, `${PRIM}/gray-50`);
     store().setActiveTheme(SEM, sl);
-    const json = JSON.parse(store().exportTokens());
-    expect(json.color.semantic.surface.$value).toBe("{color.gray.gray-50}");
+    const json = JSON.parse(exportTokens(store()));
+    expect(json.color.surface.$value).toBe("{color.gray-50}");
   });
 });
 

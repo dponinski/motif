@@ -1,5 +1,6 @@
 "use client";
 
+import { exportCss, exportTokens } from "@/lib/tokens/exports";
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
@@ -50,9 +51,9 @@ const headerButton = "flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text
 
 // The tokens of the project: sets and themes on the left, and for the open set a tab for each kind of token.
 export default function TokensView({ onClose }: { onClose?: () => void }) {
-  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions, exportTokens, exportCSS, exportTailwind } = useDesignSystemStore(useShallow((s) => ({
+  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions, exportTailwind } = useDesignSystemStore(useShallow((s) => ({
     sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions,
-    exportTokens: s.exportTokens, exportCSS: s.exportCSS, exportTailwind: s.exportTailwind,
+    exportTailwind: s.exportTailwind,
   })));
   const counts = {
     color: colors, typography, shadow: shadows, string: strings, composition: compositions,
@@ -118,8 +119,8 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
           <button onClick={() => useNavRequest.getState().ask("git")} className={headerButton} title="Pull from the repository and push what is waiting"><GitBranch size={11} /> Repo sync</button>
           <button onClick={() => setFrameworkOpen(true)} className={headerButton}><Layers size={11} /> Add a framework</button>
           <button onClick={() => setShowImport(!showImport)} className={headerButton}><Upload size={11} /> Import</button>
-          <button onClick={() => downloadText("tokens.json", exportTokens())} className={headerButton}><Download size={11} /> JSON</button>
-          <button onClick={() => downloadText("tokens.css", exportCSS())} className={headerButton}><Download size={11} /> CSS</button>
+          <button onClick={() => downloadText("tokens.json", exportTokens(useDesignSystemStore.getState()))} className={headerButton}><Download size={11} /> JSON</button>
+          <button onClick={() => downloadText("tokens.css", exportCss(useDesignSystemStore.getState()))} className={headerButton}><Download size={11} /> CSS</button>
           <button onClick={() => downloadText("tailwind.config.js", exportTailwind())} className={headerButton}><Download size={11} /> Tailwind</button>
         </div>
 
@@ -163,7 +164,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
 
               <div className="flex-1 overflow-hidden flex flex-col">
                 <KindPane key={`${activeSet.id}:${kind}:${adding}`} kind={kind} set={activeSet} sets={sets} addOnOpen={adding > 0} />
-                {showImport && <ImportPanel onClose={() => setShowImport(false)} />}
+                {showImport && <ImportPanel onClose={() => setShowImport(false)} setId={activeSet?.id} />}
               </div>
             </>
           ) : (

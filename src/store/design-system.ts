@@ -243,8 +243,6 @@ interface DesignSystemStore {
     shadows?: ShadowToken[];
   }) => void;
 
-  exportTokens: () => string;
-  exportCSS: () => string;
   exportTailwind: () => string;
   importFromJSON: (json: string) => { imported: number; errors: string[] };
 }
@@ -777,97 +775,6 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           radii: data.radii ?? s.radii,
           shadows: data.shadows ?? s.shadows,
         })),
-
-      exportTokens: () => {
-        const { colors, typography, spacing, radii, shadows } = get();
-        const tokens: Record<string, unknown> = {
-          color: {},
-          typography: {},
-          spacing: {},
-          borderRadius: {},
-          shadow: {},
-        };
-
-        for (const c of colors) {
-          const group = tokens.color as Record<string, Record<string, Record<string, string>>>;
-          if (!group[c.group]) group[c.group] = {};
-          // A color that is another token is written as a reference to it (`{color.gray.gray-50}`).
-          const active = get().sets.find((st) => st.id === c.setId)?.activeThemeId ?? "";
-          const target = c.themeAlias?.[active] ? targetOf(colors, c, c.themeAlias[active]) : undefined;
-          group[c.group][c.name] = { $value: target ? `{color.${target.group}.${target.name}}` : c.value, $type: "color" };
-        }
-        for (const t of typography) {
-          (tokens.typography as Record<string, unknown>)[t.name] = {
-            $type: "typography",
-            $value: { fontFamily: t.fontFamily, fontSize: `${t.fontSize}px`, fontWeight: t.fontWeight, lineHeight: `${t.lineHeight}px` },
-          };
-        }
-        for (const sp of spacing) {
-          (tokens.spacing as Record<string, unknown>)[sp.name] = { $value: `${sp.value}px`, $type: "dimension" };
-        }
-        for (const r of radii) {
-          (tokens.borderRadius as Record<string, unknown>)[r.name] = {
-            $value: r.value === 9999 ? "50%" : `${r.value}px`, $type: "dimension",
-          };
-        }
-        for (const sh of shadows) {
-          (tokens.shadow as Record<string, unknown>)[sh.name] = {
-            $type: "shadow",
-            $value: { x: sh.x, y: sh.y, blur: sh.blur, spread: sh.spread, color: sh.color },
-          };
-        }
-        const { numbers, strings } = get();
-        if (numbers.length) {
-          const group: Record<string, unknown> = {};
-          for (const n of numbers) group[n.name] = n.unit ? { $value: `${n.value}${n.unit}`, $type: "dimension" } : { $value: n.value, $type: "number" };
-          tokens.number = group;
-        }
-        if (strings.length) {
-          const group: Record<string, unknown> = {};
-          for (const t of strings) group[t.name] = t.use === "font-family" ? { $value: t.value, $type: "fontFamily" } : { $value: t.value, $type: "string" };
-          tokens.string = group;
-        }
-        const data = composeData(get());
-        const { compositions } = get();
-        if (compositions.length) {
-          const group: Record<string, unknown> = {};
-          const dtcg = (name: string) => name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-          for (const c of compositions) {
-            const v = resolve(c, data);
-            if (c.kind === "typography") {
-              group[c.name] = { $type: "typography", $value: Object.fromEntries(Object.entries(v).map(([k, x]) => [dtcg(k), x])) };
-            } else if (c.kind === "shadow") {
-              group[c.name] = { $type: "shadow", $value: { x: v.x ?? "0px", y: v.y ?? "0px", blur: v.blur ?? "0px", spread: v.spread ?? "0px", color: v.color ?? "#00000040", ...(c.inset ? { inset: true } : {}) } };
-            } else {
-              // A custom composition is a group of the tokens it is made of.
-              group[c.name] = Object.fromEntries(c.slots.filter((x) => v[x.name] !== undefined).map((x) => [x.name, { $value: v[x.name], $type: x.type === "number" ? (x.unit ? "dimension" : "number") : x.type === "color" ? "color" : "string" }]));
-            }
-          }
-          tokens.composition = group;
-        }
-        return JSON.stringify(tokens, null, 2);
-      },
-
-      exportCSS: () => {
-        const { colors, spacing, radii, shadows } = get();
-        const lines: string[] = [":root {"];
-        for (const c of colors) {
-          const active = get().sets.find((st) => st.id === c.setId)?.activeThemeId ?? "";
-          const target = c.themeAlias?.[active] ? targetOf(colors, c, c.themeAlias[active]) : undefined;
-          lines.push(`  --color-${toKebab(c.name)}: ${target ? `var(--color-${toKebab(target.name)})` : c.value};`);
-        }
-        for (const sp of spacing) lines.push(`  --spacing-${toKebab(sp.name.replace(/^space-/, ""))}: ${sp.value}px;`);
-        for (const r of radii) lines.push(`  --radius-${toKebab(r.name.replace(/^radius-/, ""))}: ${r.value === 9999 ? "9999px" : `${r.value}px`};`);
-        for (const sh of shadows) lines.push(`  --shadow-${toKebab(sh.name.replace(/^shadow-/, ""))}: ${sh.x}px ${sh.y}px ${sh.blur}px ${sh.spread}px ${sh.color};`);
-        for (const n of get().numbers) lines.push(`  --${toKebab(n.name)}: ${n.value}${n.unit};`);
-        for (const t of get().strings) lines.push(`  --${toKebab(t.name)}: ${t.value};`);
-        for (const c of get().compositions) {
-          if (c.kind === "shadow") { lines.push(`  --shadow-${toKebab(c.name.replace(/^shadow-/, ""))}: ${previewStyle(c, composeData(get())).boxShadow};`); continue; }
-          for (const [slotName, text] of Object.entries(resolve(c, composeData(get())))) lines.push(`  --${toKebab(c.name)}-${slotName}: ${text};`);
-        }
-        lines.push("}");
-        return lines.join("\n");
-      },
 
       exportTailwind: () => {
         const { colors, spacing, radii } = get();
