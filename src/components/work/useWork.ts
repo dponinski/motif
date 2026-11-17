@@ -13,7 +13,7 @@ import { useDesignSystemStore } from "@/store/design-system";
 import { errorMessage, useCanSend, useGitHost } from "@/components/git/hooks";
 import { useReadRepository } from "@/components/stage/useReadRepository";
 import { changedFiles, editLog, useEditStore, type Base } from "@/store/edit";
-import { NO_CONNECTION, useGitStore, type GitConnection } from "@/store/git";
+import { NO_CONNECTION, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
 import { useLibraryStore } from "@/store/library";
 import { usePullStatus } from "@/store/pull";
 import { useWorkRuntime } from "@/store/work";
@@ -46,10 +46,10 @@ export async function findStale(host: { readText: (path: string, ref: string) =>
 // Gives up the edits to some files, and the components made here that they were.
 export function discardChanges(paths: string[]) {
   // Token files that are given up are no longer what Motif's tokens were written to: they are waiting again.
-  const link = useGitStore.getState().tokenLink;
+  const link = stylesheetLink(useGitStore.getState().tokenLink);
   if (link?.staged && paths.some((p) => link.staged!.paths.includes(p))) useGitStore.getState().setTokenLink({ ...link, staged: null });
   // A rename whose files are given up isn't staged any more (Motif's token keeps the new name until it is renamed back).
-  const after = useGitStore.getState().tokenLink;
+  const after = stylesheetLink(useGitStore.getState().tokenLink);
   if (after?.renamed) {
     const kept = Object.fromEntries(Object.entries(after.renamed).filter(([, r]) => !r.paths.some((p) => paths.includes(p))));
     if (Object.keys(kept).length !== Object.keys(after.renamed).length) useGitStore.getState().setTokenLink({ ...after, renamed: Object.keys(kept).length ? kept : undefined });
@@ -79,7 +79,7 @@ export function useWorkActions() {
       // The component being worked on stays open: it is read from the repository now, with the same changes in it.
       const open = useLibraryStore.getState().activeId;
       // Which tokens the pull request changed, while the editor still holds its changes.
-      const link = useGitStore.getState().tokenLink;
+      const link = stylesheetLink(useGitStore.getState().tokenLink);
       let touched: string[] = [];
       if (link && link.repo === `${conn.owner}/${conn.repo}`) {
         try {
@@ -99,7 +99,7 @@ export function useWorkActions() {
       setWork(null);
       runtime().set({ refreshed: null, note: "", error: null, notice: `Pull request #${work.pr?.number} was merged. The repository has your changes now.` });
       await readRepository();
-      const current = useGitStore.getState().tokenLink;
+      const current = stylesheetLink(useGitStore.getState().tokenLink);
       if (current && link && current.repo === link.repo) {
         let merged = {} as Awaited<ReturnType<typeof readRepoState>>["snapshot"]["doc"];
         if (touched.length > 0) merged = await readRepoState(host, current.repo, current.branch).then((r) => r.snapshot.doc).catch(() => ({}));
@@ -136,7 +136,7 @@ export function useWorkActions() {
       runtime().set({ syncing: true, error: null, notice: null, tokenNote: null });
       try {
         // Token changes made in Motif become file changes first, so they go in the same commit as everything else.
-        const link = useGitStore.getState().tokenLink;
+        const link = stylesheetLink(useGitStore.getState().tokenLink);
         if (link && link.branch === conn.defaultBranch && waitingTokenChanges(link, tokenSlices()).length > 0) {
           const set = useDesignSystemStore.getState().sets.find((x) => x.id === link.setId);
           if (set) {
@@ -205,7 +205,7 @@ export function useWorkActions() {
 
 // Token changes in Motif that aren't in the editor's files yet (no request: see lib/work/tokens.ts).
 export function useTokenChanges() {
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const colors = useDesignSystemStore((s) => s.colors);
   const spacing = useDesignSystemStore((s) => s.spacing);
   const radii = useDesignSystemStore((s) => s.radii);

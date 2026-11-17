@@ -4,7 +4,7 @@ import { statusOf, suggest, type TokenIndex } from "@/lib/edit/tokens";
 import type { ClassGroup } from "@/lib/edit/classes";
 import { cssName } from "@/lib/token-sync/doc";
 import { useDesignSystemStore } from "@/store/design-system";
-import { useGitStore } from "@/store/git";
+import { stylesheetLink, useGitStore } from "@/store/git";
 import { editTokens } from "@/store/token-history";
 import type { SaveToken } from "./TokenField";
 
@@ -15,7 +15,7 @@ const MAKE: Partial<Record<string, Exclude<MakeKind, "shadow">>> = { color: "col
 // the repository's tokens are linked to, and then the element uses the token. Null when the value is one that is already a token or
 // a step of the scale, or not one that can be.
 export function useSaveToken(repo: string, index: TokenIndex): (group: ClassGroup, value: string | null, apply: (value: string) => void) => SaveToken | null {
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const linked = link && link.repo === repo ? link : null;
   return useCallback((group, value, apply) => {
     const kind = group.role ? MAKE[group.role] : undefined;

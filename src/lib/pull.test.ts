@@ -4,7 +4,7 @@ import { memoryReader } from "./repo-scan";
 import { loadFixture } from "./repo-scan/fixtures";
 import { finishPull, pullRepository } from "./pull";
 import { emptyTokenData, useDesignSystemStore } from "../store/design-system";
-import { useGitStore, type GitConnection } from "../store/git";
+import { stylesheetLink, useGitStore, type GitConnection } from "../store/git";
 import { useLibraryStore } from "../store/library";
 
 const CSS = "src/styles/motif.css";
@@ -13,6 +13,7 @@ const host = (files: Record<string, string>, sha = "sha-1"): GitHost & RepoReade
 
 const ds = () => useDesignSystemStore.getState();
 const git = () => useGitStore.getState();
+const sheetLink = () => stylesheetLink(git().tokenLink);
 const color = (name: string) => ds().colors.find((c) => (c.repoName ?? c.name) === name)!;
 const light = () => ds().sets[0].themes[0].id;
 
@@ -32,8 +33,8 @@ describe("the first pull of a repository", () => {
     // The set every project starts with is the repository's, not left empty beside another.
     expect(ds().sets).toHaveLength(1);
     expect(ds().sets[0].name).toBe("acme/ds");
-    expect(git().tokenLink).toMatchObject({ repo: "acme/ds", branch: "main", setId: ds().sets[0].id });
-    expect(Object.keys(git().tokenLink!.themes)).toEqual(expect.arrayContaining(["light", "dark"]));
+    expect(sheetLink()).toMatchObject({ repo: "acme/ds", branch: "main", setId: ds().sets[0].id });
+    expect(Object.keys(sheetLink()!.themes)).toEqual(expect.arrayContaining(["light", "dark"]));
     expect(color("primary").themeValues[light()]).toBe("#3e55df");
     expect(git().pulledSha).toBe("sha-1");
     expect(out.notes.join(" ")).toMatch(/tokens brought in/);
@@ -44,14 +45,14 @@ describe("the first pull of a repository", () => {
     await pullRepository(host(files), connection);
     expect(ds().sets).toHaveLength(2);
     expect(ds().colors.some((c) => c.name === "mine" && c.setId === ds().sets[0].id)).toBe(true);
-    expect(git().tokenLink!.setId).toBe(ds().sets[1].id);
+    expect(sheetLink()!.setId).toBe(ds().sets[1].id);
   });
 
   it("links the set that has tokens when the repository has none, to be sent with the first push", async () => {
     const bare = { "package.json": '{"dependencies":{"react":"^19.0.0"}}', "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" };
     ds().addColor({ name: "brand", value: "#1d4ed8", group: "base", setId: ds().sets[0].id });
     await pullRepository(host(bare), connection);
-    const link = git().tokenLink!;
+    const link = sheetLink()!;
     expect(link.setId).toBe(ds().sets[0].id);
     expect(link.base).toEqual({});
     expect(Object.keys(link.themes)).toHaveLength(ds().sets[0].themes.length);
@@ -60,7 +61,7 @@ describe("the first pull of a repository", () => {
   it("links the first set even when it is empty, so the first token made is usable", async () => {
     const bare = { "package.json": '{"dependencies":{"react":"^19.0.0"}}', "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" };
     await pullRepository(host(bare), connection);
-    expect(git().tokenLink!.setId).toBe(ds().sets[0].id);
+    expect(sheetLink()!.setId).toBe(ds().sets[0].id);
   });
 });
 
@@ -129,7 +130,7 @@ describe("a theme deleted here that the repository has", () => {
     expect(out.notes.join(" ")).toMatch(/1 theme brought back: Dark/);
     const back = themeOf("Dark")!;
     expect(back).toBeDefined();
-    expect(git().tokenLink!.themes.dark).toBe(back.id);
+    expect(sheetLink()!.themes.dark).toBe(back.id);
     // The repository's own values, not a copy of the light theme's.
     expect(color("background").themeValues[back.id]).toBe(before);
     expect(color("background").themeValues[back.id]).not.toBe(color("background").themeValues[light()]);
@@ -151,7 +152,7 @@ describe("a theme deleted here that the repository has", () => {
     const out = await pullRepository(host(files, "sha-2"), connection);
     expect(out.analysis.tokens.some((t) => t.name === "background")).toBe(true);
     // Nothing is waiting to be sent for it.
-    const link = git().tokenLink!;
+    const link = sheetLink()!;
     expect(link.staged ?? null).toBeNull();
   });
 });

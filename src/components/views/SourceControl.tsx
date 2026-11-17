@@ -13,7 +13,7 @@ import { overlayOf, overlayReader } from "@/lib/work/overlay";
 import { stageFiles } from "@/lib/work/stage";
 import { plan, statusOf, type Changed } from "@/lib/work/sync";
 import { changedFiles, useEditStore, type ChangedFile } from "@/store/edit";
-import { NO_CONNECTION, repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { isDtcgLink, NO_CONNECTION, repoSlug, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
 import { useAccount } from "@/store/account";
 import { useDesignSystemStore } from "@/store/design-system";
 import { usePullStatus } from "@/store/pull";
@@ -125,7 +125,7 @@ function AddToken({ connection }: { connection: GitConnection }) {
 // this is only for putting them in the pull request before that (a framework added next is planned on top of them).
 function ExportTokens({ connection, onDone }: { connection: GitConnection; onDone: (text: string) => void }) {
   const host = useGitHost(connection);
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const sets = useDesignSystemStore((s) => s.sets);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,7 +231,9 @@ function Details({ connection, onOpenReport }: { connection: GitConnection; onOp
 export default function SourceControl({ onOpenReport }: { onOpenReport: () => void }) {
   const connection = useGitStore((s) => s.connection);
   const work = useGitStore((s) => s.work ?? null);
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
+  // The tokens are design tokens files, for every set.
+  const filesDir = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink.dir || "the top of the repository" : null));
   const analysis = useGitStore((s) => s.analysis);
   const history = useEditStore((s) => s.history);
   const index = useEditStore((s) => s.index);
@@ -376,6 +378,9 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
         </div>
       )}
 
+      {filesDir !== null && (
+        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Motif&apos;s own token changes aren&apos;t sent to the repository yet.</p>
+      )}
       {link && link.repo === slug && (
         <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link>Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository.</p>
       )}

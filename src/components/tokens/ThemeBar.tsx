@@ -6,7 +6,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenSet, type TokenTheme } from "@/store/design-system";
-import { useGitStore } from "@/store/git";
+import { stylesheetLink, useGitStore } from "@/store/git";
 import { editTokens } from "@/store/token-history";
 import { targetOf } from "@/lib/tokens/alias-colors";
 import ConfirmDelete from "./ConfirmDelete";
@@ -57,8 +57,8 @@ function NameField({ initial, label, taken, onDone, onCancel }: { initial: strin
 // Where a theme is in the repository, when the set is the one that is synced with it: the repository's name for it (`dark`), or nothing when
 // it is Motif's own (it goes into the repository at the next Push). Null when the set isn't synced.
 function useRepoTheme(set: TokenSet, theme: TokenTheme): { key: string | null } | null {
-  const synced = useGitStore((s) => !!s.tokenLink && s.tokenLink.setId === set.id);
-  const key = useGitStore((s) => (s.tokenLink && s.tokenLink.setId === set.id ? Object.entries(s.tokenLink.themes).find(([, id]) => id === theme.id)?.[0] ?? null : null));
+  const synced = useGitStore((s) => stylesheetLink(s.tokenLink)?.setId === set.id);
+  const key = useGitStore((s) => (stylesheetLink(s.tokenLink)?.setId === set.id ? Object.entries(stylesheetLink(s.tokenLink)!.themes).find(([, id]) => id === theme.id)?.[0] ?? null : null));
   return synced ? { key } : null;
 }
 

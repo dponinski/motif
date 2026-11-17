@@ -10,7 +10,7 @@ import { applyChanges, parseEdit, previewChanges, signatureOf, type Row } from "
 import { addProposedTokens, parseTokenProposal, targetFor } from "@/lib/ai/tokens";
 import { useDesignSystemStore } from "@/store/design-system";
 import { useEditStore } from "@/store/edit";
-import { useGitStore } from "@/store/git";
+import { stylesheetLink, useGitStore } from "@/store/git";
 import { useAIStore, type AIMessage } from "@/store/ai";
 import { useChatSource } from "./chat-source";
 
@@ -134,7 +134,7 @@ export function EditProposal({ message }: { message: AIMessage }) {
 export function TokenProposal({ message }: { message: AIMessage }) {
   const setOutcome = useAIStore((s) => s.setOutcome);
   const ds = useDesignSystemStore();
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const parsed = useMemo(() => parseTokenProposal(message.structured), [message.structured]);
   const target = useMemo(() => targetFor(ds.sets, link), [ds.sets, link]);
   const preview = useMemo(() => (parsed && target ? addProposedTokens(ds, parsed.proposal, target) : null), [parsed, target, ds]);

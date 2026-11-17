@@ -12,7 +12,7 @@ import type { RepoToken } from "@/lib/repo-scan/types";
 import { aliasTarget } from "@/lib/tokens/alias";
 import { EMPTY_INDEX, buildTokenIndex, type TokenIndex } from "@/lib/edit/tokens";
 import { useDesignSystemStore } from "@/store/design-system";
-import { useGitStore } from "@/store/git";
+import { stylesheetLink, useGitStore } from "@/store/git";
 import type { LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
@@ -73,7 +73,7 @@ export function useSrcdoc(enabled: boolean, key: string, source: LibrarySource, 
 
 // What Motif has changed in its tokens since the last sync, as CSS for a preview, when the user has it switched on.
 export function useTokenOverrides(repo: string | null): { css: string; changed: string[]; shown: string; theme: string } {
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const motifTokens = usePreviewStore((s) => s.motifTokens);
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
   const analysis = useGitStore((s) => s.analysis);
@@ -117,7 +117,7 @@ export function componentGraph(host: Host, reader: Parameters<typeof buildGraph>
 // preview shows, so a swatch and the component it is used in never disagree.
 export function useTokenIndex(repo: string | null): TokenIndex {
   const analysis = useGitStore((s) => s.analysis);
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const motifTokens = usePreviewStore((s) => s.motifTokens);
   const { colors, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
   return useMemo(() => {

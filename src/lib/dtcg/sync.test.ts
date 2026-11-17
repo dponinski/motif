@@ -127,7 +127,7 @@ describe("what changed in the files", () => {
 });
 
 describe("a sync of Motif and a repository of design tokens files", () => {
-  const link = (base: DtcgFiles): DtcgLink => ({ repo: "acme/ds", branch: "main", dir: "src/tokens", files: "per-set", output: "src/styles/tokens.css", tailwind: true, base, syncedAt: 1 });
+  const link = (base: DtcgFiles): DtcgLink => ({ format: "dtcg", repo: "acme/ds", branch: "main", dir: "src/tokens", files: "per-set", output: "src/styles/tokens.css", tailwind: true, base, syncedAt: 1 });
 
   it("has nothing to do when both are as they were", () => {
     const model = fixture();

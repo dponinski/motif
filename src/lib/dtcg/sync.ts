@@ -189,6 +189,8 @@ function show(text: string): string {
 
 // The connection between Motif's tokens and a repository whose tokens are design tokens files: every set, in the files the config describes.
 export interface DtcgLink {
+  // What tells this link from the link of a repository whose tokens are in its stylesheets.
+  format: "dtcg";
   repo: string;
   branch: string;
   // Where the files are and how they are laid out (also in tokens.config.json).

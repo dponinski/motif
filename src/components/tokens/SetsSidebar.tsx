@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, Pencil, Plus, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { detachedBy } from "@/lib/tokens/alias-colors";
 import { useDesignSystemStore, type TokenSet } from "@/store/design-system";
-import { useGitStore } from "@/store/git";
+import { stylesheetLink, useGitStore } from "@/store/git";
 import { editTokens } from "@/store/token-history";
 import ConfirmDelete from "./ConfirmDelete";
 
@@ -36,7 +36,7 @@ export default function SetsSidebar({
   const { createSet, renameSet, setSetDescription, moveSet, deleteSet } = useDesignSystemStore(
     useShallow((s) => ({ createSet: s.createSet, renameSet: s.renameSet, setSetDescription: s.setSetDescription, moveSet: s.moveSet, deleteSet: s.deleteSet }))
   );
-  const linkedSetId = useGitStore((s) => s.tokenLink?.setId ?? null);
+  const linkedSetId = useGitStore((s) => stylesheetLink(s.tokenLink)?.setId ?? null);
 
   const [addingSet, setAddingSet] = useState(false);
   const [newSetName, setNewSetName] = useState("");

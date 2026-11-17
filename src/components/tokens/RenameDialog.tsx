@@ -14,7 +14,7 @@ import { editScope } from "@/components/work/useWork";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
 import { useDesignSystemStore, type TokenKind } from "@/store/design-system";
 import { useEditStore } from "@/store/edit";
-import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
+import { repoSlug, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
 import { editTokens } from "@/store/token-history";
 import type { Row } from "./rows";
 
@@ -30,7 +30,7 @@ export default function RenameDialog(props: { row: Row | null; kind: TokenKind; 
 
 function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null; kind: TokenKind; taken: string[]; onClose: () => void; connection: GitConnection }) {
   const host = useGitHost(connection);
-  const link = useGitStore((s) => s.tokenLink);
+  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
   const analysis = useGitStore((s) => s.analysis);
   const [to, setTo] = useState(row?.name ?? "");
   const [phase, setPhase] = useState<"name" | "reading" | "plan" | "adding">("name");
@@ -73,7 +73,7 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
       editTokens(() => useDesignSystemStore.getState().renameRepoToken(kind, row.id, names.to));
       // The rename is among the changes now, so the tokens waiting to sync are the ones that changed besides it (without this, the old
       // name reads as removed and the new one as added).
-      const latest = useGitStore.getState().tokenLink;
+      const latest = stylesheetLink(useGitStore.getState().tokenLink);
       if (latest && latest.repo === link.repo) {
         // A rename of a token that was renamed before goes from the first name.
         const earlier = Object.entries(latest.renamed ?? {}).find(([, r]) => r.to === token.name);
