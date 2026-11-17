@@ -13,6 +13,8 @@ export interface WriteOptions {
   dir?: string;
   output?: string;
   tailwind?: boolean;
+  // The selector of each theme when it isn't `.<key>` (`[data-theme="dark"]`), by theme key.
+  selectors?: Record<string, string>;
 }
 
 export interface Written {
@@ -120,7 +122,7 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
     const ext = common(t.setId, t.group, {
       ...(t.name !== path[path.length - 1] && !placeOf(t.repoName) ? { name: t.name } : {}),
       ...(t.repoName !== undefined && !placeOf(t.repoName) ? { repoName: t.repoName } : {}),
-      ...(ns === "" && t.use ? { use: t.use } : {}),
+      ...((ns === "" || (placeOf(t.repoName) && t.type !== "color")) && t.use ? { use: t.use } : {}),
     });
 
     if (t.type === "color") {
@@ -221,7 +223,7 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
       themes: (themesOfSet.get(s.id) ?? []).map((t) => ({ key: t.key, name: t.name })),
     })),
   };
-  for (const s of config.sets) for (const t of s.themes.slice(1)) config.selectors[t.key] ??= `.${t.key}`;
+  for (const s of config.sets) for (const t of s.themes.slice(1)) config.selectors[t.key] ??= options.selectors?.[t.key] ?? `.${t.key}`;
 
   const files: DtcgFiles = {};
   // Every base file is there, even when a set has no tokens yet (the config says it exists).
