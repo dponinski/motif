@@ -193,7 +193,7 @@ export function convertTokens(input: ConvertInput): Conversion | null {
   for (const key of themes.slice(1)) selectors[key] = selectorOf(key) ?? `.${key}`;
   const data: StoredTokenData = {
     tokensVersion: TOKENS_VERSION,
-    sets: [{ id: setId, name: input.name, themes: themes.map((key) => ({ id: themeIds[key], name: themeLabel(key), ...(slug(themeLabel(key)) !== key ? { repoKey: key } : {}) })), activeThemeId: themeIds[base] }],
+    sets: [{ id: setId, name: input.name, repoKey: "tokens", themes: themes.map((key) => ({ id: themeIds[key], name: themeLabel(key), ...(slug(themeLabel(key)) !== key ? { repoKey: key } : {}) })), activeThemeId: themeIds[base] }],
     tokens,
     compositions,
     components: [],
