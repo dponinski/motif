@@ -46,3 +46,22 @@ repository by a sync: a token deleted in Motif is brought back (`restored`), as 
 - `planDtcgExport(host, analysis, branch, model)`: a repository with no tokens: the files, the stylesheet, `style-dictionary.config.mjs`, the
   `tokens:build` script and dependency in `package.json`, and the stylesheet imported after Tailwind's. A config the repository wrote itself is
   left alone (and said so).
+
+## Converting a repository's stylesheets
+
+A repository whose tokens are variables in its stylesheets is read as design tokens files without touching the repository (`convert.ts`),
+and the first Push is what makes them real (`convert-edit.ts`).
+
+- **What becomes a token.** Colors, lengths in px or rem, and shadows, declared in `:root` (and the selector of each other theme: `.dark`,
+  `[data-theme="dark"]`) or in `@theme`. A variable of a rule is a token of the top level of the files, so `--primary` is written back as
+  `--primary`; a variable of `@theme` named by a Tailwind namespace (`--color-brand`, `--spacing-18`) is that token in that group, so the
+  classes Tailwind makes from it stay. A color that is another variable is a reference.
+- **What stays in the stylesheet.** Everything else: `@theme inline` aliases (`--color-primary: var(--primary)`; `inline` is what makes them
+  follow a theme, so they are not moved), anything with `calc()` or `color-mix()`, fonts, a variable inside `@media` or `@layer`, in a
+  selector that isn't the base or its theme's, a shadow in a rule, and a name that is also the group of other tokens (`--radius` and
+  `--radius-lg`). Each is listed with why.
+- **The first Push** adds the files, the config, the Style Dictionary config and script, and the generated stylesheet to its pull request, takes
+  the converted declarations out of the stylesheets (a rule or `@theme` that is left empty goes too) and imports the generated stylesheet
+  after the Tailwind import (or after the imports a plain stylesheet starts with).
+- **The check** reads the stylesheets as they will be, the generated one included, and compares every variable in every theme as it is
+  resolved: colors as colors, lengths in px, shadows layer by layer, aliases followed. `41 variables, all identical`, or the ones that differ.

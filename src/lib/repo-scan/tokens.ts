@@ -42,8 +42,8 @@ function kindOf(name: string, value: string): RepoTokenKind {
   return isColorValue(value) ? "color" : "other";
 }
 
-function put(acc: TokenAccumulator, token: { name: string; theme: string; value: string; file: string; line: number; container: TokenContainer; tailwind?: string | null; kind?: RepoTokenKind; path?: string[]; inExtend?: boolean }) {
-  const location: TokenLocation = { file: token.file, line: token.line, container: token.container, ...(token.path ? { path: token.path, inExtend: !!token.inExtend } : {}) };
+function put(acc: TokenAccumulator, token: { name: string; theme: string; value: string; file: string; line: number; container: TokenContainer; selector?: string; within?: string; tailwind?: string | null; kind?: RepoTokenKind; path?: string[]; inExtend?: boolean }) {
+  const location: TokenLocation = { file: token.file, line: token.line, container: token.container, ...(token.selector !== undefined ? { selector: token.selector } : {}), ...(token.within ? { within: token.within } : {}), ...(token.path ? { path: token.path, inExtend: !!token.inExtend } : {}) };
   const existing = acc.tokens.get(token.name);
   if (existing) {
     existing.values[token.theme] = token.value;
@@ -109,10 +109,13 @@ export async function scanCss(files: TokenFile[], acc: TokenAccumulator, warning
       let inTheme = false;
       let darkMedia = false;
       let selectorTheme: string | null | undefined;
+      let selector: string | undefined;
+      let within: string | undefined;
       for (let node = decl.parent as PostcssNode | undefined; node; node = node.parent) {
         if (node.type === "atrule" && node.name === "theme") inTheme = true;
-        else if (node.type === "atrule" && node.name === "media" && /prefers-color-scheme:\s*dark/.test(node.params ?? "")) darkMedia = true;
-        else if (node.type === "rule" && selectorTheme === undefined) selectorTheme = themeOfSelector(node.selector ?? "");
+        else if (node.type === "atrule" && node.name === "media" && /prefers-color-scheme:\s*dark/.test(node.params ?? "")) { darkMedia = true; within ??= "media"; }
+        else if (node.type === "atrule") within ??= node.name;
+        else if (node.type === "rule" && selectorTheme === undefined) { selectorTheme = themeOfSelector(node.selector ?? ""); selector = (node.selector ?? "").replace(/\s+/g, " ").trim(); }
       }
 
       if (inTheme) {
@@ -122,7 +125,7 @@ export async function scanCss(files: TokenFile[], acc: TokenAccumulator, warning
         return;
       }
       if (!selectorTheme) return;
-      put(acc, { name, theme: darkMedia && selectorTheme === BASE ? "dark" : selectorTheme, value, file: file.path, line, container: "css-var" });
+      put(acc, { name, theme: darkMedia && selectorTheme === BASE ? "dark" : selectorTheme, value, file: file.path, line, container: "css-var", selector, within });
     });
   }
 }

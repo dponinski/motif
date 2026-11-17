@@ -7,6 +7,8 @@ import { generateCss } from "./generate";
 import { patchPackageJson, scaffoldFiles } from "./scaffold";
 import { fixture } from "./fixture";
 import { writeDtcg } from "./write";
+import { convertTokens } from "./convert";
+import { finalizeTokens, newAccumulator, scanCss } from "../repo-scan/tokens";
 
 // The scaffolded config, run by the real Style Dictionary over the files Motif writes, must write the stylesheet Motif writes itself.
 
@@ -83,4 +85,15 @@ describe("package.json for the build", () => {
     expect(JSON.parse(patchPackageJson("{}")!)).toEqual({ scripts: { "tokens:build": "node style-dictionary.config.mjs" }, devDependencies: { "style-dictionary": "^5.8.0" } });
     expect(patchPackageJson("nope")).toBeNull();
   });
+
+  it("writes the stylesheet of a converted repository, with the names its variables have and its themes' selectors", async () => {
+    const acc = newAccumulator();
+    await scanCss([{ path: "src/app.css", text: `:root { --radius: 0.5rem; --background: oklch(1 0 0); --card: var(--background); }\n[data-theme="dark"] { --background: oklch(0.2 0 0); }\n@theme { --color-brand: #4f46e5; --spacing-18: 4.5rem; }` }], acc, []);
+    const found = finalizeTokens(acc);
+    const conv = convertTokens({ tokens: found.tokens, themes: found.themes, tailwind: true, name: "acme", dir: "src/tokens", output: "src/styles/tokens.css" })!;
+    const css = build(conv.files);
+    expect(css).toBe(generateCss(conv.files));
+    expect(css).toContain("--background: oklch(1 0 0);");
+    expect(css).toContain('[data-theme="dark"] {');
+  }, 60000);
 });

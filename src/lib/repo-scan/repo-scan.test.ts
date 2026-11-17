@@ -59,8 +59,8 @@ describe("motif-test-system (React 19, Vite, Tailwind v4, cva)", async () => {
     const css = loadFixture("motif-test-system")["src/styles/motif.css"].split("\n");
     const lineOf = (needle: string, nth = 0) => css.flatMap((l, i) => (l.includes(needle) ? [i + 1] : []))[nth];
     expect(token(a, "primary").locations).toEqual({
-      light: { file: "src/styles/motif.css", line: lineOf("--primary: oklch(0.52"), container: "css-var" },
-      dark: { file: "src/styles/motif.css", line: lineOf("--primary: oklch(0.65"), container: "css-var" },
+      light: { file: "src/styles/motif.css", line: lineOf("--primary: oklch(0.52"), container: "css-var", selector: ":root" },
+      dark: { file: "src/styles/motif.css", line: lineOf("--primary: oklch(0.65"), container: "css-var", selector: ".dark" },
     });
     expect(token(a, "radius-lg").locations).toEqual({ light: { file: "src/styles/motif.css", line: lineOf("--radius-lg"), container: "theme" } });
     expect(lineOf("--primary: oklch(0.52")).not.toBe(lineOf("--primary: oklch(0.65"));

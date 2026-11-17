@@ -40,6 +40,9 @@ export interface TokenLocation {
   // changed in place. Absent when the value is computed (a const, a concatenation), which Motif doesn't change.
   path?: string[];
   inExtend?: boolean;
+  // A custom property in a rule: the rule's selector as written, and the at-rule it is inside of (`media`, `layer`, …) when there is one.
+  selector?: string;
+  within?: string;
 }
 
 export interface RepoToken {
