@@ -34,7 +34,24 @@ function tokensOf(tree: Obj): { path: string[]; node: Obj; group?: Flat }[] {
 
 // The files that have to be written for `planned` (the repository as the pull request will have it) to say what `merged` says: by path, with
 // their new text.
-export function patchFiles(planned: DtcgFiles, merged: DtcgFiles): DtcgFiles {
+// The tree without the token at `path`, and without the groups that leaves empty.
+function removeAt(tree: Obj, path: string[]): Obj {
+  const copy = JSON.parse(JSON.stringify(tree)) as Obj;
+  const chain: Obj[] = [copy];
+  for (const key of path.slice(0, -1)) {
+    const next = (chain[chain.length - 1] as Obj)[key];
+    if (!isObject(next)) return copy;
+    chain.push(next);
+  }
+  delete chain[chain.length - 1][path[path.length - 1]];
+  for (let i = chain.length - 1; i > 0; i--) {
+    if (Object.keys(chain[i]).some((k) => k.startsWith("$")) || Object.keys(chain[i]).length > 0) break;
+    delete chain[i - 1][path[i - 1]];
+  }
+  return copy;
+}
+
+export function patchFiles(planned: DtcgFiles, merged: DtcgFiles, options: { gone?: ReadonlySet<string> } = {}): DtcgFiles {
   const out: DtcgFiles = {};
   for (const file of Object.keys(merged).filter(isTokenFile)) {
     if (file.endsWith("tokens.config.json")) {
@@ -58,7 +75,36 @@ export function patchFiles(planned: DtcgFiles, merged: DtcgFiles): DtcgFiles {
         changed = true;
       }
     }
+    // A token that was renamed away is taken out where it was.
+    if (options.gone?.size) {
+      const wanted = new Set(tokensOf(want).map((t) => t.path.join(".")));
+      for (const { path } of tokensOf(raw)) {
+        if (options.gone.has(path.join(".")) && !wanted.has(path.join("."))) { patched = removeAt(patched as Obj, path); changed = true; }
+      }
+    }
     if (changed) out[file] = stringify(patched);
+  }
+  return out;
+}
+
+// The files as they would be with the renames made: the token at each old path is at its new one. What a rename leaves to send is the
+// rename and not a token removed and another added.
+export function applyRenames(files: DtcgFiles, renamed: Record<string, string> | undefined): DtcgFiles {
+  const pairs = Object.entries(renamed ?? {});
+  if (pairs.length === 0) return files;
+  const out: DtcgFiles = { ...files };
+  for (const file of Object.keys(files).filter(isTokenFile)) {
+    if (file.endsWith("tokens.config.json")) continue;
+    let tree = parse(files[file]);
+    let moved = false;
+    for (const [from, to] of pairs) {
+      const [a, b] = [from.split("."), to.split(".")];
+      const node = getAt(tree, a);
+      if (node === undefined || getAt(tree, b) !== undefined) continue;
+      tree = setAt(removeAt(tree, a), b, node) as Obj;
+      moved = true;
+    }
+    if (moved) out[file] = stringify(tree);
   }
   return out;
 }

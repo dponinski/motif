@@ -67,3 +67,29 @@ describe("files Motif wrote", () => {
     expect(patchFiles(planned, files)["src/tokens/semantic.dark.json"]).toBe(gone);
   });
 });
+
+describe("renames", () => {
+  const files = { "src/tokens/tokens.json": `${JSON.stringify({ color: { $type: "color", "gray-50": { $value: { colorSpace: "srgb", components: [1, 1, 1] } }, other: { $value: { colorSpace: "srgb", components: [0, 0, 0] } } } }, null, 2)}\n` };
+
+  it("moves a token to its new place", async () => {
+    const { applyRenames } = await import("./patch");
+    const tree = JSON.parse(applyRenames(files, { "color.gray-50": "color.gray-25" })["src/tokens/tokens.json"]);
+    expect(Object.keys(tree.color)).toEqual(["$type", "other", "gray-25"]);
+  });
+
+  it("is the same files without renames", async () => {
+    const { applyRenames } = await import("./patch");
+    expect(applyRenames(files, undefined)).toBe(files);
+    expect(applyRenames(files, {})).toBe(files);
+  });
+
+  it("takes a token out where it was only when it was renamed away", async () => {
+    const { patchFiles } = await import("./patch");
+    const merged = { "src/tokens/tokens.json": files["src/tokens/tokens.json"].replace('"gray-50"', '"gray-25"') };
+    const without = patchFiles(files, merged);
+    expect(JSON.parse(without["src/tokens/tokens.json"]).color).toHaveProperty("gray-50");
+    const gone = patchFiles(files, merged, { gone: new Set(["color.gray-50"]) });
+    expect(JSON.parse(gone["src/tokens/tokens.json"]).color).not.toHaveProperty("gray-50");
+    expect(JSON.parse(gone["src/tokens/tokens.json"]).color).toHaveProperty("gray-25");
+  });
+});

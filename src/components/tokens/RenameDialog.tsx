@@ -12,11 +12,13 @@ import { readMotifTokens } from "@/lib/token-sync/doc";
 import { tokenSlices } from "@/store/token-sync";
 import { editScope } from "@/components/work/useWork";
 import { errorMessage, useGitHost } from "@/components/git/hooks";
-import { useDesignSystemStore, type TokenKind } from "@/store/design-system";
+import { snapshotTokens, useDesignSystemStore, type TokenKind } from "@/store/design-system";
+import { toStored } from "@/lib/tokens/migrate";
+import { stageDtcgTokens } from "@/lib/work/dtcg-tokens";
 import { useEditStore } from "@/store/edit";
-import { repoSlug, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
+import { isDtcgLink, repoSlug, stylesheetLink, useGitStore, type GitConnection } from "@/store/git";
 import { editTokens } from "@/store/token-history";
-import type { Row } from "./rows";
+import { nameAtPlace, pathInFiles, type Row } from "./rows";
 
 const field = "rounded border border-surface-border bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
 const primary = "h-7 rounded-md bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50";
@@ -30,7 +32,10 @@ export default function RenameDialog(props: { row: Row | null; kind: TokenKind; 
 
 function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null; kind: TokenKind; taken: string[]; onClose: () => void; connection: GitConnection }) {
   const host = useGitHost(connection);
-  const link = useGitStore((s) => stylesheetLink(s.tokenLink));
+  const sheet = useGitStore((s) => stylesheetLink(s.tokenLink));
+  // The tokens are design tokens files: the files change by Motif's token being renamed, the code and the stylesheet's own lines by the plan.
+  const files = useGitStore((s) => (isDtcgLink(s.tokenLink) ? s.tokenLink : null));
+  const link = sheet ?? files;
   const analysis = useGitStore((s) => s.analysis);
   const [to, setTo] = useState(row?.name ?? "");
   const [phase, setPhase] = useState<"name" | "reading" | "plan" | "adding">("name");
@@ -38,7 +43,7 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
   const [plan, setPlan] = useState<RenamePlan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const repoName = (row?.token as { repoName?: string } | undefined)?.repoName ?? null;
+  const repoName = row?.variable ?? (row?.token as { repoName?: string } | undefined)?.repoName ?? null;
   const token = useMemo(() => analysis?.tokens.find((t) => t.name === repoName) ?? null, [analysis, repoName]);
 
   const names = token && to.trim() ? namesFor(token, to, analysis!.tokens) : null;
@@ -67,20 +72,52 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
     setPhase("adding");
     setError(null);
     try {
-      const lines = plan.places.map((p) => `- \`${p.path}\` (${p.n})`).join("\n");
-      const summary = `Rename token ${token.name} to ${names.to} (${plan.total} place${plan.total === 1 ? "" : "s"} in ${plan.places.length} file${plan.places.length === 1 ? "" : "s"})\n${lines}`;
-      if (plan.places.length > 0) await stageFiles({ host, branch: link.branch, scope: editScope(connection), files: plan.files, summary });
-      editTokens(() => useDesignSystemStore.getState().renameRepoToken(kind, row.id, names.to));
-      // The rename is among the changes now, so the tokens waiting to sync are the ones that changed besides it (without this, the old
-      // name reads as removed and the new one as added).
-      const latest = stylesheetLink(useGitStore.getState().tokenLink);
-      if (latest && latest.repo === link.repo) {
-        // A rename of a token that was renamed before goes from the first name.
-        const earlier = Object.entries(latest.renamed ?? {}).find(([, r]) => r.to === token.name);
-        const renamed = { ...latest.renamed };
-        const origin = earlier ? earlier[0] : token.name;
-        renamed[origin] = { to: names.to, paths: [...new Set([...(earlier?.[1].paths ?? []), ...Object.keys(plan.files)])] };
-        useGitStore.getState().setTokenLink({ ...latest, renamed, staged: { doc: readMotifTokens(tokenSlices(), latest), paths: [...new Set([...(latest.staged?.paths ?? []), ...Object.keys(plan.files)])] } });
+      // The stylesheet the files generate is written from them (the rename changes the files, and the stylesheet follows), not by the plan.
+      const places = files ? plan.places.filter((p) => p.path !== files.output) : plan.places;
+      const written = files ? Object.fromEntries(Object.entries(plan.files).filter(([path]) => path !== files.output)) : plan.files;
+      const lines = places.map((p) => `- \`${p.path}\` (${p.n})`).join("\n");
+      const summary = `Rename token ${token.name} to ${names.to} (${plan.total} place${plan.total === 1 ? "" : "s"} in ${places.length} file${places.length === 1 ? "" : "s"})\n${lines}`;
+      if (files) {
+        const from = pathInFiles(row.kind, row.token);
+        if (!from) throw new Error("This token isn't one that is in the design tokens files");
+        const to = from.length > 1 ? [from[0], names.to.slice(from[0].length + 1)] : [names.to];
+        if (from.length > 1 && (!names.to.startsWith(`${from[0]}-`) || to[1] === "")) throw new Error(`The name has to start with ${from[0]}-`);
+        if (places.length > 0) await stageFiles({ host, branch: link.branch, scope: editScope(connection), files: written, summary });
+        const at = nameAtPlace(row.kind, row.token, to);
+        const done = editTokens(() => useDesignSystemStore.getState().renameFileToken(row.kind, row.id, at.name, at.repoName));
+        if (!done) throw new Error("Another token of this set has that name");
+        // The old place is gone on purpose (so a sync doesn't bring it back), and the variable is called what it is now in what is still to be moved.
+        const latest = useGitStore.getState().tokenLink;
+        if (isDtcgLink(latest) && latest.repo === link.repo) {
+          const swap = (name: string) => (name === names.from ? names.to : name);
+          const next = {
+            ...latest,
+            renamed: { ...latest.renamed, [from.join(".")]: to.join(".") },
+            ...(latest.convert ? { convert: { ...latest.convert, converted: latest.convert.converted.map(swap), containers: Object.fromEntries(Object.entries(latest.convert.containers).map(([n, c]) => [swap(n), c])) } } : {}),
+          };
+          useGitStore.getState().setTokenLink(next);
+          // The files follow the rename now, as one more step of the pull request (tokens that are still variables in the stylesheets move into
+          // files with the first push, renamed).
+          if (!next.convert) {
+            const model = toStored(snapshotTokens(useDesignSystemStore.getState()));
+            const staged = await stageDtcgTokens({ host, link: next, model, overlay: overlayOf(useEditStore.getState()), scope: editScope(connection) });
+            useGitStore.getState().setTokenLink(staged.link);
+          }
+        }
+      } else {
+        if (plan.places.length > 0) await stageFiles({ host, branch: link.branch, scope: editScope(connection), files: plan.files, summary });
+        editTokens(() => useDesignSystemStore.getState().renameRepoToken(kind, row.id, names.to));
+        // The rename is among the changes now, so the tokens waiting to sync are the ones that changed besides it (without this, the old
+        // name reads as removed and the new one as added).
+        const latest = stylesheetLink(useGitStore.getState().tokenLink);
+        if (latest && latest.repo === link.repo) {
+          // A rename of a token that was renamed before goes from the first name.
+          const earlier = Object.entries(latest.renamed ?? {}).find(([, r]) => r.to === token.name);
+          const renamed = { ...latest.renamed };
+          const origin = earlier ? earlier[0] : token.name;
+          renamed[origin] = { to: names.to, paths: [...new Set([...(earlier?.[1].paths ?? []), ...Object.keys(plan.files)])] };
+          useGitStore.getState().setTokenLink({ ...latest, renamed, staged: { doc: readMotifTokens(tokenSlices(), latest), paths: [...new Set([...(latest.staged?.paths ?? []), ...Object.keys(plan.files)])] } });
+        }
       }
       // What the scan says follows the rename, so the new name isn't taken for a token the repository doesn't have.
       const current = useGitStore.getState().analysis;
