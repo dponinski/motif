@@ -75,6 +75,8 @@ const check = (name, ok, detail = "") => {
   // ── Build more, sync again: same pull request, another commit ────────────
   if (!(await stage.locator(".card").count())) await page.locator("aside button[title*='src/components/Card.tsx']").first().click();
   await stage.locator(".card").waitFor({ timeout: 60000 }).catch(async () => { await page.screenshot({ path: `${OUT}/sync-debug.png` }); throw new Error("the Card component didn't show"); });
+  // (The first push also changed the tokens' stylesheet that the preview imports, so the preview was loaded again: the element is picked again.)
+  if (!(await aside().locator("[data-styles-in]").count())) await stage.locator(".card").first().click();
   await aside().locator("[data-styles-in]").waitFor({ timeout: 30000 });
   await field("Padding").selectOption("space-2").catch(async () => {
     await aside().locator('[data-raw="p"]').getByRole("button", { name: /Use space-4 for Padding/ }).click();

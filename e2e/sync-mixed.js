@@ -72,10 +72,10 @@ const check = (name, ok, detail = "") => {
   check("one pull request, with one commit holding the component and the token change", repo.prs.length === 1 && repo.commitLog.length === 1, JSON.stringify(repo.commitLog.map((c) => c.message)));
   const tree = gh.files(repo.prs[0].head);
   const changed = [...tree].filter(([p, t]) => t !== gh.files("main").get(p)).map(([p]) => p).sort().join();
-  check("the files are the component's and the tokens file", changed === "package.json,src/components/Card.css,src/components/Card.tsx,src/index.ts,src/styles/tokens.css", changed);
-  check("the token is changed in the tokens file", /--primary:\s*#ff0000/i.test(tree.get("src/styles/tokens.css")), tree.get("src/styles/tokens.css"));
+  check("the files are the component's, and the tokens moved into files (their repository keeps them in a stylesheet)", changed === "package.json,src/components/Card.css,src/components/Card.tsx,src/index.ts,src/styles/motif-tokens.css,src/styles/tokens.css,src/tokens/tokens.config.json,src/tokens/tokens.json,style-dictionary.config.mjs", changed);
+  check("the token is changed in the files and in the stylesheet they generate", /--primary:\s*#ff0000/i.test(tree.get("src/styles/motif-tokens.css")) && !!JSON.parse(tree.get("src/tokens/tokens.json")).primary && !/--primary:/.test(tree.get("src/styles/tokens.css")), tree.get("src/styles/motif-tokens.css"));
   const body = repo.prs[0].body;
-  check("the description has both steps", body.includes("- Create the Card component") && body.includes("- Update 1 design token from Motif") && body.includes("  - `primary`"), body.slice(0, 500));
+  check("the description has both steps", body.includes("- Create the Card component") && /- Move \d+ design tokens? from the stylesheets into design tokens files/.test(body) && body.includes("  - `primary`") && /Check: \d+ variables, all identical/.test(body), body.slice(0, 500));
 
   // Merged: the token badge goes, the link moves on.
   gh.merge(1);
@@ -84,7 +84,7 @@ const check = (name, ok, detail = "") => {
   check("when merged, nothing is left to send", await settle(async () => (await status()).includes("Nothing to sync")), await status());
   await page.waitForTimeout(1800);
   const link = await page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].repo.tokenLink);
-  check("the link has moved on to the merged tokens, with nothing staged", link.staged === null && link.base.primary.values.default === "#ff0000", JSON.stringify(link.base.primary));
+  check("the link has moved on to the merged files, with nothing staged", link.format === "dtcg" && link.staged === null && !link.convert && /ff0000|1,\s*0,\s*0/.test(link.base["src/tokens/tokens.json"]), Object.keys(link.base).join());
   await openSourceControl(page);
   await page.getByRole("button", { name: "Pull", exact: true }).click();
   check("pulling says the two sides agree", await page.locator("[data-pull-notice]").getByText("Up to date.").waitFor({ timeout: 30000 }).then(() => true, () => false));
