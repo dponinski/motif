@@ -31,7 +31,8 @@ describe("pasted CSS", () => {
   it("reads the tokens the way a repository's are read, with the dark block as the dark theme", async () => {
     const r = await parsePaste(css, [L, D]);
     expect(r.format).toBe("css");
-    expect(names(r).sort()).toEqual(["background", "color-brand-500", "primary-500", "radius-lg", "radius-md", "shadow-sm", "space-4"]);
+    expect(names(r).sort()).toEqual(["background", "color-brand-500", "font-sans", "primary-500", "radius-lg", "radius-md", "shadow-sm", "space-4"]);
+    expect(find(r, "font-sans")).toMatchObject({ kind: "string", value: "Inter, sans-serif", use: "font-family" });
     expect(find(r, "primary-500")).toMatchObject({ kind: "color", values: { L: "#6366f1", D: "#818cf8" } });
     expect(find(r, "background")).toMatchObject({ kind: "color", values: { L: "oklch(1 0 0)", D: "oklch(0.145 0 0)" } });
     expect(find(r, "radius-md")).toMatchObject({ kind: "radius", value: 8 });
@@ -42,7 +43,6 @@ describe("pasted CSS", () => {
   it("says what it left out and why", async () => {
     const r = await parsePaste(css, [L, D]);
     expect(r.notes.join("\n")).toMatch(/border: refers to .*, which isn't a color/);
-    expect(r.notes.join("\n")).toMatch(/font-sans/);
   });
 
   it("puts a theme the set doesn't have in the notes", async () => {
@@ -83,9 +83,9 @@ describe("pasted W3C tokens", () => {
   });
 
   it("says what it can't keep", async () => {
-    const r = await parsePaste(JSON.stringify({ font: { body: { $value: "Inter", $type: "fontFamily" } }, c: { $value: "#fff", $type: "color" } }), [L]);
+    const r = await parsePaste(JSON.stringify({ t: { $value: "1s", $type: "duration" }, c: { $value: "#fff", $type: "color" } }), [L]);
     expect(names(r)).toEqual(["c"]);
-    expect(r.notes.join("\n")).toMatch(/fontFamily/);
+    expect(r.notes.join("\n")).toMatch(/duration/);
   });
 
   it("falls back to reading text that only looks like JSON as CSS", async () => {
@@ -130,7 +130,7 @@ describe("pasted lines", () => {
   });
 
   it("ignores comments and blank lines, and numbers the problems by line", async () => {
-    const r = await parsePaste("// colors\n\nprimary #6366f1 // main\n  \nnot a token at all\nsecondary: nope", [L]);
+    const r = await parsePaste("// colors\n\nprimary #6366f1 // main\n  \nnot a token at all\nsecondary: var(--nope)", [L]);
     expect(names(r)).toEqual(["primary"]);
     expect(r.notes).toHaveLength(2);
     expect(r.notes[0]).toMatch(/^Line 5:/);
@@ -161,5 +161,83 @@ describe("pasted aliases", () => {
     expect(find(r, "foreground")).toMatchObject({ values: { L: "#111827" }, aliases: { L: "gray-900" } });
     expect(names(r)).toEqual(["foreground"]);
     expect(r.notes.join(" ")).toMatch(/lost: refers to nowhere/);
+  });
+});
+
+describe("numbers and strings", () => {
+  it("keeps a font size, a weight, a line height and a ratio as the numbers they were written as", async () => {
+    const r = await parsePaste("font-size-lg: 1.125rem\nfont-weight-bold: 700\nline-height-tight: 1.25\nletter-spacing-wide: 0.05em\nscale-ratio: 1.2", [L]);
+    expect(find(r, "font-size-lg")).toMatchObject({ kind: "number", value: 1.125, unit: "rem", use: "font-size" });
+    expect(find(r, "font-weight-bold")).toMatchObject({ kind: "number", value: 700, unit: "", use: "font-weight" });
+    expect(find(r, "line-height-tight")).toMatchObject({ kind: "number", value: 1.25, unit: "", use: "line-height" });
+    expect(find(r, "letter-spacing-wide")).toMatchObject({ kind: "number", value: 0.05, unit: "em", use: "letter-spacing" });
+    expect(find(r, "scale-ratio")).toMatchObject({ kind: "number", value: 1.2, unit: "" });
+    expect(r.notes).toEqual([]);
+  });
+
+  it("still takes a length with no such name as a spacing or a radius, in pixels", async () => {
+    const r = await parsePaste("space-4: 1rem\ngap: 8\nradius-md: 6px", [L]);
+    expect(find(r, "space-4")).toMatchObject({ kind: "spacing", value: 16 });
+    expect(find(r, "gap")).toMatchObject({ kind: "spacing", value: 8 });
+    expect(find(r, "radius-md")).toMatchObject({ kind: "radius", value: 6 });
+  });
+
+  it("takes em and percentages, which aren't pixels, as numbers", async () => {
+    const r = await parsePaste("indent: 2em\nwidth-half: 50%", [L]);
+    expect(find(r, "indent")).toMatchObject({ kind: "number", value: 2, unit: "em" });
+    expect(find(r, "width-half")).toMatchObject({ kind: "number", value: 50, unit: "%" });
+  });
+
+  it("takes text as a string, and a font family as one used as a font family", async () => {
+    const r = await parsePaste("font-sans: Inter, system-ui, sans-serif\nlabel-save: Save changes\nfamily-mono: ui-monospace", [L]);
+    expect(find(r, "font-sans")).toMatchObject({ kind: "string", value: "Inter, system-ui, sans-serif", use: "font-family" });
+    expect(find(r, "label-save")).toMatchObject({ kind: "string", value: "Save changes" });
+    expect(find(r, "label-save")).not.toHaveProperty("use");
+    expect(find(r, "family-mono")).toMatchObject({ kind: "string", use: "font-family" });
+  });
+
+  it("still leaves out a value that refers to another token, and says so", async () => {
+    const r = await parsePaste("font-body: var(--font-sans)", [L]);
+    expect(r.drafts).toEqual([]);
+    expect(r.notes.join("\n")).toMatch(/refers to another token/);
+  });
+
+  it("reads them from CSS: the font and text variables of a Tailwind theme", async () => {
+    const r = await parsePaste("@theme { --font-sans: Inter, sans-serif; --text-lg: 1.125rem; --font-weight-bold: 700; --leading-tight: 1.25; --tracking-wide: 0.025em; }", [L]);
+    expect(find(r, "font-sans")).toMatchObject({ kind: "string", use: "font-family", value: "Inter, sans-serif" });
+    expect(find(r, "text-lg")).toMatchObject({ kind: "number", value: 1.125, unit: "rem", use: "font-size" });
+    expect(find(r, "font-weight-bold")).toMatchObject({ kind: "number", value: 700, use: "font-weight" });
+    expect(find(r, "leading-tight")).toMatchObject({ kind: "number", value: 1.25, use: "line-height" });
+    expect(find(r, "tracking-wide")).toMatchObject({ kind: "number", value: 0.025, unit: "em", use: "letter-spacing" });
+  });
+
+  it("reads them from a design tokens file: font families, weights, numbers and dimensions as objects", async () => {
+    const r = await parsePaste(JSON.stringify({
+      font: { sans: { $value: ["Inter", "sans-serif"], $type: "fontFamily" }, "weight-bold": { $value: 700, $type: "fontWeight" } },
+      ratio: { $value: 1.25, $type: "number" },
+      "font-size-lg": { $value: { value: 1.125, unit: "rem" }, $type: "dimension" },
+      pad: { $value: { value: 16, unit: "px" }, $type: "dimension" },
+    }), [L]);
+    expect(find(r, "font-sans")).toMatchObject({ kind: "string", value: "Inter, sans-serif", use: "font-family" });
+    expect(find(r, "font-weight-bold")).toMatchObject({ kind: "number", value: 700, use: "font-weight" });
+    expect(find(r, "ratio")).toMatchObject({ kind: "number", value: 1.25, unit: "" });
+    expect(find(r, "font-size-lg")).toMatchObject({ kind: "number", value: 1.125, unit: "rem", use: "font-size" });
+    expect(find(r, "pad")).toMatchObject({ kind: "spacing", value: 16 });
+  });
+
+  it("reads a color written as an object, from its hex or its sRGB channels", async () => {
+    const r = await parsePaste(JSON.stringify({
+      a: { $value: { colorSpace: "srgb", components: [1, 0, 0], hex: "#ff0000" }, $type: "color" },
+      b: { $value: { colorSpace: "srgb", components: [0, 0, 1] }, $type: "color" },
+    }), [L]);
+    expect(find(r, "a")).toMatchObject({ kind: "color", values: { L: "#ff0000" } });
+    expect(find(r, "b")).toMatchObject({ kind: "color", values: { L: "#0000ff" } });
+  });
+
+  it("reads what Motif's own JSON export writes: the number and string groups", async () => {
+    const r = await parsePaste(JSON.stringify({ number: { "text-lg": { $value: "1.125rem", $type: "dimension" }, ratio: { $value: 1.25, $type: "number" } }, string: { "font-sans": { $value: "Inter", $type: "fontFamily" } } }), [L]);
+    expect(find(r, "text-lg")).toMatchObject({ kind: "number", value: 1.125, unit: "rem", use: "font-size" });
+    expect(find(r, "ratio")).toMatchObject({ kind: "number", value: 1.25 });
+    expect(find(r, "font-sans")).toMatchObject({ kind: "string", use: "font-family" });
   });
 });

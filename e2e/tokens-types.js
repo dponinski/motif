@@ -120,6 +120,37 @@ const check = (name, ok, detail = "") => {
   const bar = page.locator("[data-bulk-bar]");
   check("picked numbers can be moved to a group like any other tokens", (await bar.innerText()).includes("2 selected"));
 
+  // ── Add many: pasted text and a scale make Numbers and Strings ───────────
+  await page.keyboard.press("Escape");
+  const dialog = page.getByRole("dialog");
+  const row = (name) => dialog.locator(`[data-plan-row="${name}"]`);
+  await page.getByRole("button", { name: /Add many/ }).click();
+  await dialog.waitFor();
+  check("Add many on the Numbers tab opens on a scale of numbers", (await dialog.getByRole("tab", { name: "Scale" }).count()) === 1);
+  await dialog.getByRole("tab", { name: "Paste" }).click();
+  await dialog.getByLabel("Paste tokens").fill("font-size-xl: 1.25rem\nfont-weight-bold: 700\nfont-mono: ui-monospace, monospace\nspace-9: 36px");
+  await dialog.locator("[data-plan-row]").first().waitFor();
+  check("pasted values are given the type they have: a font size keeps its rem and says what it is used as", (await row("font-size-xl").innerText()).includes("1.25rem") && (await row("font-size-xl").innerText()).includes("font-size"), await row("font-size-xl").innerText());
+  check("a weight is a bare number, a font family a string used as a font family, a length in pixels a spacing", (await row("font-weight-bold").innerText()).includes("700 · font-weight") && (await row("font-mono").innerText()).includes("ui-monospace, monospace · font-family") && (await row("space-9").innerText()).includes("36px"));
+  await dialog.getByRole("button", { name: /^Add (\d+ tokens?|tokens)$/ }).click();
+  await dialog.waitFor({ state: "hidden" });
+  check("they are added to the tabs of their type", await settle(async () => (await tabCount("Numbers")) === 5 && (await tabCount("Strings")) === 2 && (await tabCount("Spacing")) === 1), `${await tabCount("Numbers")} ${await tabCount("Strings")} ${await tabCount("Spacing")}`);
+
+  await page.getByRole("button", { name: /Add many/ }).click();
+  await dialog.waitFor();
+  await dialog.getByRole("tab", { name: "Scale" }).click();
+  check("the scale is of numbers: a base, a unit, a ratio, a name and what it is used as", (await dialog.getByLabel("Number base").isVisible()) && (await dialog.getByLabel("Number unit").inputValue()) === "rem" && (await dialog.getByLabel("Name of the numbers").inputValue()) === "scale");
+  check("it grows by the ratio from the base, smallest first", (await row("scale-3").innerText()).includes("1rem") && (await row("scale-4").innerText()).includes("1.25rem") && (await row("scale-1").innerText()).includes("0.64rem"), await row("scale-4").innerText());
+  await dialog.getByLabel("Number used as").selectOption("font-size");
+  await dialog.getByLabel("Number unit").selectOption("em");
+  check("with the unit and use that were chosen", (await row("scale-4").innerText()).includes("1.25em · font-size"));
+  await page.screenshot({ path: `${OUT}/tokens-number-scale.png` });
+  await dialog.getByRole("button", { name: /^Add (\d+ tokens?|tokens)$/ }).click();
+  await dialog.waitFor({ state: "hidden" });
+  check("the scale is added as numbers", await settle(async () => (await tabCount("Numbers")) === 13));
+  await undo();
+  check("in one step of undo", await settle(async () => (await tabCount("Numbers")) === 5));
+
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));
   await browser.close();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { colorRamp, fromLch, radiusScale, RAMP_STEPS, spacingScale, toLch, typeScale } from "./scale";
+import { colorRamp, fromLch, numberScale, radiusScale, RAMP_STEPS, spacingScale, toLch, typeScale } from "./scale";
 import { contrastRatio } from "./contrast";
 import { normalizeColor } from "../token-sync/color";
 
@@ -124,5 +124,24 @@ describe("spacing, radius and type scales", () => {
   it("can go down less, and up less", () => {
     expect(typeScale({ below: 0, above: 1 }).map((t) => t.name)).toEqual(["text-base", "text-lg"]);
     expect(typeScale({ below: 1, above: 0, base: 14, ratio: 1.2, fontFamily: "Geist" }).map((t) => [t.name, t.fontSize, t.fontFamily])).toEqual([["text-sm", 11.5, "Geist"], ["text-base", 14, "Geist"]]);
+  });
+});
+
+describe("a scale of numbers", () => {
+  it("grows by the ratio from the base, smallest first, named by step", () => {
+    const steps = numberScale({ base: 1, ratio: 1.25, below: 2, above: 3, prefix: "text" });
+    expect(steps.map((s) => s.name)).toEqual(["text-1", "text-2", "text-3", "text-4", "text-5", "text-6"]);
+    expect(steps.map((s) => s.value)).toEqual([0.64, 0.8, 1, 1.25, 1.563, 1.953]);
+  });
+
+  it("keeps the base in the middle of the steps below and above it", () => {
+    const steps = numberScale({ base: 16, ratio: 1.5, below: 1, above: 1 });
+    expect(steps.map((s) => s.value)).toEqual([10.667, 16, 24]);
+  });
+
+  it("has defaults, and keeps the number of steps in bounds", () => {
+    expect(numberScale().map((s) => s.name)).toHaveLength(8);
+    expect(numberScale({ below: 99, above: 99 })).toHaveLength(6 + 10 + 1);
+    expect(numberScale({ below: -3, above: -3 })).toHaveLength(1);
   });
 });

@@ -6,6 +6,7 @@ import { tokenKey } from "./alias-colors";
 import type { ColorToken } from "../../store/design-system";
 import { normalizeShadow, parseLengthPx, parseShadow } from "../token-sync/values";
 import type { Draft } from "./drafts";
+import type { Unit } from "./model";
 
 // Tokens from text that was pasted: CSS custom properties (read the way a repository's are, with a `.dark` block as the dark theme),
 // a W3C design tokens file, or plain lines: `primary #6366f1`, `space-4: 16px`, or just a list of colors.
@@ -20,6 +21,22 @@ export interface Parsed {
 }
 
 const RADIUS_NAME = /radius|rounded|radii|corner/i;
+// A name that says its value is a number of its own (not a spacing, which is pixels): what it is for, when it says.
+const NUMBER_NAME = /font-?size|text-?size|^text(-|$)|line-?height|leading|font-?weight|^weight|letter-?spacing|tracking|ratio|scale|opacity|z-?index|duration|delay/i;
+const USE_OF_NAME: [RegExp, string][] = [
+  [/font-?size|text-?size|^text(-|$)/i, "font-size"], [/line-?height|leading/i, "line-height"], [/font-?weight|^weight/i, "font-weight"], [/letter-?spacing|tracking/i, "letter-spacing"],
+];
+const FONT_NAME = /font|family|typeface/i;
+const purposeOfName = (name: string): string | undefined => USE_OF_NAME.find(([re]) => re.test(name))?.[1];
+
+// A number with the unit it is written in: `1.125rem`, `1.2em`, `50%`, `600`.
+export function parseNumber(text: string): { value: number; unit: Unit } | null {
+  const m = text.trim().toLowerCase().match(/^([-+]?(?:\d+\.?\d*|\.\d+))(px|rem|em|%)?$/);
+  return m ? { value: parseFloat(m[1]), unit: (m[2] ?? "") as Unit } : null;
+}
+
+const numberDraft = (name: string, n: { value: number; unit: Unit }, use = purposeOfName(name)): Draft => ({ kind: "number", name, value: n.value, unit: n.unit, ...(use ? { use } : {}) });
+const stringDraft = (name: string, text: string, use?: string): Draft => ({ kind: "string", name, value: text.trim(), ...(use ? { use } : FONT_NAME.test(name) ? { use: "font-family" } : {}) });
 
 // What a piece of text is worth as a token: a color, a shadow, or a length.
 export function valueKind(text: string): "color" | "shadow" | "length" | null {
@@ -53,8 +70,21 @@ function draftOf(name: string, text: string, themes: ThemeRef[], themeValues?: R
   switch (valueKind(text)) {
     case "color": return { kind: "color", name, values: themeValues ?? Object.fromEntries(themes.slice(0, 1).map((t) => [t.id, text.trim()])) };
     case "shadow": return shadowDraft(name, text) ?? { reason: "isn't a shadow Motif can read" };
-    case "length": { const n = lengthOf(text)!; return { kind: RADIUS_NAME.test(name) ? "radius" : "spacing", name, value: n }; }
-    default: return { reason: /^var\(/i.test(text.trim()) ? "refers to another token (var()), which Motif keeps between colors only" : "isn't a color, a length or a shadow Motif can read" };
+    case "length": {
+      // A name that says it is a font size, a weight, a ratio keeps the number as it was written (a font size in rem stays rem).
+      const written = parseNumber(text);
+      if (written && NUMBER_NAME.test(name)) return numberDraft(name, written);
+      const n = lengthOf(text)!;
+      return { kind: RADIUS_NAME.test(name) ? "radius" : "spacing", name, value: n };
+    }
+    default: {
+      const t = text.trim();
+      if (/^var\(/i.test(t)) return { reason: "refers to another token (var()), which Motif keeps between colors only" };
+      const written = parseNumber(t);
+      if (written) return numberDraft(name, written);
+      // Anything else is text: a font family, a name, a keyword.
+      return t ? stringDraft(name, t) : { reason: "has no value" };
+    }
   }
 }
 
@@ -106,7 +136,11 @@ async function fromCss(text: string, themes: ThemeRef[], known: Known): Promise<
     // A color that is a color the set has already is a color, though the text doesn't say what the other one is.
     const aliasOfKnown = token.kind === "other" && Object.values(token.values).every((v) => { const t = aliasTarget(v); return t !== null && (byName.get(t)?.kind === "color" || t in known); });
     if (!aliasOfKnown && (token.kind === "font" || token.kind === "other")) {
-      notes.push(`${token.name}: ${aliasTarget(first) !== null ? `refers to ${aliasTarget(first)}, which isn't a color in the text or this set` : token.kind === "font" ? "Motif has no font tokens yet" : "isn't a color, a length or a shadow"}`);
+      if (aliasTarget(first) !== null) { notes.push(`${token.name}: refers to ${aliasTarget(first)}, which isn't a color in the text or this set`); continue; }
+      // A font family is a string; a size, a weight or a ratio is a number; the rest is text.
+      const d = draftOf(token.name, first, themes);
+      if ("reason" in d) { notes.push(`${token.name}: ${d.reason}`); continue; }
+      drafts.push(d.kind === "string" && token.kind === "font" ? { ...d, use: "font-family" } : d);
       continue;
     }
     if (token.kind === "color" || aliasOfKnown) {
@@ -146,7 +180,19 @@ async function fromCss(text: string, themes: ThemeRef[], known: Known): Promise<
 
 // ── W3C design tokens ─────────────────────────────────────────────────────────
 
-const CATEGORY = /^(colors?|spacing|space|radius|radii|border-?radius|shadows?|dimension|sizes?)$/i;
+const CATEGORY = /^(colors?|spacing|space|radius|radii|border-?radius|shadows?|dimension|sizes?|numbers?|strings?)$/i;
+
+// The color text of a color written as an object, when it says one.
+function colorObjectText(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const o = value as { hex?: unknown; colorSpace?: unknown; components?: unknown };
+  if (typeof o.hex === "string") return o.hex;
+  if (o.colorSpace === "srgb" && Array.isArray(o.components) && o.components.length >= 3 && o.components.every((c) => typeof c === "number")) {
+    const [r, g, b] = (o.components as number[]).map((c) => Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, "0"));
+    return `#${r}${g}${b}`;
+  }
+  return null;
+}
 
 function fromJson(root: unknown, themes: ThemeRef[]): Parsed {
   const drafts: Draft[] = [];
@@ -160,14 +206,26 @@ function fromJson(root: unknown, themes: ThemeRef[]): Parsed {
       const value = (o.$value ?? o.value) as unknown;
       const parts = CATEGORY.test(path[0] ?? "") && path.length > 1 ? path.slice(1) : path;
       const name = cssName(parts.join("-"));
-      if (type === "color" || (typeof value === "string" && normalizeColor(value) !== null && type !== "dimension")) {
-        if (typeof value === "string" && normalizeColor(value) !== null) drafts.push({ kind: "color", name, values: Object.fromEntries(themes.slice(0, 1).map((t) => [t.id, value])) });
+      // A color written as an object (`{ colorSpace, components, hex }`) is read from its hex, or from its sRGB channels.
+      const colorText = typeof value === "string" ? value : colorObjectText(value);
+      if (type === "fontFamily" || type === "string") {
+        const text = Array.isArray(value) ? value.join(", ") : typeof value === "string" ? value : "";
+        if (text.trim()) drafts.push(stringDraft(name, text, type === "fontFamily" ? "font-family" : undefined)); else notes.push(`${name}: no text to keep`);
+      } else if (type === "fontWeight" || type === "number") {
+        const n = typeof value === "number" ? { value, unit: "" as Unit } : typeof value === "string" ? parseNumber(value) : null;
+        if (n) drafts.push(numberDraft(name, n, type === "fontWeight" ? "font-weight" : undefined)); else notes.push(`${name}: this isn't a number Motif can read`);
+      } else if (type === "color" || (colorText !== null && normalizeColor(colorText) !== null && type !== "dimension")) {
+        if (colorText !== null && normalizeColor(colorText) !== null) drafts.push({ kind: "color", name, values: Object.fromEntries(themes.slice(0, 1).map((t) => [t.id, colorText])) });
         else notes.push(`${name}: this color isn't written as text Motif can read`);
       } else if (type === "dimension" || type === "spacing" || type === "borderRadius" || (typeof value === "string" && lengthOf(value) !== null)) {
-        const raw = String(value).trim();
+        // A dimension can be an object too (`{ value: 16, unit: "px" }`).
+        const raw = (value && typeof value === "object" && !Array.isArray(value) && "value" in value ? `${(value as { value: unknown }).value}${(value as { unit?: unknown }).unit ?? ""}` : String(value)).trim();
+        const written = parseNumber(raw);
         // 50% is how a fully round corner is written; Motif keeps it as a very large radius.
         const n = raw === "50%" ? 9999 : typeof value === "number" ? value : lengthOf(raw);
-        if (n === null) notes.push(`${name}: Motif can only read px and rem lengths`);
+        if (written && (/^numbers?$/i.test(path[0] ?? "") || NUMBER_NAME.test(name) || NUMBER_NAME.test(path.join("-"))) && raw !== "50%") drafts.push(numberDraft(name, written));
+        else if (written && (written.unit === "em" || written.unit === "%") && raw !== "50%") drafts.push(numberDraft(name, written));
+        else if (n === null) notes.push(`${name}: Motif can only read px and rem lengths`);
         else drafts.push({ kind: RADIUS_NAME.test(path.join("-")) || type === "borderRadius" ? "radius" : "spacing", name, value: n });
       } else if (type === "shadow") {
         const text = typeof value === "string" ? value : value && typeof value === "object" && !Array.isArray(value)

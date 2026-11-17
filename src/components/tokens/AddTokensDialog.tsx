@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { applyPlan, planDrafts, type Draft, type PlanItem } from "@/lib/tokens/drafts";
 import { knownOf, parsePaste, type Parsed } from "@/lib/tokens/paste";
-import { colorRamp, RAMP_STEPS, radiusScale, spacingScale, typeScale } from "@/lib/tokens/scale";
+import { colorRamp, numberScale, RAMP_STEPS, radiusScale, spacingScale, typeScale } from "@/lib/tokens/scale";
+import { isUnit, NUMBER_USES, UNITS } from "@/lib/tokens/uses";
 import { hexOf } from "@/lib/tokens/contrast";
 import { snapshotTokens, useDesignSystemStore, type TokenKind, type TokenSet } from "@/store/design-system";
 import { editTokens } from "@/store/token-history";
@@ -16,7 +17,7 @@ import { editTokens } from "@/store/token-history";
 // Either way what adding them would do is shown first, and adding is one step of undo.
 
 type Tab = "paste" | "scale";
-type ScaleKind = "color" | "spacing" | "radius" | "typography";
+type ScaleKind = "color" | "spacing" | "radius" | "typography" | "number";
 
 const field = "rounded border border-surface-border bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
 const label = "flex flex-col gap-1 text-2xs text-text-tertiary";
@@ -45,6 +46,8 @@ function describe(d: Draft, themes: TokenSet["themes"]): React.ReactNode {
     case "spacing": case "radius": return <span className="font-mono text-2xs text-text-secondary">{d.value >= 9999 ? "full" : `${d.value}px`}</span>;
     case "shadow": return <span className="font-mono text-2xs text-text-secondary">{d.x} {d.y} {d.blur} {d.spread} {d.color}</span>;
     case "typography": return <span className="font-mono text-2xs text-text-secondary">{d.fontFamily} {d.fontSize}px / {d.lineHeight}</span>;
+    case "number": return <span className="font-mono text-2xs text-text-secondary">{d.value}{d.unit}{d.use ? ` · ${d.use}` : ""}</span>;
+    case "string": return <span className="font-mono text-2xs text-text-secondary">{d.value}{d.use ? ` · ${d.use}` : ""}</span>;
   }
 }
 
@@ -55,9 +58,11 @@ function PlanPanel({ drafts, notes, set, onDone }: { drafts: Draft[]; notes: str
   const radii = useDesignSystemStore((s) => s.radii);
   const shadows = useDesignSystemStore((s) => s.shadows);
   const typography = useDesignSystemStore((s) => s.typography);
+  const numbers = useDesignSystemStore((s) => s.numbers);
+  const strings = useDesignSystemStore((s) => s.strings);
   const plan = useMemo(
-    () => planDrafts(drafts, { ...snapshotTokens(useDesignSystemStore.getState()), colors, spacing, radii, shadows, typography }, set.id),
-    [drafts, set.id, colors, spacing, radii, shadows, typography]
+    () => planDrafts(drafts, { ...snapshotTokens(useDesignSystemStore.getState()), colors, spacing, radii, shadows, typography, numbers, strings }, set.id),
+    [drafts, set.id, colors, spacing, radii, shadows, typography, numbers, strings]
   );
   // The boxes the person has changed; the rest are ticked unless the token is there as it is.
   const [changed, setChanged] = useState<Record<string, boolean>>({});
@@ -164,6 +169,10 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
   const [size, setSize] = useState("16");
   const [ratio, setRatio] = useState(1.25);
   const [family, setFamily] = useState("Inter");
+  const [numBase, setNumBase] = useState("1");
+  const [numUnit, setNumUnit] = useState("rem");
+  const [numStem, setNumStem] = useState("scale");
+  const [numUse, setNumUse] = useState("");
 
   const light = set.themes[0];
   const darkTheme = set.themes.find((t) => t.id !== light?.id && /dark/i.test(t.name)) ?? set.themes[1];
@@ -186,15 +195,21 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
       const n = parseFloat(medium);
       if (!Number.isFinite(n) || n <= 0) { out.problem = "The medium radius is a number of px."; return out; }
       out.drafts = radiusScale(n).map((s) => ({ kind: "radius", name: s.name, value: s.value }));
+    } else if (kind === "number") {
+      const n = parseFloat(numBase);
+      if (!Number.isFinite(n) || n <= 0) { out.problem = "The base is a number above zero."; return out; }
+      const stem = (numStem.trim() || "scale").toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+      const unitOf = isUnit(numUnit) ? numUnit : "rem";
+      out.drafts = numberScale({ base: n, ratio, prefix: stem }).map((s) => ({ kind: "number", name: s.name, value: s.value, unit: unitOf, ...(numUse ? { use: numUse } : {}) }));
     } else {
       const n = parseFloat(size);
       if (!Number.isFinite(n) || n <= 0) { out.problem = "The base size is a number of px."; return out; }
       out.drafts = typeScale({ base: n, ratio, fontFamily: family.trim() || "Inter" }).map((t) => ({ kind: "typography", name: t.name, fontFamily: t.fontFamily, fontSize: t.fontSize, fontWeight: t.fontWeight, lineHeight: t.lineHeight }));
     }
     return out;
-  }, [kind, base, stem, steps, dark, darkTheme, light, unit, spaceSteps, medium, size, ratio, family]);
+  }, [kind, base, stem, steps, dark, darkTheme, light, unit, spaceSteps, medium, size, ratio, family, numBase, numUnit, numStem, numUse]);
 
-  const tabs: [ScaleKind, string][] = [["color", "Color ramp"], ["spacing", "Spacing"], ["radius", "Radius"], ["typography", "Type"]];
+  const tabs: [ScaleKind, string][] = [["color", "Color ramp"], ["number", "Numbers"], ["spacing", "Spacing"], ["radius", "Radius"], ["typography", "Type"]];
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex gap-0.5 rounded bg-surface-subtle p-0.5" role="group" aria-label="Kind of scale">
@@ -253,6 +268,23 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
           <label className={label}>Font<input aria-label="Font family" value={family} onChange={(e) => setFamily(e.target.value)} className={cn(field, "w-32")} /></label>
         </div>
       )}
+      {kind === "number" && (
+        <div className="flex flex-wrap items-end gap-3">
+          <label className={label}>Base<input aria-label="Number base" value={numBase} onChange={(e) => setNumBase(e.target.value)} className={cn(field, "w-20 font-mono")} /></label>
+          <label className={label}>Unit
+            <select aria-label="Number unit" value={numUnit} onChange={(e) => setNumUnit(e.target.value)} className={field}>{UNITS.map((u) => <option key={u.label} value={u.value}>{u.label}</option>)}</select>
+          </label>
+          <label className={label}>Ratio
+            <select aria-label="Number ratio" value={ratio} onChange={(e) => setRatio(parseFloat(e.target.value))} className={field}>
+              {RATIOS.map(([name, v]) => <option key={v} value={v}>{name}</option>)}
+            </select>
+          </label>
+          <label className={label}>Name<input aria-label="Name of the numbers" value={numStem} onChange={(e) => setNumStem(e.target.value)} className={cn(field, "w-28")} /></label>
+          <label className={label}>Used as
+            <select aria-label="Number used as" value={numUse} onChange={(e) => setNumUse(e.target.value)} className={field}>{NUMBER_USES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}</select>
+          </label>
+        </div>
+      )}
       {problem && <p className="text-xs text-red-400" data-problem>{problem}</p>}
       <PlanPanel drafts={drafts} notes={[]} set={set} onDone={onDone} />
     </div>
@@ -263,7 +295,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
 
 export default function AddTokensDialog({ open, onOpenChange, set, kind }: { open: boolean; onOpenChange: (open: boolean) => void; set: TokenSet; kind: TokenKind }) {
   const [tab, setTab] = useState<Tab>("paste");
-  const scaleKind: ScaleKind = kind === "spacing" || kind === "radius" || kind === "typography" ? kind : kind === "number" ? "spacing" : "color";
+  const scaleKind: ScaleKind = kind === "spacing" || kind === "radius" || kind === "typography" || kind === "number" ? kind : "color";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>

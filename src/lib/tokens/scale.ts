@@ -119,3 +119,18 @@ export function typeScale(options: { base?: number; ratio?: number; below?: numb
   }
   return out;
 }
+
+// ── Numbers ──────────────────────────────────────────────────────────────────
+
+export interface NumberStep { name: string; value: number }
+
+// Numbers that grow by a ratio from a base (1rem and 1.25 is a text scale): `scale-1` is the smallest, the base is in the middle of the
+// ones named, and each is rounded to three places.
+export function numberScale(options: { base?: number; ratio?: number; below?: number; above?: number; prefix?: string } = {}): NumberStep[] {
+  const { base = 1, ratio = 1.25, prefix = "scale" } = options;
+  const below = Math.min(Math.max(Math.floor(options.below ?? 2), 0), 6);
+  const above = Math.min(Math.max(Math.floor(options.above ?? 5), 0), 10);
+  const out: NumberStep[] = [];
+  for (let k = -below; k <= above; k++) out.push({ name: `${prefix}-${k + below + 1}`, value: parseFloat((base * ratio ** k).toFixed(3)) });
+  return out;
+}

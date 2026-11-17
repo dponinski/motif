@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { normalizeColor } from "../token-sync/color";
-import type { ColorToken, RadiusToken, ShadowToken, SpacingToken, TokenData, TypographyToken } from "../../store/design-system";
+import type { ColorToken, NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TokenData, TypographyToken } from "../../store/design-system";
+import type { Unit } from "./model";
 import { deriveGroup } from "./organize";
 import { detachMissing, refreshAliases } from "./alias-colors";
 
@@ -21,7 +22,10 @@ export type Draft =
   | (Base & { kind: "spacing"; value: number })
   | (Base & { kind: "radius"; value: number })
   | (Base & { kind: "shadow"; x: number; y: number; blur: number; spread: number; color: string; inset?: boolean; raw?: string })
-  | (Base & { kind: "typography"; fontFamily: string; fontSize: number; fontWeight: number; lineHeight: number });
+  | (Base & { kind: "typography"; fontFamily: string; fontSize: number; fontWeight: number; lineHeight: number })
+  // A number as it is written, with its unit (a font size in rem, a line height with none), and what it is for when the name says.
+  | (Base & { kind: "number"; value: number; unit: Unit; use?: string })
+  | (Base & { kind: "string"; value: string; use?: string });
 
 export type Status = "new" | "update" | "same";
 export type Action = "add" | "update" | "skip";
@@ -36,10 +40,10 @@ export interface PlanItem {
   name: string;
 }
 
-type Existing = ColorToken | SpacingToken | RadiusToken | ShadowToken | TypographyToken;
+type Existing = ColorToken | SpacingToken | RadiusToken | ShadowToken | TypographyToken | NumberToken | StringToken;
 
 const listOf = (state: TokenData, kind: Draft["kind"]): Existing[] =>
-  (kind === "color" ? state.colors : kind === "spacing" ? state.spacing : kind === "radius" ? state.radii : kind === "shadow" ? state.shadows : state.typography) as Existing[];
+  (kind === "color" ? state.colors : kind === "spacing" ? state.spacing : kind === "radius" ? state.radii : kind === "shadow" ? state.shadows : kind === "number" ? state.numbers : kind === "string" ? state.strings : state.typography) as Existing[];
 
 const nameOf = (t: Existing) => (t as { repoName?: string }).repoName ?? t.name;
 
@@ -55,6 +59,8 @@ function sameValue(draft: Draft, t: Existing, themeIds: string[]): boolean {
     }
     case "spacing":
     case "radius": return (t as SpacingToken).value === draft.value;
+    case "number": { const n = t as NumberToken; return n.value === draft.value && n.unit === draft.unit && (draft.use === undefined || n.use === draft.use); }
+    case "string": { const x = t as StringToken; return x.value === draft.value && (draft.use === undefined || x.use === draft.use); }
     case "shadow": { const s = t as ShadowToken; return s.x === draft.x && s.y === draft.y && s.blur === draft.blur && s.spread === draft.spread && normalizeColor(s.color) === normalizeColor(draft.color) && !!s.inset === !!draft.inset; }
     case "typography": { const y = t as TypographyToken; return y.fontFamily === draft.fontFamily && y.fontSize === draft.fontSize && y.fontWeight === draft.fontWeight && y.lineHeight === draft.lineHeight; }
   }
@@ -88,7 +94,7 @@ export function planDrafts(drafts: Draft[], state: TokenData, setId: string): Pl
 export function applyPlan(state: TokenData, setId: string, plan: PlanItem[]): TokenData {
   const set = state.sets.find((s) => s.id === setId);
   if (!set) return state;
-  const out: TokenData = { ...state, colors: [...state.colors], spacing: [...state.spacing], radii: [...state.radii], shadows: [...state.shadows], typography: [...state.typography] };
+  const out: TokenData = { ...state, colors: [...state.colors], spacing: [...state.spacing], radii: [...state.radii], shadows: [...state.shadows], typography: [...state.typography], numbers: [...state.numbers], strings: [...state.strings] };
   const colorNames = [...state.colors.filter((c) => c.setId === setId).map((c) => c.name), ...plan.filter((p) => p.action === "add" && p.draft.kind === "color").map((p) => p.name)];
 
   for (const item of plan) {
@@ -110,6 +116,8 @@ export function applyPlan(state: TokenData, setId: string, plan: PlanItem[]): To
         }
         list[at] = { ...c, themeValues, themeAlias: Object.keys(aliases).length ? aliases : undefined, value: themeValues[set.activeThemeId] ?? c.value };
       } else if (d.kind === "spacing" || d.kind === "radius") list[at] = { ...(t as SpacingToken), value: d.value };
+      else if (d.kind === "number") list[at] = { ...(t as NumberToken), value: d.value, unit: d.unit, ...(d.use !== undefined ? { use: d.use } : {}) };
+      else if (d.kind === "string") list[at] = { ...(t as StringToken), value: d.value, ...(d.use !== undefined ? { use: d.use } : {}) };
       else if (d.kind === "shadow") { const { x, y, blur, spread, color, inset, raw } = d; list[at] = { ...(t as ShadowToken), x, y, blur, spread, color, inset, raw }; }
       else { const { fontFamily, fontSize, fontWeight, lineHeight } = d; list[at] = { ...(t as TypographyToken), fontFamily, fontSize, fontWeight, lineHeight }; }
       continue;
@@ -124,6 +132,8 @@ export function applyPlan(state: TokenData, setId: string, plan: PlanItem[]): To
       out.colors.push({ id: nanoid(6), name: item.name, value: themeValues[set.activeThemeId] ?? first, group, setId, themeValues, ...(Object.keys(aliases).length ? { themeAlias: aliases } : {}) });
     } else if (d.kind === "spacing") out.spacing.push({ id: nanoid(6), name: item.name, value: d.value, group, setId });
     else if (d.kind === "radius") out.radii.push({ id: nanoid(6), name: item.name, value: d.value, group, setId });
+    else if (d.kind === "number") out.numbers.push({ id: nanoid(6), name: item.name, value: d.value, unit: d.unit, ...(d.use !== undefined ? { use: d.use } : {}), group, setId });
+    else if (d.kind === "string") out.strings.push({ id: nanoid(6), name: item.name, value: d.value, ...(d.use !== undefined ? { use: d.use } : {}), group, setId });
     else if (d.kind === "shadow") out.shadows.push({ id: nanoid(6), name: item.name, x: d.x, y: d.y, blur: d.blur, spread: d.spread, color: d.color, group, setId, inset: d.inset, raw: d.raw });
     else out.typography.push({ id: nanoid(6), name: item.name, fontFamily: d.fontFamily, fontSize: d.fontSize, fontWeight: d.fontWeight, lineHeight: d.lineHeight, group, setId });
   }
