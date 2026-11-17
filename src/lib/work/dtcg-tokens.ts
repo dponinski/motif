@@ -136,7 +136,6 @@ async function convertExport(input: { host: GitHost & RepoReader; link: DtcgLink
   }
 
   const exported = await planDtcgExport(oh, state.analysis, link.branch, model, { files: link.files, selectors: convert.selectors, output: link.output, skipImport: true });
-  const generated = exported.files[exported.link.output].text;
 
   const wanted = new Set(convert.converted);
   const paths = new Set<string>(state.analysis.tailwindEntry ? [state.analysis.tailwindEntry] : []);
@@ -146,7 +145,9 @@ async function convertExport(input: { host: GitHost & RepoReader; link: DtcgLink
     const file = await oh.getFile(path, link.branch);
     if (file) sheets.push({ path, text: file.text, sha: file.sha });
   }
-  const edit = await editStylesheets({ sheets, conversion: convert, entry: state.analysis.tailwindEntry ?? null, tailwind: exported.link.tailwind, output: exported.link.output, generated });
+  // The check is of the conversion: the stylesheet the repository's own values come to, not one with what Motif changed since (those are the
+  // token changes listed above it).
+  const edit = await editStylesheets({ sheets, conversion: convert, entry: state.analysis.tailwindEntry ?? null, tailwind: exported.link.tailwind, output: exported.link.output, generated: generateCss(link.base) });
 
   const notes = [
     `Check: ${describeCheck(edit.check)}`,

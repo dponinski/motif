@@ -294,6 +294,17 @@ describe("the first push of a repository whose tokens are variables in its style
     expect(waitingDtcgChanges(r.link, model)).toEqual([]);
   });
 
+  it("checks the conversion, not what Motif changed since: an edited token doesn't make the check fail", async () => {
+    const { repo, link, model } = await pulled();
+    const primary = model.tokens.find((t) => t.name === "primary")!;
+    const edited = { ...model, tokens: model.tokens.map((t) => (t.id === primary.id ? { ...t, values: Object.fromEntries(Object.keys(t.values).map((k) => [k, "#ff0000"])), value: "#ff0000" } : t)) };
+    const r = await stage(repo, link, edited);
+    expect(r.attention).toBeNull();
+    const step = useEditStore.getState().history[useEditStore.getState().index].summary ?? "";
+    expect(step).toMatch(/Check: \d+ variables, all identical/);
+    expect(edits()["src/tokens.css"]).toContain("--primary: #ff0000;");
+  });
+
   it("holds off when the stylesheets changed since they were pulled", async () => {
     const { repo, link, model } = await pulled();
     repo.files["src/app.css"] = APP_CSS.replace("oklch(0.205 0 0)", "oklch(0.3 0 0)");
