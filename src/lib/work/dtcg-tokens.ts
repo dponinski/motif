@@ -29,9 +29,9 @@ export interface DtcgStageResult {
 // last merged state).
 export function waitingDtcgChanges(link: DtcgLink | null, model: StoredTokenData): DtcgChange[] {
   if (!link) return [];
-  // Tokens still in the stylesheets: what is waiting is all of them, going into files.
-  const from = link.staged?.files ?? (link.convert ? {} : link.base);
-  return describeDtcgChanges(from, writeDtcg(model, writeOptionsOf(link)).files);
+  // (Tokens still in the stylesheets are not waiting: moving them into files goes with the next push, whatever it is for, or with "Add to pull
+  // request"; what is waiting is what Motif changed besides.)
+  return describeDtcgChanges(link.staged?.files ?? link.base, writeDtcg(model, writeOptionsOf(link)).files);
 }
 
 const MAX_LISTED = 60;

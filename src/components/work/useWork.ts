@@ -163,7 +163,8 @@ export function useWorkActions() {
           }
         }
         const dtcg = useGitStore.getState().tokenLink;
-        if (isDtcgLink(dtcg) && dtcg.branch === conn.defaultBranch && waitingDtcgChanges(dtcg, currentModel()).length > 0) {
+        // (Tokens that are still variables in the stylesheets move into files with the first push, whatever it is for.)
+        if (isDtcgLink(dtcg) && dtcg.branch === conn.defaultBranch && (waitingDtcgChanges(dtcg, currentModel()).length > 0 || (!!dtcg.convert && !dtcg.staged))) {
           try {
             const staged = await stageDtcgTokens({ host, link: dtcg, model: currentModel(), overlay: overlayOf(useEditStore.getState()), scope: editScope(conn) });
             useGitStore.getState().setTokenLink(staged.link);
