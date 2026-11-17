@@ -54,8 +54,14 @@ export function dtcgOverrides(link: Pick<DtcgLink, "dir" | "files" | "output" | 
     }
   }
   const order = [...bySelector.keys()].sort((a, b) => Number(b === ":root") - Number(a === ":root"));
+  // The base theme's rule must not outrank the others' (a repository's `.dark` beats its `:root` by coming later), so it only applies where no
+  // other theme does.
+  const others = Object.values(selectorsOf(mine) ?? {});
+  const scoped = (selector: string) => (selector === ":root"
+    ? `html:root${others.length ? `:not(${others.join(", ")})` : ""}`
+    : selector.split(",").map((s) => `html${s.trim()}`).join(", "));
   return {
-    css: order.map((selector) => `${selector} {\n${bySelector.get(selector)!.join("\n")}\n}`).join("\n"),
+    css: order.map((selector) => `${scoped(selector)} {\n${bySelector.get(selector)!.join("\n")}\n}`).join("\n"),
     changed: [...changed],
     theme: link.tailwind && fresh.length ? `@theme {\n${fresh.join("\n")}\n}` : "",
   };

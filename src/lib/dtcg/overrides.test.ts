@@ -21,7 +21,7 @@ describe("what Motif changed, as CSS for a preview", () => {
   it("puts a changed base color under :root, with the variable the files generate", () => {
     const { model, link } = linked();
     const out = dtcgOverrides(link, edit(model, "g50", "p-l", "#ff0000"));
-    expect(out.css).toBe(":root {\n  --color-gray-50: #ff0000;\n}");
+    expect(out.css).toBe("html:root:not(.dark) {\n  --color-gray-50: #ff0000;\n}");
     expect(out.changed).toEqual(["color-gray-50"]);
     expect(out.theme).toBe("");
   });
@@ -29,7 +29,7 @@ describe("what Motif changed, as CSS for a preview", () => {
   it("puts a change of another theme under that theme's selector", () => {
     const { model, link } = linked();
     const out = dtcgOverrides(link, edit(model, "g50", "p-d", "#000000"));
-    expect(out.css).toBe(".dark {\n  --color-gray-50: #000000;\n}");
+    expect(out.css).toBe("html.dark {\n  --color-gray-50: #000000;\n}");
   });
 
   it("follows the tokens that are that token", () => {
@@ -51,6 +51,6 @@ describe("what Motif changed, as CSS for a preview", () => {
     const { model } = linked();
     const out = dtcgOverrides({ ...OPTS, base: {} }, model);
     expect(out.changed).toContain("color-gray-50");
-    expect(out.css.startsWith(":root {")).toBe(true);
+    expect(out.css.startsWith("html:root")).toBe(true);
   });
 });
