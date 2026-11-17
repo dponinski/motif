@@ -30,6 +30,12 @@ function rich(): TokenData {
       { id: "h1", name: "card", x: 0, y: 1, blur: 3, spread: 0, color: "rgba(0,0,0,0.1)", group: "default", setId: "set-a", repoName: "shadow-card" },
       { id: "h2", name: "inner", x: 0, y: 2, blur: 4, spread: -1, color: "#00000020", group: "inner", setId: "set-a", inset: true, raw: "inset 0 2px 4px -1px #00000020, 0 1px 0 #fff" },
     ],
+    numbers: [
+      { id: "n1", name: "ratio", value: 1.25, unit: "", setId: "set-a" },
+      { id: "n2", name: "text-lg", value: 1.125, unit: "rem", use: "font-size", group: "type", setId: "set-a", repoName: "text-lg" },
+      { id: "n3", name: "gap-rem", value: 2, unit: "rem", use: "spacing", setId: "set-b" },
+    ],
+    strings: [{ id: "g1", name: "font-sans", value: "Inter, sans-serif", use: "font-family", group: "type", setId: "set-a" }, { id: "g2", name: "label", value: "Save", setId: "set-b" }],
     components: [{ id: "k1", name: "Button", category: "ui", description: "", defaultProps: { label: "Hi" } }],
   };
 }
@@ -130,11 +136,16 @@ describe("migrating what a project holds", () => {
     expect(stored.compositions).toEqual([]);
   });
 
-  it("leaves out a number that isn't spacing or a radius, for the store that has no list for it yet, without failing", () => {
+  it("keeps a number that isn't spacing or a radius in pixels, and a string, in lists of their own", () => {
     const stored = toStored(rich());
-    stored.tokens.push({ id: "n1", name: "ratio", setId: "set-a", type: "number", unit: "", values: { [ALL_THEMES]: "1.25" }, use: "scale" });
-    stored.tokens.push({ id: "n2", name: "font", setId: "set-a", type: "string", values: { [ALL_THEMES]: "Inter" } });
+    expect(stored.tokens.find((t) => t.id === "n2")).toMatchObject({ type: "number", unit: "rem", use: "font-size", values: { [ALL_THEMES]: "1.125" }, repoName: "text-lg" });
+    expect(stored.tokens.find((t) => t.id === "n1")).toMatchObject({ type: "number", unit: "" });
+    expect(stored.tokens.find((t) => t.id === "g1")).toMatchObject({ type: "string", use: "font-family", values: { [ALL_THEMES]: "Inter, sans-serif" } });
     const back = fromStored(stored);
+    expect(back.numbers.map((n) => n.id)).toEqual(["n1", "n2", "n3"]);
+    expect(back.strings.map((n) => n.id)).toEqual(["g1", "g2"]);
+    // A spacing in rem isn't the pixels the repository's sync knows, so it stays a number.
+    expect(back.spacing.map((s) => s.id)).toEqual(["s1", "s2"]);
     expect(back).toEqual(rich());
   });
 });

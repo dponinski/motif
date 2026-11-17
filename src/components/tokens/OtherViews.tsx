@@ -4,7 +4,8 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
-import type { RadiusToken, ShadowToken, SpacingToken, TypographyToken } from "@/store/design-system";
+import type { NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TypographyToken } from "@/store/design-system";
+import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
 import { CommitInput, InlineName } from "./fields";
 import { Badges } from "./ColorViews";
 import type { Row } from "./rows";
@@ -38,21 +39,51 @@ function Visual({ row }: { row: Row }) {
     case "radius": return <div className="h-6 w-6 flex-shrink-0 border border-text-tertiary/40 bg-surface-subtle" style={{ borderRadius: Math.min((row.token as RadiusToken).value, 12) }} />;
     case "shadow": { const s = row.token as ShadowToken; return <div className="h-8 w-8 flex-shrink-0 rounded border border-surface-border bg-surface-base" style={{ boxShadow: s.raw ?? `${s.inset ? "inset " : ""}${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${s.color}` }} />; }
     case "typography": { const t = row.token as TypographyToken; return <span className="w-24 flex-shrink-0 truncate text-text-primary" style={{ fontFamily: t.fontFamily, fontSize: Math.min(18, t.fontSize), fontWeight: t.fontWeight, lineHeight: 1.2 }}>Aa Quick fox</span>; }
+    case "number": { const n = row.token as NumberToken; return <span className="w-16 flex-shrink-0 truncate rounded bg-surface-subtle px-1.5 py-0.5 text-center font-mono text-2xs text-text-secondary" aria-hidden>{n.value}{n.unit}</span>; }
+    case "string": { const x = row.token as StringToken; return <span className="w-16 flex-shrink-0 truncate text-center text-text-primary" style={x.use === "font-family" ? { fontFamily: x.value } : undefined} aria-hidden>Aa</span>; }
     default: return null;
   }
 }
 
+const selectClass = "rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
+
 function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const set = (patch: Record<string, unknown>) => ctx.act.update(row, patch);
-  const num = (key: string, value: number, label: string, unit?: string) => (
+  // `exact` shows the number as it is (a Number has the digits its author gave it); pixels are shown to two places.
+  const num = (key: string, value: number, label: string, unit?: string, exact = false) => (
     <label className="flex items-center gap-1 text-2xs text-text-tertiary">
-      <CommitInput value={px(value)} label={`${label} of ${row.name}`} mono frame className="w-14 text-right" invalidHint="A number" onCommit={(t) => { const n = number(t); if (n === null) return false; set({ [key]: n }); return true; }} />
+      <CommitInput value={exact ? String(value) : px(value)} label={`${label} of ${row.name}`} mono frame className="w-14 text-right" invalidHint="A number" onCommit={(t) => { const n = number(t); if (n === null) return false; set({ [key]: n }); return true; }} />
       {unit}
     </label>
   );
   switch (row.kind) {
     case "spacing": { const v = (row.token as SpacingToken).value; return <>{num("value", v, "Value", "px")}<span className="w-14 text-2xs tabular-nums text-text-tertiary">{px(v / 16)}rem</span></>; }
     case "radius": { const v = (row.token as RadiusToken).value; return <>{num("value", v, "Value", "px")}{v >= 9999 && <span className="text-2xs text-text-tertiary">full</span>}</>; }
+    case "number": {
+      const n = row.token as NumberToken;
+      return (
+        <>
+          {num("value", n.value, "Value", undefined, true)}
+          <select aria-label={`Unit of ${row.name}`} value={n.unit} onChange={(e) => { if (isUnit(e.target.value)) set({ unit: e.target.value }); }} className={selectClass}>
+            {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </select>
+          <select aria-label={`Used as of ${row.name}`} value={n.use ?? ""} onChange={(e) => set({ use: e.target.value || undefined })} className={selectClass}>
+            {NUMBER_USES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </select>
+        </>
+      );
+    }
+    case "string": {
+      const x = row.token as StringToken;
+      return (
+        <>
+          <CommitInput value={x.value} label={`Value of ${row.name}`} frame className="w-56" invalidHint="Can't be empty" onCommit={(t) => { if (!t.trim()) return false; set({ value: t.trim() }); return true; }} />
+          <select aria-label={`Used as of ${row.name}`} value={x.use ?? ""} onChange={(e) => set({ use: e.target.value || undefined })} className={selectClass}>
+            {STRING_USES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+          </select>
+        </>
+      );
+    }
     default: return null;
   }
 }

@@ -86,7 +86,7 @@ export function CommitInput({ value, onCommit, label, className, mono, frame, in
 }
 
 // The row of fields that adds a token: Enter adds it and the row stays for the next one, with the name already suggested.
-export interface AddField { key: string; label: string; placeholder: string; width?: string; mono?: boolean; validate?: (v: string) => boolean }
+export interface AddField { key: string; label: string; placeholder: string; width?: string; mono?: boolean; validate?: (v: string) => boolean; options?: { value: string; label: string }[] }
 
 export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
   fields: AddField[];
@@ -119,7 +119,18 @@ export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
 
   return (
     <div className="flex items-center gap-2 border-y border-accent/30 bg-accent/5 px-4 py-1.5" data-add-row>
-      {fields.map((f) => (
+      {fields.map((f) => f.options ? (
+        <select
+          key={f.key}
+          aria-label={f.label}
+          value={values[f.key] ?? ""}
+          onChange={(e) => set(f.key, e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+          className={cn("rounded border border-surface-border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent", f.width ?? "w-28")}
+        >
+          {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      ) : (
         <input
           key={f.key}
           ref={(el) => { refs.set(f.key, el); }}

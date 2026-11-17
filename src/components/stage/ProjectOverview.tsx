@@ -28,7 +28,7 @@ export default function ProjectOverview() {
   const source = useLibraryStore((s) => s.source);
   const components = useLibraryStore((s) => s.components);
   const setActive = useLibraryStore((s) => s.setActive);
-  const tokens = useDesignSystemStore((s) => s.colors.length + s.typography.length + s.spacing.length + s.radii.length + s.shadows.length);
+  const tokens = useDesignSystemStore((s) => s.colors.length + s.typography.length + s.spacing.length + s.radii.length + s.shadows.length + s.numbers.length + s.strings.length);
   const { busy, error } = useReadStatus();
   const read = useReadRepository();
   const host = useGitHost(connection ?? NO_CONNECTION);

@@ -1,6 +1,6 @@
 import {
   emptyTokenData,
-  type ColorToken, type ComponentDefinition, type RadiusToken, type ShadowToken, type SpacingToken, type TokenData, type TokenSet, type TypographyToken,
+  type ColorToken, type ComponentDefinition, type NumberToken, type RadiusToken, type ShadowToken, type SpacingToken, type StringToken, type TokenData, type TokenSet, type TypographyToken,
 } from "../../store/design-system";
 import { tokenKey } from "./alias-colors";
 import { ALL_THEMES, TOKENS_VERSION, type Composition, type Slot, type StoredTokenData, type Token } from "./model";
@@ -37,6 +37,16 @@ const lengthToken = (t: SpacingToken | RadiusToken, use: "spacing" | "radius"): 
   values: { [ALL_THEMES]: num(t.value) }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
 });
 
+const numberToken = (t: NumberToken): Token => ({
+  id: t.id, name: t.name, setId: t.setId, ...(t.group !== undefined ? { group: t.group } : {}), type: "number", unit: t.unit, ...(t.use !== undefined ? { use: t.use } : {}),
+  values: { [ALL_THEMES]: num(t.value) }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+});
+
+const stringToken = (t: StringToken): Token => ({
+  id: t.id, name: t.name, setId: t.setId, ...(t.group !== undefined ? { group: t.group } : {}), type: "string", ...(t.use !== undefined ? { use: t.use } : {}),
+  values: { [ALL_THEMES]: t.value }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+});
+
 const slot = (name: string, type: Slot["type"], value: string, unit?: Slot["unit"]): Slot => ({ name, type, value, ...(unit !== undefined ? { unit } : {}) });
 
 const typographyComposition = (t: TypographyToken): Composition => ({
@@ -66,6 +76,8 @@ export function toStored(data: TokenData): StoredTokenData {
       ...data.colors.map((c) => colorToken(c, data.colors)),
       ...data.spacing.map((t) => lengthToken(t, "spacing")),
       ...data.radii.map((t) => lengthToken(t, "radius")),
+      ...data.numbers.map(numberToken),
+      ...data.strings.map(stringToken),
     ],
     compositions: [...data.typography.map(typographyComposition), ...data.shadows.map(shadowComposition)],
     components: data.components,
@@ -93,7 +105,9 @@ export function fromStored(data: StoredTokenData): TokenData {
     };
   });
 
-  const lengths = (use: string) => data.tokens.filter((t) => t.type === "number" && t.use === use).map((t) => ({
+  // A spacing or a radius in pixels is a token of its own kind (the repository's sync reads and writes those); any other number is a number.
+  const isLength = (t: Token, use: string) => t.type === "number" && t.use === use && t.unit === "px";
+  const lengths = (use: string) => data.tokens.filter((t) => isLength(t, use)).map((t) => ({
     id: t.id, name: t.name, value: parseFloat(t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "0") || 0, setId: t.setId,
     ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
   }));
@@ -114,8 +128,17 @@ export function fromStored(data: StoredTokenData): TokenData {
     ...(c.repoName !== undefined ? { repoName: c.repoName } : {}), ...(c.inset !== undefined ? { inset: c.inset } : {}), ...(c.raw !== undefined ? { raw: c.raw } : {}),
   }));
 
-  // (Numbers that aren't spacing or radius, strings, and the other kinds of composition have no list in the store yet.)
-  return { sets: data.sets, colors, typography, spacing: lengths("spacing"), radii: lengths("radius"), shadows, components: data.components };
+  const numbers: NumberToken[] = data.tokens.filter((t) => t.type === "number" && !isLength(t, "spacing") && !isLength(t, "radius")).map((t) => ({
+    id: t.id, name: t.name, value: parseFloat(t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "0") || 0, unit: t.unit ?? "", setId: t.setId,
+    ...(t.use !== undefined ? { use: t.use } : {}), ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+  }));
+  const strings: StringToken[] = data.tokens.filter((t) => t.type === "string").map((t) => ({
+    id: t.id, name: t.name, value: t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "", setId: t.setId,
+    ...(t.use !== undefined ? { use: t.use } : {}), ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+  }));
+
+  // (The other kinds of composition have no list in the store yet.)
+  return { sets: data.sets, colors, typography, spacing: lengths("spacing"), radii: lengths("radius"), shadows, numbers, strings, components: data.components };
 }
 
 // ── Whatever a project holds ──────────────────────────────────────────────────
@@ -140,6 +163,8 @@ export function migrateTokenData(raw: unknown): StoredTokenData {
     spacing: list<SpacingToken>(raw.spacing),
     radii: list<RadiusToken>(raw.radii),
     shadows: list<ShadowToken>(raw.shadows),
+    numbers: list<NumberToken>(raw.numbers),
+    strings: list<StringToken>(raw.strings),
     components,
   });
 }

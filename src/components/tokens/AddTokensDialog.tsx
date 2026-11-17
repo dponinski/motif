@@ -263,7 +263,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
 
 export default function AddTokensDialog({ open, onOpenChange, set, kind }: { open: boolean; onOpenChange: (open: boolean) => void; set: TokenSet; kind: TokenKind }) {
   const [tab, setTab] = useState<Tab>("paste");
-  const scaleKind: ScaleKind = kind === "spacing" || kind === "radius" || kind === "typography" ? kind : "color";
+  const scaleKind: ScaleKind = kind === "spacing" || kind === "radius" || kind === "typography" ? kind : kind === "number" ? "spacing" : "color";
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
