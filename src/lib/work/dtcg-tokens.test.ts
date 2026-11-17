@@ -6,6 +6,11 @@ import { writeDtcg } from "../dtcg/write";
 import type { DtcgLink } from "../dtcg/sync";
 import type { StoredTokenData } from "../tokens/model";
 import { useEditStore } from "../../store/edit";
+import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "../../store/design-system";
+import { useGitStore } from "../../store/git";
+import { useLibraryStore } from "../../store/library";
+import { pullRepository } from "../pull";
+import { toStored } from "../tokens/migrate";
 import { overlayOf } from "./overlay";
 import { dtcgSummary, stageDtcgTokens, waitingDtcgChanges } from "./dtcg-tokens";
 
@@ -184,5 +189,97 @@ describe("the first push of a repository that has no tokens", () => {
     const r = await stage(empty(), awaiting(), { ...fixture(), tokens: [], compositions: [] });
     expect(r.staged).toBe(0);
     expect(Object.keys(edits())).toEqual([]);
+  });
+});
+
+// ── Tokens that are variables in the repository's stylesheets ─────────────────
+
+const APP_CSS = `@import "tailwindcss";
+
+:root {
+  --radius: 0.5rem;
+  --background: oklch(1 0 0);
+  --primary: oklch(0.205 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-primary: var(--primary);
+}
+
+@theme {
+  --color-brand: #4f46e5;
+}
+
+body { background: var(--background); }
+`;
+
+describe("the first push of a repository whose tokens are variables in its stylesheets", () => {
+  const files = { "package.json": '{"name":"x","devDependencies":{"tailwindcss":"^4.0.0"},"dependencies":{"react":"^19.0.0"}}', "src/app.css": APP_CSS, "src/index.tsx": "export {};\n" };
+  const connection = { owner: "a", repo: "b", token: "t", defaultBranch: "main" };
+
+  async function pulled() {
+    const repo = repoOf(files);
+    const host = { ...repo.host, getRef: async () => "sha-1" } as unknown as GitHost & RepoReader;
+    useDesignSystemStore.setState({ ...emptyTokenData() });
+    useLibraryStore.getState().clear();
+    useGitStore.getState().load({ connection, analysis: null, tokenLink: null, work: null, pulledSha: null });
+    await pullRepository(host, connection);
+    const link = useGitStore.getState().tokenLink as DtcgLink;
+    return { repo: { ...repo, host }, link, model: toStored(snapshotTokens(useDesignSystemStore.getState())) };
+  }
+
+  beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
+
+  it("counts every token as waiting, and the pull wrote nothing to the repository", async () => {
+    const { repo, link, model } = await pulled();
+    expect(link.convert?.converted).toEqual(expect.arrayContaining(["radius", "background", "primary", "color-brand"]));
+    expect(repo.files["src/app.css"]).toBe(APP_CSS);
+    expect(waitingDtcgChanges(link, model).length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("puts the files, the generated stylesheet and the edited stylesheet in the editor as one step, with the check in its lines", async () => {
+    const { repo, link, model } = await pulled();
+    const r = await stage(repo, link, model);
+    expect(r.attention).toBeNull();
+    const e = edits();
+    expect(Object.keys(e).sort()).toEqual(expect.arrayContaining(["package.json", "src/app.css", "src/tokens/tokens.config.json", "src/tokens/tokens.json", "src/tokens/tokens.dark.json", "src/tokens.css", "style-dictionary.config.mjs"].sort()));
+    // The variables are generated now, with the names they had; the aliases Tailwind reads and the rules stay.
+    expect(e["src/tokens.css"]).toContain("--primary: oklch(0.205 0 0);");
+    expect(e["src/tokens.css"]).toMatch(/\.dark \{[^}]*--background: oklch\(0\.145 0 0\);/);
+    expect(e["src/app.css"]).toContain('@import "tailwindcss";\n@import "./tokens.css";');
+    expect(e["src/app.css"]).not.toContain("--primary: oklch");
+    expect(e["src/app.css"]).toContain("--color-primary: var(--primary);");
+    expect(e["src/app.css"]).toContain("body { background: var(--background); }");
+    const step = useEditStore.getState().history[useEditStore.getState().index].summary ?? "";
+    expect(step).toMatch(/Move \d+ design tokens? from the stylesheets into design tokens files/);
+    expect(step).toMatch(/Check: \d+ variables, all identical/);
+    // The link is what a merged pull request will make real.
+    expect(r.link.staged?.paths).toContain("src/app.css");
+    expect(r.link.convert).toBeDefined();
+    expect(waitingDtcgChanges(r.link, model)).toEqual([]);
+  });
+
+  it("holds off when the stylesheets changed since they were pulled", async () => {
+    const { repo, link, model } = await pulled();
+    repo.files["src/app.css"] = APP_CSS.replace("oklch(0.205 0 0)", "oklch(0.3 0 0)");
+    const r = await stage(repo, link, model);
+    expect(r.staged).toBe(0);
+    expect(r.attention).toMatch(/changed since they were pulled/);
+    expect(edits()).toEqual({});
+  });
+
+  it("builds on itself: a token changed after goes into the files that are in the pull request", async () => {
+    const { repo, link, model } = await pulled();
+    const first = await stage(repo, link, model);
+    const primary = model.tokens.find((t) => t.name === "primary")!;
+    const second = await stage(repo, first.link, { ...model, tokens: model.tokens.map((t) => (t.id === primary.id ? { ...t, values: Object.fromEntries(Object.keys(t.values).map((k) => [k, "#ff0000"])), value: "#ff0000" } : t)) });
+    expect(second.staged).toBe(1);
+    expect(edits()["src/tokens.css"]).toContain("--primary: #ff0000;");
+    expect(edits()["src/app.css"]).not.toContain("--primary: oklch");
   });
 });

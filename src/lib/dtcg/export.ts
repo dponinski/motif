@@ -38,12 +38,12 @@ export async function planDtcgExport(
   analysis: RepoAnalysis,
   branch: string,
   model: StoredTokenData,
-  options: { files?: "single" | "per-set" } = {}
+  options: { files?: "single" | "per-set"; selectors?: Record<string, string>; output?: string; skipImport?: boolean } = {}
 ): Promise<DtcgExport> {
   const tailwind = analysis.stack.tailwindVersion === 4;
-  const output = newTokensPath(analysis);
+  const output = options.output ?? newTokensPath(analysis);
   const dir = tokensDirFor(output);
-  const written = writeDtcg(model, { files: options.files ?? "single", dir, output, tailwind });
+  const written = writeDtcg(model, { files: options.files ?? "single", dir, output, tailwind, selectors: options.selectors });
   const notes: string[] = [];
   const files: Record<string, FileWrite> = {};
 
@@ -63,7 +63,7 @@ export async function planDtcgExport(
 
   let imported = false;
   const entry = analysis.tailwindEntry;
-  if (tailwind && entry) {
+  if (tailwind && entry && !options.skipImport) {
     const current = await host.getFile(entry, branch);
     const next = current ? addImport(current.text, relativeImport(entry, output)) : null;
     if (current && next !== null) {
