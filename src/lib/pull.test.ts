@@ -49,7 +49,8 @@ describe("the first pull of a repository", () => {
   });
 
   it("links the set that has tokens when the repository has none, to be sent with the first push", async () => {
-    const bare = { "package.json": '{"dependencies":{"react":"^19.0.0"}}', "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" };
+    // (Tailwind 3: the stylesheet sync stays; a repository with no tokens that isn't, starts with design tokens files: see pull-dtcg.test.ts.)
+    const bare = { "package.json": '{"dependencies":{"react":"^19.0.0"},"devDependencies":{"tailwindcss":"^3.4.0"}}', "tailwind.config.js": "module.exports = { content: [] };\n", "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" };
     ds().addColor({ name: "brand", value: "#1d4ed8", group: "base", setId: ds().sets[0].id });
     await pullRepository(host(bare), connection);
     const link = sheetLink()!;
@@ -59,7 +60,8 @@ describe("the first pull of a repository", () => {
   });
 
   it("links the first set even when it is empty, so the first token made is usable", async () => {
-    const bare = { "package.json": '{"dependencies":{"react":"^19.0.0"}}', "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" };
+    // (Tailwind 3: the stylesheet sync stays; a repository with no tokens that isn't, starts with design tokens files: see pull-dtcg.test.ts.)
+    const bare = { "package.json": '{"dependencies":{"react":"^19.0.0"},"devDependencies":{"tailwindcss":"^3.4.0"}}', "tailwind.config.js": "module.exports = { content: [] };\n", "src/Button.tsx": "export function Button() { return <button>Hi</button>; }\n" };
     await pullRepository(host(bare), connection);
     expect(sheetLink()!.setId).toBe(ds().sets[0].id);
   });

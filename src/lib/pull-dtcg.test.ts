@@ -54,10 +54,23 @@ describe("the first pull of a repository of design tokens files", () => {
     expect(ds().colors.map((c) => c.name)).toEqual(["mine"]);
   });
 
-  it("is a repository of stylesheets when it has no design tokens files", async () => {
+  it("waits for the first push, with every set going in as design tokens files, when it has no tokens at all", async () => {
+    ds().addColor({ name: "brand", value: "#1d4ed8", group: "base", setId: ds().sets[0].id });
     await pullRepository(host(APP), connection);
+    expect(link()).toMatchObject({ repo: "acme/ds", branch: "main", files: "single", base: {}, tailwind: false });
+    expect(link()!.output).toMatch(/tokens\.css$/);
+    expect(ds().colors.map((c) => c.name)).toEqual(["brand"]);
+  });
+
+  it("starts the same way when the repository uses Tailwind 4, and says so in the link", async () => {
+    await pullRepository(host({ ...APP, "package.json": '{"dependencies":{"react":"^19.0.0"},"devDependencies":{"tailwindcss":"^4.0.0"}}', "src/index.css": '@import "tailwindcss";\n' }), connection);
+    expect(link()).toMatchObject({ tailwind: true, base: {} });
+  });
+
+  it("keeps the stylesheet sync for a Tailwind 3 repository with no tokens", async () => {
+    await pullRepository(host({ ...APP, "package.json": '{"dependencies":{"react":"^19.0.0"},"devDependencies":{"tailwindcss":"^3.4.0"}}', "tailwind.config.js": "module.exports = { content: [] };\n" }), connection);
     expect(link()).toBeNull();
-    expect(git().tokenLink).toMatchObject({ repo: "acme/ds" });
+    expect(git().tokenLink).toMatchObject({ repo: "acme/ds", setId: ds().sets[0].id, base: {} });
   });
 });
 

@@ -2,7 +2,7 @@
 
 Motif keeps a repository's design tokens as [design tokens (DTCG 2025.10)](https://www.designtokens.org/) JSON, and builds the stylesheet from
 them with [Style Dictionary](https://styledictionary.com/). This folder is that format: what Motif writes, what it reads back, the
-stylesheet the files come to, and what a repository needs to build the same stylesheet itself. (Not wired into the app yet: see Syncing.)
+stylesheet the files come to, and what a repository needs to build the same stylesheet itself. (Pull, Push and starting an empty repository use it: see Syncing.)
 
 ```
 src/tokens/

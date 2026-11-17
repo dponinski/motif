@@ -7,7 +7,8 @@ import { planDtcgSync, resolveDtcg, takeDtcg, type DtcgLink, type DtcgPlan } fro
 import type { DtcgFiles } from "./dtcg/types";
 import { fromStored, toStored } from "./tokens/migrate";
 import { readRepoTokens } from "./token-sync/doc";
-import { healLink, linkShapeFor, planSync, themeLabel, type RepoState, type SyncPlan, type TokenLink } from "./token-sync/flow";
+import { healLink, linkShapeFor, newTokensPath, planSync, themeLabel, type RepoState, type SyncPlan, type TokenLink } from "./token-sync/flow";
+import { tokensDirFor } from "./dtcg/export";
 import { keyPrefixes } from "./token-sync/keys";
 import { snapshotTokens, useDesignSystemStore } from "../store/design-system";
 import { isDtcgLink, repoSlug, stylesheetLink, useGitStore, type GitConnection } from "../store/git";
@@ -57,7 +58,8 @@ async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection): 
   // A link to another branch than the one pull requests are made from isn't followed.
   if (stored && stored.branch !== connection.defaultBranch) return { notes: [], conflicts: null };
   const found = await readRepoTokenFiles(host, connection.defaultBranch);
-  if (!found) return { notes: stored ? ["The design tokens files aren't in the repository any more"] : [], conflicts: null };
+  // (A link that has never sent anything is waiting for the first push: there is nothing to have gone.)
+  if (!found) return { notes: stored && Object.keys(stored.base).length > 0 ? ["The design tokens files aren't in the repository any more"] : [], conflicts: null };
 
   const first: DtcgLink = { format: "dtcg", repo: slug, branch: connection.defaultBranch, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind, base: {}, syncedAt: Date.now() };
   if (!stored) {
@@ -112,7 +114,14 @@ function pullTokens(analysis: RepoAnalysis, connection: GitConnection): { notes:
     return { notes: [`${plural(total, "token")} brought in`], conflicts: null };
   }
 
-  // A repository with no tokens: the first set that has some (else the first set) is the one that goes into it, with Push.
+  // A repository with no tokens (and not Tailwind 3, which keeps its stylesheet sync): every set goes into it as design tokens files, with Push.
+  if (analysis.stack.tailwindVersion !== 3) {
+    const output = newTokensPath(analysis);
+    git.setTokenLink({ format: "dtcg", repo: slug, branch: connection.defaultBranch, dir: tokensDirFor(output), files: "single", output, tailwind: analysis.stack.tailwindVersion === 4, base: {}, syncedAt: Date.now() });
+    return { notes: [], conflicts: null };
+  }
+
+  // A Tailwind 3 repository with no tokens: the first set that has some (else the first set) is the one that goes into it, with Push.
   const has = (id: string) => [ds.colors, ds.radii, ds.spacing, ds.shadows].some((list) => list.some((t) => t.setId === id));
   const set = ds.sets.find((s) => has(s.id)) ?? ds.sets[0];
   if (!set) return { notes: [], conflicts: null };

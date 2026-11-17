@@ -60,7 +60,7 @@ const check = (name, ok, detail = "") => {
   await tokensFile.getByRole("button", { name: "Add to pull request" }).waitFor({ timeout: 20000 });
   check("adding tokens needs no commit: the button is there in the Source control panel", !(await tokensFile.getByRole("button", { name: "Add to pull request" }).isDisabled()));
   await tokensFile.getByRole("button", { name: "Add to pull request" }).click();
-  await page.getByText(/Added 2 tokens in src\/styles\/tokens\.css to your pull request/).waitFor({ timeout: 30000 });
+  await page.getByText(/Added 2 design tokens to your pull request/).waitFor({ timeout: 30000 });
   check("and says they are in the pull request, to be sent with Push", repo.writes.length === 0 && repo.prs.length === 0);
   await page.screenshot({ path: `${OUT}/empty-sync-before.png` });
 
@@ -70,7 +70,7 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("button", { name: /Add a framework/ }).click();
   await dialog.locator("[data-plan]").waitFor({ timeout: 30000 });
   const planText = await dialog.locator("[data-plan]").innerText();
-  check("the framework dialog lists the files before anything is added, including the staged tokens file", planText.includes("package.json") && planText.includes("src/styles/tailwind.css") && planText.includes("src/styles/tokens.css"), planText);
+  check("the framework dialog lists the files before anything is added, including the staged tokens file", planText.includes("package.json") && planText.includes("src/styles/tailwind.css") && planText.includes("src/styles/tokens.css") && planText.includes("src/tokens/tokens.config.json"), planText);
   check("and says Motif does not set up the bundler", planText.includes("bundler"));
   await page.screenshot({ path: `${OUT}/empty-framework.png` });
   await dialog.getByRole("button", { name: "Add to pull request" }).click();
@@ -94,9 +94,11 @@ const check = (name, ok, detail = "") => {
   check("one pull request holds the tokens and the framework", repo.prs.length === 1 && pr.base === "main" && /^motif\/changes-/.test(pr.head) && pr.title === "Changes from Motif");
   const tree = gh.files(pr.head);
   const changedFiles = [...tree].filter(([p, t]) => t !== gh.files("main").get(p)).map(([p]) => p).sort().join();
-  check("and only those files", changedFiles === "package.json,src/styles/tailwind.css,src/styles/tokens.css", changedFiles);
+  check("and only those files", changedFiles === "package.json,src/styles/tailwind.css,src/styles/tokens.css,src/tokens/tokens.config.json,src/tokens/tokens.json,style-dictionary.config.mjs", changedFiles);
   const tokens = tree.get("src/styles/tokens.css");
-  check("the tokens are variables, in the form Tailwind reads", tokens.includes(":root {") && tokens.includes("--primary: #3366ff;") && tokens.includes("--surface: #ffffff;") && tokens.includes("@theme inline") && tokens.includes("--color-primary: var(--primary)"), tokens);
+  check("the tokens are variables, in the form Tailwind reads: in @theme, named by their group", tokens.includes("@theme {") && tokens.includes("--color-primary: #3366ff;") && tokens.includes("--color-surface: #ffffff;") && !tokens.includes(":root"), tokens);
+  const files = JSON.parse(tree.get("src/tokens/tokens.json"));
+  check("and are design tokens files, with the stylesheet built from them", files.color.primary.$type === "color" && files.color.primary.$value.hex === "#3366ff" && JSON.parse(tree.get("src/tokens/tokens.config.json")).tailwind === true && tree.get("style-dictionary.config.mjs").includes("StyleDictionary"));
   const pkg = JSON.parse(tree.get("package.json"));
   check("with a package.json that has tailwindcss", pkg.devDependencies.tailwindcss === "^4.0.0" && pkg.private === true);
   check("a stylesheet that starts Tailwind and imports the tokens", tree.get("src/styles/tailwind.css") === '@import "tailwindcss";\n@import "./tokens.css";\n');

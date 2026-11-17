@@ -1,4 +1,7 @@
-import type { GitHost } from "../github";
+import type { GitHost, RepoReader } from "../github";
+import { generateCss, HEADER as DTCG_HEADER } from "../dtcg/generate";
+import { readRepoTokenFiles } from "../dtcg/repo";
+import { stringify } from "../dtcg/write";
 import { generateTokensCss } from "../token-sync/write";
 import { relativeImport, type RepoState } from "../token-sync/flow";
 import type { FileWrite } from "../token-sync/pr";
@@ -73,7 +76,7 @@ const dirOf = (p: string) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) :
 const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 
 // What adding Tailwind to this repository changes, or why it can't be done.
-export async function planTailwind(host: Pick<GitHost, "getFile">, repo: RepoState, branch: string, repoName: string): Promise<FrameworkPlan> {
+export async function planTailwind(host: Pick<GitHost, "getFile"> & Partial<Pick<RepoReader, "listTree" | "readText">>, repo: RepoState, branch: string, repoName: string): Promise<FrameworkPlan> {
   const { analysis, snapshot } = repo;
   if (analysis.stack.tailwindVersion === 4) throw new FrameworkRefusal("Tailwind CSS v4 is already set up in this repository.");
   if (analysis.stack.tailwindVersion === 3) throw new FrameworkRefusal("This repository uses Tailwind CSS v3, which Motif previews and edits as it is. Adding a framework only adds v4 to a repository with none; Motif doesn't change versions.");
@@ -95,10 +98,30 @@ export async function planTailwind(host: Pick<GitHost, "getFile">, repo: RepoSta
     summary.push({ path: "package.json", what: "new, with tailwindcss as a dev dependency" });
   }
 
+  // Design tokens files, when the tokens are those (in the repository or already in the pull request): the config says Tailwind from now on, and
+  // the stylesheet they come to is written again with the variables Tailwind builds classes from in @theme.
+  const dtcg = host.listTree && host.readText ? await readRepoTokenFiles({ listTree: host.listTree, readText: host.readText }, branch) : null;
+  let dtcgOutput: string | null = null;
+  if (dtcg) {
+    const output = dtcg.config.output;
+    const current = await host.getFile(output, branch);
+    if (current && !current.text.startsWith(DTCG_HEADER)) {
+      notes.push(`${output} isn't a file Motif's build writes, so it was left as it is. Map its variables into Tailwind's @theme to use them as utilities.`);
+    } else {
+      const configText = stringify({ ...dtcg.config, tailwind: true });
+      const config = await host.getFile(dtcg.configPath, branch);
+      files[dtcg.configPath] = { text: configText, sha: config?.sha ?? null };
+      files[output] = { text: generateCss({ ...dtcg.files, [dtcg.configPath]: configText }), sha: current?.sha ?? null };
+      summary.push({ path: dtcg.configPath, what: "now says the stylesheet is for Tailwind" });
+      summary.push({ path: output, what: "the tokens, now also given to Tailwind as theme values (@theme)" });
+      dtcgOutput = output;
+    }
+  }
+
   // Motif's own tokens file, when there is one, switched to the form Tailwind reads.
-  const tokensPath = analysis.styleFiles.find((f) => /(^|\/)(motif-)?tokens\.css$/.test(f)) ?? null;
-  let tokensImport: string | null = null;
-  if (tokensPath) {
+  const tokensPath = dtcg ? dtcgOutput : analysis.styleFiles.find((f) => /(^|\/)(motif-)?tokens\.css$/.test(f)) ?? null;
+  let tokensImport: string | null = dtcgOutput;
+  if (tokensPath && !dtcg) {
     const current = await host.getFile(tokensPath, branch);
     if (current?.text.startsWith(MOTIF_HEADER)) {
       const text = generateTokensCss(snapshot.doc, { tailwind: true, baseTheme: snapshot.baseTheme });

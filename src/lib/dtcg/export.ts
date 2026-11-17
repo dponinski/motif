@@ -58,6 +58,8 @@ export async function planDtcgExport(
   const patched = pkg ? patchPackageJson(pkg.text) : null;
   if (pkg && patched !== null && patched !== pkg.text) files["package.json"] = { text: patched, sha: pkg.sha };
   else if (pkg && patched === null) notes.push("package.json couldn't be read, so the tokens:build script and style-dictionary weren't added to it.");
+  // A repository with no package.json gets one with just what the build needs (a framework added next goes into it).
+  else if (!pkg) files["package.json"] = { text: patchPackageJson(JSON.stringify({ name: (analysis.repo ?? "").split("/").pop() || "design-system", version: "0.0.0", private: true, type: "module" }, null, 2))!, sha: null };
 
   let imported = false;
   const entry = analysis.tailwindEntry;
