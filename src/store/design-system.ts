@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { deriveGroup, uniqueName } from "@/lib/tokens/organize";
 import { darkOf } from "@/lib/tokens/theme-gen";
-import { detachMissing, refreshAliases, renameAlias, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
+import { detachMissing, moveColors, refreshAliases, renameAlias, targetOf, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
 import type { Unit } from "@/lib/tokens/model";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
@@ -144,7 +144,8 @@ interface DesignSystemStore {
   // Set management
   createSet: (name: string) => string;
   renameSet: (setId: string, name: string) => void;
-  deleteSet: (setId: string) => void;
+  // Takes the set and its tokens away. Colors of other sets that were tokens of it keep the colors they came to; says how many aliases that was.
+  deleteSet: (setId: string) => number;
 
   // Theme management
   // A new theme at the end. It starts as a copy of `from` (the open theme when not given); with `dark`, the colors that are colors of their
@@ -301,17 +302,6 @@ type Arranged = { id: string; name: string; setId: string; group?: string; repoN
 const listOf = (s: TokenData, kind: TokenKind) => s[SLICE[kind]] as unknown as Arranged[];
 const withList = (kind: TokenKind, list: Arranged[]) => ({ [SLICE[kind]]: list }) as unknown as Partial<TokenData>;
 
-// A color moved to another set keeps what it was in each theme the two sets share by name, and the active theme's value elsewhere.
-function remapThemes(c: ColorToken, from: TokenSet | undefined, to: TokenSet): Record<string, string> {
-  const out: Record<string, string> = {};
-  const fallback = (from && c.themeValues[from.activeThemeId]) ?? c.value;
-  for (const t of to.themes) {
-    const same = from?.themes.find((x) => x.name.toLowerCase() === t.name.toLowerCase());
-    out[t.id] = (same && c.themeValues[same.id]) ?? fallback;
-  }
-  return out;
-}
-
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 // Held in memory for the project that is open; the project keeps it (see store/project-session.ts).
@@ -336,17 +326,26 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       renameSet: (setId, name) =>
         set((s) => ({ sets: s.sets.map((st) => (st.id === setId ? { ...st, name } : st)) })),
 
-      deleteSet: (setId) =>
-        set((s) => ({
-          sets: s.sets.filter((st) => st.id !== setId),
-          colors: s.colors.filter((c) => c.setId !== setId),
-          typography: s.typography.filter((t) => t.setId !== setId),
-          spacing: s.spacing.filter((sp) => sp.setId !== setId),
-          radii: s.radii.filter((r) => r.setId !== setId),
-          shadows: s.shadows.filter((sh) => sh.setId !== setId),
-          numbers: s.numbers.filter((n) => n.setId !== setId),
-          strings: s.strings.filter((t) => t.setId !== setId),
-        })),
+      deleteSet: (setId) => {
+        const aliasesIn = (colors: ColorToken[]) => colors.reduce((n, c) => n + Object.keys(c.themeAlias ?? {}).length, 0);
+        const before = aliasesIn(get().colors.filter((c) => c.setId !== setId));
+        let detached = 0;
+        set((s) => {
+          const colors = detachMissing(s.colors.filter((c) => c.setId !== setId));
+          detached = before - aliasesIn(colors);
+          return {
+            sets: s.sets.filter((st) => st.id !== setId),
+            colors,
+            typography: s.typography.filter((t) => t.setId !== setId),
+            spacing: s.spacing.filter((sp) => sp.setId !== setId),
+            radii: s.radii.filter((r) => r.setId !== setId),
+            shadows: s.shadows.filter((sh) => sh.setId !== setId),
+            numbers: s.numbers.filter((n) => n.setId !== setId),
+            strings: s.strings.filter((t) => t.setId !== setId),
+          };
+        });
+        return detached;
+      },
 
       // ── Theme management ────────────────────────────────────────────────────
 
@@ -573,22 +572,16 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         set((s) => {
           const target = s.sets.find((x) => x.id === setId);
           if (!target) return {};
+          // Colors keep being the tokens they were, and the colors that were them keep being them, in whichever set each is.
+          if (kind === "color") return { colors: moveColors(s.colors, ids, setId, s.sets) };
           const next = listOf(s, kind).map((t) => {
             if (!ids.includes(t.id) || t.setId === setId) return t;
             const moved = { ...t, setId };
             // In the new set the token is a token of Motif's own until it is synced there.
             delete moved.repoName;
-            if (kind === "color") {
-              const c = moved as unknown as ColorToken;
-              c.themeValues = remapThemes(t as unknown as ColorToken, s.sets.find((x) => x.id === t.setId), target);
-              c.value = c.themeValues[target.activeThemeId] ?? Object.values(c.themeValues)[0] ?? c.value;
-              // The tokens it was are in the set it left, so it takes their colors with it.
-              delete c.themeAlias;
-            }
             return moved;
           });
-          const out = withList(kind, next) as Partial<TokenData>;
-          return (kind === "color" ? { ...out, colors: detachMissing(out.colors!) } : out) as never;
+          return withList(kind, next) as never;
         }),
 
       duplicateTokens: (kind, ids) => {
@@ -660,8 +653,8 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         const token = get().colors.find((c) => c.id === id);
         if (!token) return false;
         if (target !== null) {
-          const other = get().colors.find((c) => c.setId === token.setId && tokenKey(c) === target);
-          if (!other || other.id === token.id || wouldLoop(get().colors, token, themeId, target)) return false;
+          const other = targetOf(get().colors, token, target);
+          if (!other || other.id === token.id || wouldLoop(get().colors, token, themeId, target, get().sets)) return false;
         }
         set((s) => ({
           colors: refreshAliases(s.colors.map((c) => {
@@ -681,7 +674,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
             const themeValues = { ...c.themeValues, [to]: c.themeValues[from] ?? c.value };
             const target = c.themeAlias?.[from];
             // An alias goes along unless it would lead back to the color itself in the other theme: then it is the color it is.
-            const alias = target && !wouldLoop(s.colors, c, to, target) ? { ...c.themeAlias, [to]: target } : withoutKey(c.themeAlias, to);
+            const alias = target && !wouldLoop(s.colors, c, to, target, s.sets) ? { ...c.themeAlias, [to]: target } : withoutKey(c.themeAlias, to);
             const tokenSet = s.sets.find((st) => st.id === c.setId);
             return { ...c, themeValues, value: tokenSet?.activeThemeId === to ? themeValues[to] : c.value, themeAlias: alias };
           }), s.sets),
@@ -717,7 +710,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           if (!group[c.group]) group[c.group] = {};
           // A color that is another token is written as a reference to it (`{color.gray.gray-50}`).
           const active = get().sets.find((st) => st.id === c.setId)?.activeThemeId ?? "";
-          const target = c.themeAlias?.[active] ? colors.find((o) => o.setId === c.setId && tokenKey(o) === c.themeAlias![active]) : undefined;
+          const target = c.themeAlias?.[active] ? targetOf(colors, c, c.themeAlias[active]) : undefined;
           group[c.group][c.name] = { $value: target ? `{color.${target.group}.${target.name}}` : c.value, $type: "color" };
         }
         for (const t of typography) {
@@ -759,7 +752,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         const lines: string[] = [":root {"];
         for (const c of colors) {
           const active = get().sets.find((st) => st.id === c.setId)?.activeThemeId ?? "";
-          const target = c.themeAlias?.[active] ? colors.find((o) => o.setId === c.setId && tokenKey(o) === c.themeAlias![active]) : undefined;
+          const target = c.themeAlias?.[active] ? targetOf(colors, c, c.themeAlias[active]) : undefined;
           lines.push(`  --color-${toKebab(c.name)}: ${target ? `var(--color-${toKebab(target.name)})` : c.value};`);
         }
         for (const sp of spacing) lines.push(`  --spacing-${toKebab(sp.name.replace(/^space-/, ""))}: ${sp.value}px;`);

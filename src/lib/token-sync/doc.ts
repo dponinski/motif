@@ -147,7 +147,8 @@ export function readMotifTokens(state: TokenSlices, link: LinkShape): SyncDoc {
     for (const [theme, id] of Object.entries(link.themes)) {
       const v = c.themeValues[id];
       const alias = c.themeAlias?.[id];
-      if (alias) values[theme] = varRef(alias);
+      // A color that is a token of another set is, for the repository, the color it comes to (its sync is of one set).
+      if (alias && !alias.includes("/")) values[theme] = varRef(alias);
       else if (v !== undefined) values[theme] = normalizeColor(v) ?? v;
     }
     doc[repoKey("color", c, link.prefixes)] = { kind: "color", values };

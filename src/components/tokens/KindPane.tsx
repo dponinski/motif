@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { filterItems, groupItems, nextName, sortForReading, uniqueName, type Only } from "@/lib/tokens/organize";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { useDesignSystemStore, type ColorToken, type TokenKind, type TokenSet } from "@/store/design-system";
-import { tokenKey } from "@/lib/tokens/alias-colors";
+import { targetKey } from "@/lib/tokens/alias-colors";
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
 import { AddRow, type AddField } from "./fields";
@@ -47,6 +47,8 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
   // Whether the repository has been counted for where its tokens are used.
   const counted = rows.some((r) => r.use !== null);
   const hasRepo = useGitStore((s) => !!(s.tokenLink || s.analysis));
+  // The colors of every set: a color can be a color of another.
+  const everyColor = useDesignSystemStore((s) => s.colors);
   const colorsView = kind === "color";
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<Only>("all");
@@ -94,6 +96,7 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
   const colorCtx: ColorCtx = {
     themes: set.themes, shown, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo, rename: setRenaming,
     all: kind === "color" ? rows.map((r) => r.token as ColorToken) : [],
+    every: everyColor, sets,
     act: { ...common, setColor: (id, theme, text) => editTokens(() => ds().setColorText(id, theme, text)), setAlias: (id, theme, target) => editTokens(() => ds().setColorAlias(id, theme, target)), toGroup: (ids, group) => { editTokens(() => ds().setTokenGroup(kind, ids, group)); } },
   };
   const otherCtx: OtherCtx = {
@@ -228,7 +231,8 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
         setId={set.id}
         alias={colorsView ? {
           themes: set.themes,
-          targets: rows.filter((r) => !selection.selected.has(r.id)).map((r) => ({ key: tokenKey(r.token as ColorToken), name: r.name })),
+          targets: [...everyColor].filter((c) => !selection.selected.has(c.id)).sort((a, b) => Number(b.setId === set.id) - Number(a.setId === set.id))
+            .map((c) => ({ key: targetKey(c, set.id), name: c.setId === set.id ? c.name : `${sets.find((x) => x.id === c.setId)?.name ?? "Another set"} / ${c.name}` })),
           apply: (choices) => {
             let refused = 0;
             editTokens(() => {
