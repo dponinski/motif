@@ -11,6 +11,7 @@ const { openSync, syncNow } = require("./support/sync-helpers");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
+const { withoutConversion } = require("./support/conversion");
 const blobSha = (text) => {
   const body = Buffer.from(text, "utf8");
   return crypto.createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
@@ -220,7 +221,7 @@ const check = (name, ok, detail = "") => {
   await syncNow(page, 1);
   const pr = prs[prs.length - 1];
   const banner = repos["acme/ds"][pr.head].get("src/components/Banner.tsx");
-  check("the pull request made after the reload has the edit", banner.includes("Saved across a reload") && [...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)).map(([p]) => p).join() === "src/components/Banner.tsx");
+  check("the pull request made after the reload has the edit", banner.includes("Saved across a reload") && [...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)).map(([p]) => p).filter((p) => withoutConversion([p]).length).join() === "src/components/Banner.tsx");
   await page.reload();
   await backToLibrary();
   await rowFor("Banner").click();

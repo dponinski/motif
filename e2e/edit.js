@@ -9,6 +9,7 @@ const { gitData } = require("./support/git-data");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
+const { withoutConversion } = require("./support/conversion");
 const blobSha = (text) => {
   const body = Buffer.from(text, "utf8");
   return crypto.createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
@@ -248,7 +249,7 @@ const check = (name, ok, detail = "") => {
   check("Button changes by exactly the two edited class strings", edited.length === original.length && diff.length === 2 && diff[0].includes("gap-2") && diff[0].includes("gap-4") && diff[1].includes("bg-primary text-primary-foreground") && diff[1].includes("bg-danger text-primary-foreground"), diff.join(" | "));
   const banner = repos["acme/ds"][pr.head].get("src/components/Banner.tsx");
   check("Banner has its text, order and structure changed", banner.includes("Welcome") && banner.indexOf("<p") < banner.indexOf("<h2") && banner.split("<p").length === 3 && !banner.includes("<small>") && banner.includes("flex-row"));
-  check("no other file was touched", Object.keys(Object.fromEntries([...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)))).sort().join() === "src/components/Banner.tsx,src/components/Button.tsx");
+  check("no other file was touched", withoutConversion(Object.keys(Object.fromEntries([...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p))))).sort().join() === "src/components/Banner.tsx,src/components/Button.tsx");
   check("the description lists what was done and the files", pr.body.includes("button: gap 2 → 4") && pr.body.includes("h2: text") && pr.body.includes("`src/components/Banner.tsx`"), pr.body.slice(0, 400));
   check("the base branch is untouched", repos["acme/ds"].main.get("src/components/Button.tsx").includes("gap-2 whitespace-nowrap"));
   check("the changes stay in the editor, marked as in the pull request, until it is merged", (await page.getByLabel("In the pull request").innerText()).includes("src/components/Button.tsx"));

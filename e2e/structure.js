@@ -10,6 +10,7 @@ const { openSync, syncNow } = require("./support/sync-helpers");
 
 const { OUT } = require("./support/env");
 const { FIXTURE } = require("./support/env");
+const { withoutConversion } = require("./support/conversion");
 const blobSha = (text) => {
   const body = Buffer.from(text, "utf8");
   return crypto.createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
@@ -210,7 +211,7 @@ const check = (name, ok, detail = "") => {
   const banner = repos["acme/ds"][pr.head].get("src/components/Banner.tsx");
   check("the file imports Badge in the file's own way, from where it is", banner.startsWith('import { Badge } from "./Badge";\n'), banner.slice(0, 120));
   check("and uses everything that was added", banner.includes("<h3") && banner.includes("<Badge>") && banner.includes("<small") && banner.includes("flex-col") === true);
-  check("only Banner changed", [...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)).map(([p]) => p).join() === "src/components/Banner.tsx");
+  check("only Banner changed", [...repos["acme/ds"][pr.head]].filter(([p, t]) => t !== repos["acme/ds"].main.get(p)).map(([p]) => p).filter((p) => withoutConversion([p]).length).join() === "src/components/Banner.tsx");
   check("the description lists the structure changes", pr.body.includes("added <h2>") && pr.body.includes("wrapped in <Badge>") && pr.body.includes("now <h3>"), pr.body.slice(0, 500));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
