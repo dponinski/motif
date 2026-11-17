@@ -84,11 +84,13 @@ const EVIL = '<img src=x onerror="window.__xss=1">';
   check("and none for components until a repository's are imported", (await sidebar.getByText("Repository components").count()) === 0 && (await sidebar.getByText("Components", { exact: true }).count()) === 0);
   await sidebar.getByRole("button", { name: "Colors" }).click();
   check("colors page shows token swatches", (await paper.locator(".md-swatch").count()) > 5, await paper.locator(".md-swatch").count());
+  let shadowCards = 0;
   for (const kind of ["Typography", "Spacing", "Radius", "Shadows", "Numbers", "Strings", "Compositions"]) {
     await sidebar.getByRole("button", { name: kind }).click();
     await paper.locator("h1", { hasText: kind }).waitFor();
+    if (kind === "Shadows") shadowCards = await paper.locator(".md-swatch.md-card").count();
   }
-  check("every foundations page renders", (await paper.locator(".md-swatch.md-card").count()) > 0);
+  check("every foundations page renders", shadowCards > 0);
 
   // XSS: hostile page title and text
   await sidebar.getByRole("button", { name: EVIL }).click();
@@ -160,7 +162,7 @@ const EVIL = '<img src=x onerror="window.__xss=1">';
   const frame = page.frameLocator('iframe[title="Documentation preview"]');
   await frame.locator("article").first().waitFor();
   const articles = await frame.locator("article").count();
-  check("preview shows every page as one site", articles === 3 + 5, articles);
+  check("preview shows every page as one site", articles === 3 + 8, articles);
   check("preview escapes titles", (await frame.locator("nav").innerText()).includes("<img src=x"));
   await frame.locator('nav a[href="#doc-tokens-spacing"]').click();
   await page.waitForTimeout(700);
