@@ -17,6 +17,7 @@ const TABS: { kind: TokenKind; label: string }[] = [
   { kind: "color", label: "Colors" },
   { kind: "number", label: "Numbers" },
   { kind: "string", label: "Strings" },
+  { kind: "composition", label: "Compositions" },
   { kind: "typography", label: "Typography" },
   { kind: "spacing", label: "Spacing" },
   { kind: "radius", label: "Radii" },
@@ -28,6 +29,7 @@ const NEW_TOKEN: { kind: TokenKind; label: string; hint: string }[] = [
   { kind: "color", label: "Color", hint: "a color, in each theme" },
   { kind: "number", label: "Number", hint: "a size, a weight, a ratio, with its unit" },
   { kind: "string", label: "String", hint: "text, such as a font family" },
+  { kind: "composition", label: "Composition", hint: "tokens that go together: a text style, a shadow" },
 ];
 const NEW_KIND: { kind: TokenKind; label: string }[] = [
   { kind: "spacing", label: "Spacing" },
@@ -48,11 +50,11 @@ const headerButton = "flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text
 
 // The tokens of the project: sets and themes on the left, and for the open set a tab for each kind of token.
 export default function TokensView({ onClose }: { onClose?: () => void }) {
-  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, exportTokens, exportCSS, exportTailwind } = useDesignSystemStore(useShallow((s) => ({
-    sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings,
+  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions, exportTokens, exportCSS, exportTailwind } = useDesignSystemStore(useShallow((s) => ({
+    sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions,
     exportTokens: s.exportTokens, exportCSS: s.exportCSS, exportTailwind: s.exportTailwind,
   })));
-  const counts = { color: colors, typography, spacing, radius: radii, shadow: shadows, number: numbers, string: strings };
+  const counts = { color: colors, typography, spacing, radius: radii, shadow: shadows, number: numbers, string: strings, composition: compositions };
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   const [kind, setKind] = useState<TokenKind>("color");
   // A kind chosen from New token opens with its add row ready.

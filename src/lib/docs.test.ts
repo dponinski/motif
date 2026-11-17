@@ -19,7 +19,7 @@ describe("docSections", () => {
   it("gives every token category a default page and no component pages without a repository", () => {
     const [own, foundations, ...rest] = docSections([]);
     expect(own.pages).toEqual([]);
-    expect(foundations.pages.map((p) => p.title)).toEqual(["Colors", "Typography", "Spacing", "Radius", "Shadows"]);
+    expect(foundations.pages.map((p) => p.title)).toEqual(["Colors", "Typography", "Spacing", "Radius", "Shadows", "Numbers", "Strings", "Compositions"]);
     expect(rest).toEqual([]);
   });
 
@@ -32,6 +32,21 @@ describe("docSections", () => {
 });
 
 describe("blockHtml", () => {
+  it("documents numbers, strings and compositions, with what a composition's parts come to", () => {
+    const ctx = context();
+    expect(blockHtml({ id: "b", type: "tokens", kind: "numbers" }, ctx)).toContain("No numbers yet");
+    expect(blockHtml({ id: "b", type: "tokens", kind: "compositions" }, ctx)).toContain("No compositions yet");
+    ctx.tokens.numbers = [{ id: "n", name: "text-xl", value: 1.5, unit: "rem", use: "font-size", setId: "s" }];
+    ctx.tokens.strings = [{ id: "g", name: "font-sans", value: "Georgia, serif", use: "font-family", setId: "s" }];
+    ctx.tokens.compositions = [{ id: "c", name: "heading", kind: "typography", setId: "s", slots: [{ name: "font-family", type: "string", ref: "g" }, { name: "font-size", type: "number", ref: "n" }] }];
+    expect(blockHtml({ id: "b", type: "tokens", kind: "numbers" }, ctx)).toContain("1.5rem");
+    expect(blockHtml({ id: "b", type: "tokens", kind: "strings" }, ctx)).toContain("Georgia, serif");
+    const html = blockHtml({ id: "b", type: "tokens", kind: "compositions" }, ctx);
+    expect(html).toContain("heading");
+    expect(html).toContain("font-size:1.5rem");
+    expect(html).toContain("font-family:Georgia, serif");
+  });
+
   it("explains empty token sets and shows the ones there are", () => {
     const ctx = context();
     expect(blockHtml({ id: "b", type: "tokens", kind: "shadows" }, ctx)).toContain("No shadow tokens yet");

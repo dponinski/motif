@@ -6,6 +6,9 @@ export const TOKEN_KINDS: { kind: TokenKind; title: string }[] = [
   { kind: "spacing", title: "Spacing" },
   { kind: "radii", title: "Radius" },
   { kind: "shadows", title: "Shadows" },
+  { kind: "numbers", title: "Numbers" },
+  { kind: "strings", title: "Strings" },
+  { kind: "compositions", title: "Compositions" },
 ];
 
 // Built-in pages use ids derived from what they document, so editing one always edits the same page.

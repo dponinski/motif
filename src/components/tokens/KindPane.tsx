@@ -19,17 +19,18 @@ import { ListBody, ListHead, PaletteBody, type ColorCtx } from "./ColorViews";
 import { OtherBody, type OtherCtx } from "./OtherViews";
 import { useRows, type Row } from "./rows";
 import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
+import { presetSlots, PRESETS } from "@/lib/tokens/compose";
 import { useSelection } from "./useSelection";
 import { useTokenDrag, type DropTarget } from "./drag";
 
-const NOUN: Record<TokenKind, string> = { color: "color", typography: "text style", spacing: "spacing", radius: "radius", shadow: "shadow", number: "number", string: "string" };
+const NOUN: Record<TokenKind, string> = { color: "color", typography: "text style", spacing: "spacing", radius: "radius", shadow: "shadow", number: "number", string: "string", composition: "composition" };
 
 // The list of the store each kind of token is in.
-const LIST = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows", number: "numbers", string: "strings" } as const;
+const LIST = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows", number: "numbers", string: "strings", composition: "compositions" } as const;
 
 const free = (prefix: string, names: string[]) => { for (let i = 1; ; i++) if (!names.includes(`${prefix}-${i}`)) return `${prefix}-${i}`; };
 const suggest = (kind: TokenKind, group: string, names: string[]) =>
-  kind === "color" ? nextName(group, names) : kind === "spacing" ? free("space", names) : kind === "radius" ? free("radius", names) : kind === "shadow" ? free("shadow", names) : kind === "number" ? free("number", names) : kind === "string" ? free("string", names) : free("text", names);
+  kind === "color" ? nextName(group, names) : kind === "spacing" ? free("space", names) : kind === "radius" ? free("radius", names) : kind === "shadow" ? free("shadow", names) : kind === "number" ? free("number", names) : kind === "string" ? free("string", names) : kind === "composition" ? free("composition", names) : free("text", names);
 
 // A choice kept in the browser (which view of colors was last used); the same on the server and the first paint, then what was kept.
 const listeners = new Set<() => void>();
@@ -110,6 +111,7 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
         else if (row.kind === "shadow") s.updateShadow(row.id, patch);
         else if (row.kind === "number") s.updateNumber(row.id, patch);
         else if (row.kind === "string") s.updateString(row.id, patch);
+        else if (row.kind === "composition") s.updateComposition(row.id, patch);
         else s.updateTypography(row.id, patch);
       }),
     },
@@ -149,13 +151,17 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
         { key: "value", label: "New string value", placeholder: "text", width: "w-64", validate: (v) => v.trim() !== "" },
         { key: "use", label: "New string used as", placeholder: "", width: "w-36", options: STRING_USES },
       ] };
+      case "composition": return { focus: "name", fields: [
+        { key: "name", label: "New composition name", placeholder: "name", width: "w-44" },
+        { key: "preset", label: "New composition made of", placeholder: "", width: "w-36", options: PRESETS.map((p) => ({ value: p.id, label: p.label })) },
+      ] };
       case "typography": return { focus: "name", fields: [{ key: "name", label: "New text style name", placeholder: "name", width: "w-44" }, { key: "size", label: "New text style size", placeholder: "size", width: "w-20", mono: true, validate: (v) => v === "" || Number.isFinite(parseFloat(v)) }] };
     }
   };
   const addRow = (group: string, done: () => void) => {
     const { fields, focus } = fieldsFor();
     const names = () => (ds()[LIST[kind]] as { setId: string; name: string }[]).filter((t) => t.setId === set.id).map((t) => t.name);
-    const initial = () => ({ name: suggest(kind, group, names()), value: "", size: "", unit: "px", use: "" });
+    const initial = () => ({ name: suggest(kind, group, names()), value: "", size: "", unit: "px", use: "", preset: "typography" });
     return (
       <AddRow
         fields={fields}
@@ -173,6 +179,7 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
             else if (kind === "radius") s.addRadius({ name: unique, value: parseFloat(v.value), group, setId: set.id });
             else if (kind === "shadow") s.addShadow({ name: unique, x: 0, y: 4, blur: 8, spread: 0, color: "rgba(0,0,0,0.1)", group, setId: set.id });
             else if (kind === "number") s.addNumber({ name: unique, value: parseFloat(v.value), unit: isUnit(v.unit) ? v.unit : "px", ...(v.use ? { use: v.use } : {}), group, setId: set.id });
+            else if (kind === "composition") { const made = PRESETS.find((p) => p.id === v.preset)?.id ?? "typography"; s.addComposition({ name: unique, kind: made, slots: presetSlots(made), group, setId: set.id }); }
             else if (kind === "string") s.addString({ name: unique, value: v.value.trim(), ...(v.use ? { use: v.use } : {}), group, setId: set.id });
             else s.addTypography({ name: unique, fontFamily: "Inter", fontSize: parseFloat(v.size) || 14, fontWeight: 400, lineHeight: Math.round((parseFloat(v.size) || 14) * 1.5), group, setId: set.id });
           });
@@ -185,10 +192,10 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
   const empty = rows.length === 0 ? (
     <div className="flex flex-col items-center gap-2 px-6 py-16 text-center" data-empty>
       <p className="text-sm font-medium text-text-primary">No {NOUN[kind]} tokens in {set.name} yet</p>
-      <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">Add the first one below, or bring them in from the repository with Repo sync.</p>
+      <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">{kind === "composition" ? "Put tokens together as one: a text style from a font family, a size and a weight, or a shadow. Each part is a value of its own or another token." : "Add the first one below, or bring them in from the repository with Repo sync."}</p>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => setAdding("base")} className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90">Add a {NOUN[kind]}</button>
-        <button type="button" onClick={() => setAddMany(true)} className="rounded border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>
+        {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} className="rounded border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>}
       </div>
     </div>
   ) : (
@@ -212,7 +219,7 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
           <button type="button" disabled title="Scan the repository again (in Source control) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
         )}
         <div className="flex-1" />
-        <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>
+        {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>}
         {colorsView && (
           <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5" role="group" aria-label="View">
             <button type="button" aria-pressed={view === "palette"} onClick={() => setView("palette")} className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs", view === "palette" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><PaletteIcon size={11} /> Palette</button>

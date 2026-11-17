@@ -9,6 +9,11 @@ import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
 import { CommitInput, InlineName } from "./fields";
 import { Badges } from "./ColorViews";
 import type { Row } from "./rows";
+import CompositionEditor, { Sample } from "./CompositionEditor";
+import { summary as compositionSummary } from "@/lib/tokens/compose";
+import type { Composition } from "@/lib/tokens/model";
+import { useDesignSystemStore } from "@/store/design-system";
+import { useShallow } from "zustand/react/shallow";
 import type { Selection } from "./useSelection";
 import type { Drag } from "./drag";
 
@@ -41,6 +46,7 @@ function Visual({ row }: { row: Row }) {
     case "typography": { const t = row.token as TypographyToken; return <span className="w-24 flex-shrink-0 truncate text-text-primary" style={{ fontFamily: t.fontFamily, fontSize: Math.min(18, t.fontSize), fontWeight: t.fontWeight, lineHeight: 1.2 }}>Aa Quick fox</span>; }
     case "number": { const n = row.token as NumberToken; return <span className="w-16 flex-shrink-0 truncate rounded bg-surface-subtle px-1.5 py-0.5 text-center font-mono text-2xs text-text-secondary" aria-hidden>{n.value}{n.unit}</span>; }
     case "string": { const x = row.token as StringToken; return <span className="w-16 flex-shrink-0 truncate text-center text-text-primary" style={x.use === "font-family" ? { fontFamily: x.value } : undefined} aria-hidden>Aa</span>; }
+    case "composition": return <Sample composition={row.token as Composition} small />;
     default: return null;
   }
 }
@@ -84,6 +90,7 @@ function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
         </>
       );
     }
+    case "composition": return <span data-composition-kind className="w-20 flex-shrink-0 text-2xs capitalize text-text-tertiary">{(row.token as Composition).kind}</span>;
     default: return null;
   }
 }
@@ -96,6 +103,7 @@ function Expanded({ row, ctx }: { row: Row; ctx: OtherCtx }) {
       <CommitInput value={String(value)} label={`${label} of ${row.name}`} frame className={width} onCommit={onCommit} invalidHint="Not a valid value" />
     </label>
   );
+  if (row.kind === "composition") return <CompositionEditor composition={row.token as Composition} onChange={(patch) => ctx.act.update(row, patch)} />;
   const asNumber = (key: string) => (t: string) => { const n = number(t); if (n === null) return false; set({ [key]: n }); return true; };
   if (row.kind === "typography") {
     const t = row.token as TypographyToken;
@@ -123,13 +131,14 @@ function Expanded({ row, ctx }: { row: Row; ctx: OtherCtx }) {
 
 export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const [open, setOpen] = useState(false);
-  const expandable = row.kind === "typography" || row.kind === "shadow";
+  const expandable = row.kind === "typography" || row.kind === "shadow" || row.kind === "composition";
+  const data = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
   const picked = ctx.selection.selected.has(row.id);
   const dragged = ctx.drag.moving?.includes(row.id);
   const over = ctx.drag.over?.type === "token" && ctx.drag.over.id === row.id ? ctx.drag.over : null;
   const summary = row.kind === "typography"
     ? `${(row.token as TypographyToken).fontSize}px · ${(row.token as TypographyToken).fontWeight} · ${(row.token as TypographyToken).lineHeight}`
-    : row.kind === "shadow" ? row.text : "";
+    : row.kind === "shadow" ? row.text : row.kind === "composition" ? compositionSummary(row.token as Composition, data) : "";
   return (
     <div data-token-id={row.id} data-selected={picked || undefined} className={cn("relative border-b border-transparent", dragged && "opacity-40")}>
       {over && <span aria-hidden className={cn("absolute inset-x-0 z-10 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}

@@ -1,4 +1,6 @@
-import type { ColorToken, RadiusToken, ShadowToken, SpacingToken, TypographyToken } from "../store/design-system";
+import type { ColorToken, NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TypographyToken } from "../store/design-system";
+import { previewStyle, summary, type ComposeData } from "./tokens/compose";
+import type { Composition } from "./tokens/model";
 import { previewKey, type DocSection } from "./docs";
 import { componentSnippet } from "./edit/snippets";
 import type { DocBlock, DocPage } from "./motif-document";
@@ -10,6 +12,10 @@ export interface DocsTokens {
   spacing: SpacingToken[];
   radii: RadiusToken[];
   shadows: ShadowToken[];
+  // Numbers, strings and compositions (absent in a context that has none).
+  numbers?: NumberToken[];
+  strings?: StringToken[];
+  compositions?: Composition[];
 }
 
 // The connected repository's components, for blocks that document them.
@@ -76,6 +82,32 @@ function tokensHtml(kind: Extract<DocBlock, { type: "tokens" }>["kind"], tokens:
         const value = `${num(s.x)}px ${num(s.y)}px ${num(s.blur)}px ${num(s.spread)}px ${cssValue(s.color, "transparent")}`;
         return `<div><div class="md-swatch md-card" style="box-shadow:${esc(value)}"></div><div class="md-name">${esc(s.name)}</div><div class="md-value">${esc(value)}</div></div>`;
       }).join("")}</div>`;
+    case "numbers": {
+      const numbers = tokens.numbers ?? [];
+      if (!numbers.length) return empty("No numbers yet.");
+      return numbers.map((n) =>
+        `<div class="md-row"><div class="md-name md-label">${esc(n.name)}</div><div class="md-grow"></div><div class="md-value">${esc(`${num(n.value)}${n.unit}`)}${n.use ? ` · ${esc(n.use)}` : ""}</div></div>`
+      ).join("");
+    }
+    case "strings": {
+      const strings = tokens.strings ?? [];
+      if (!strings.length) return empty("No strings yet.");
+      return strings.map((t) => {
+        const style = t.use === "font-family" ? ` style="font-family:${esc(cssValue(t.value, "inherit"))},system-ui,sans-serif"` : "";
+        return `<div class="md-row"><div class="md-name md-label">${esc(t.name)}</div><div class="md-grow"${style}>${esc(t.value)}</div>${t.use ? `<div class="md-value">${esc(t.use)}</div>` : ""}</div>`;
+      }).join("");
+    }
+    case "compositions": {
+      const compositions = tokens.compositions ?? [];
+      if (!compositions.length) return empty("No compositions yet.");
+      const data: ComposeData = { colors: tokens.colors, numbers: tokens.numbers ?? [], strings: tokens.strings ?? [], spacing: tokens.spacing, radii: tokens.radii };
+      return compositions.map((c) => {
+        const look = previewStyle(c, data);
+        const css = Object.entries(look).map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}:${cssValue(v, "inherit")}`).join(";");
+        const sample = c.kind === "typography" ? `<div class="md-grow" style="${esc(css)}">${esc(c.name)}</div>` : c.kind === "shadow" ? `<div class="md-grow"><div class="md-swatch md-card" style="${esc(css)}"></div></div>` : `<div class="md-grow"></div>`;
+        return `<div class="md-row"><div class="md-name md-label">${esc(c.name)}</div>${sample}<div class="md-value">${esc(summary(c, data))}</div></div>`;
+      }).join("");
+    }
   }
 }
 

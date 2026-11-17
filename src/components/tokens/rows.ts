@@ -6,8 +6,10 @@ import { useTokenChanges } from "@/components/work/useWork";
 import { cssName, readRepoTokens, type SyncKind } from "@/lib/token-sync/doc";
 import { keyPrefixes, repoKey } from "@/lib/token-sync/keys";
 import { hexOf } from "@/lib/tokens/contrast";
+import { summary, type ComposeData } from "@/lib/tokens/compose";
+import type { Composition } from "@/lib/tokens/model";
 
-export type Token = ColorToken | TypographyToken | SpacingToken | RadiusToken | ShadowToken | NumberToken | StringToken;
+export type Token = ColorToken | TypographyToken | SpacingToken | RadiusToken | ShadowToken | NumberToken | StringToken | Composition;
 
 // A token as the screen arranges it: what it is called, where it is, what a search can find in it, and how it stands with the
 // repository.
@@ -32,7 +34,7 @@ export interface Row {
   differs: boolean;
 }
 
-function searchText(kind: TokenKind, t: Token, themes: { id: string }[]): string {
+function searchText(kind: TokenKind, t: Token, themes: { id: string }[], data: ComposeData): string {
   switch (kind) {
     case "color": {
       const c = t as ColorToken;
@@ -43,12 +45,15 @@ function searchText(kind: TokenKind, t: Token, themes: { id: string }[]): string
     case "shadow": { const s = t as ShadowToken; return `${s.x}px ${s.y}px ${s.blur}px ${s.spread}px ${s.color}`; }
     case "number": { const n = t as NumberToken; return `${n.value}${n.unit} ${n.use ?? ""}`; }
     case "string": { const x = t as StringToken; return `${x.value} ${x.use ?? ""}`; }
+    case "composition": { const c = t as Composition; return `${c.kind} ${summary(c, data)}`; }
     case "typography": { const y = t as TypographyToken; return `${y.fontFamily} ${y.fontSize}px ${y.fontWeight} ${y.lineHeight}`; }
   }
 }
 
 export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]): Row[] {
-  const list = useDesignSystemStore(useShallow((s) => (kind === "color" ? s.colors : kind === "spacing" ? s.spacing : kind === "radius" ? s.radii : kind === "shadow" ? s.shadows : kind === "number" ? s.numbers : kind === "string" ? s.strings : s.typography)));
+  const list = useDesignSystemStore(useShallow((s) => (kind === "color" ? s.colors : kind === "spacing" ? s.spacing : kind === "radius" ? s.radii : kind === "shadow" ? s.shadows : kind === "number" ? s.numbers : kind === "string" ? s.strings : kind === "composition" ? s.compositions : s.typography)));
+  // What a composition's slots can be (read for the compositions only).
+  const data = useDesignSystemStore(useShallow((s): ComposeData => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
   const changes = useTokenChanges();
   const analysis = useGitStore((s) => s.analysis);
   const changed = useMemo(() => new Set(changes.map((c) => c.name)), [changes]);
@@ -63,16 +68,16 @@ export function useRows(kind: TokenKind, setId: string, themes: { id: string }[]
   return useMemo(
     () => (list as Token[]).filter((t) => t.setId === setId).map((t) => {
       const repoName = (t as { repoName?: string }).repoName;
-      const key = kind === "typography" || kind === "number" || kind === "string" ? (repoName ?? cssName(t.name)) : repoKey(kind as SyncKind, t as { name: string; repoName?: string }, prefixes);
+      const key = kind === "typography" || kind === "number" || kind === "string" || kind === "composition" ? (repoName ?? cssName(t.name)) : repoKey(kind as SyncKind, t as { name: string; repoName?: string }, prefixes);
       // Only a token the repository has can be looked for in its code, and only once a scan has counted.
       const counted = analysis?.tokenUsage && repoName && analysis.tokens.some((x) => x.name === key) ? (analysis.tokenUsage[key] ?? { n: 0, files: [] }) : null;
       const use = counted ? { ...counted, components: [...new Set(counted.files.flatMap((f) => componentsIn.get(f) ?? []))] } : null;
       return {
         id: t.id, kind, name: t.name, group: (t as { group?: string }).group || DEFAULT_GROUP,
-        text: searchText(kind, t, themes), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
+        text: searchText(kind, t, themes, data), linked: !!repoName, changed: changed.has(key), readonly: key in readonlyBy, token: t, use, unused: use?.n === 0,
         differs: kind === "color" && themes.length > 1 && new Set(themes.map((th) => { const c = t as ColorToken; return hexOf(c.themeValues[th.id] ?? c.value).toLowerCase(); })).size > 1,
       };
     }),
-    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes]
+    [list, setId, kind, changed, readonlyBy, themes, analysis, componentsIn, prefixes, data]
   );
 }

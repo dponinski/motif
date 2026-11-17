@@ -84,7 +84,7 @@ const EVIL = '<img src=x onerror="window.__xss=1">';
   check("and none for components until a repository's are imported", (await sidebar.getByText("Repository components").count()) === 0 && (await sidebar.getByText("Components", { exact: true }).count()) === 0);
   await sidebar.getByRole("button", { name: "Colors" }).click();
   check("colors page shows token swatches", (await paper.locator(".md-swatch").count()) > 5, await paper.locator(".md-swatch").count());
-  for (const kind of ["Typography", "Spacing", "Radius", "Shadows"]) {
+  for (const kind of ["Typography", "Spacing", "Radius", "Shadows", "Numbers", "Strings", "Compositions"]) {
     await sidebar.getByRole("button", { name: kind }).click();
     await paper.locator("h1", { hasText: kind }).waitFor();
   }

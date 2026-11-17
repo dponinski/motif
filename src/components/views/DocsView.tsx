@@ -28,14 +28,14 @@ function useRepoComponents() {
 
 function useDocsContext(): DocsContext {
   const repo = useRepoComponents();
-  const { colors, typography, spacing, radii, shadows } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows })));
+  const { colors, typography, spacing, radii, shadows, numbers, strings, compositions } = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions })));
 
   return useMemo(
     () => ({
-      tokens: { colors, typography, spacing, radii, shadows },
+      tokens: { colors, typography, spacing, radii, shadows, numbers, strings, compositions },
       repo: repo.length ? { components: repo } : undefined,
     }),
-    [colors, typography, spacing, radii, shadows, repo]
+    [colors, typography, spacing, radii, shadows, numbers, strings, compositions, repo]
   );
 }
 

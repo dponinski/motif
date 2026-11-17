@@ -4,7 +4,8 @@ import { normalizeColor } from "@/lib/token-sync/color";
 import { deriveGroup, uniqueName } from "@/lib/tokens/organize";
 import { darkOf } from "@/lib/tokens/theme-gen";
 import { detachMissing, moveColors, refreshAliases, renameAlias, targetOf, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
-import type { Unit } from "@/lib/tokens/model";
+import type { Composition, Unit } from "@/lib/tokens/model";
+import { previewStyle, releaseSlots, resolve, type ComposeData } from "@/lib/tokens/compose";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ export interface ComponentDefinition {
   defaultProps: Record<string, unknown>;
 }
 
-export type TokenKind = "color" | "typography" | "spacing" | "radius" | "shadow" | "number" | "string";
+export type TokenKind = "color" | "typography" | "spacing" | "radius" | "shadow" | "number" | "string" | "composition";
 
 // What a token is in a group when nothing says.
 export const DEFAULT_GROUP = "base";
@@ -141,6 +142,8 @@ interface DesignSystemStore {
   shadows: ShadowToken[];
   numbers: NumberToken[];
   strings: StringToken[];
+  // Tokens that go together as one, whose parts are values of their own or other tokens.
+  compositions: Composition[];
   components: ComponentDefinition[];
 
   // Set management
@@ -189,6 +192,12 @@ interface DesignSystemStore {
   addString: (token: Omit<StringToken, "id">) => string;
   updateString: (id: string, updates: Partial<StringToken>) => void;
   deleteString: (id: string) => void;
+
+  // Compositions: each add returns the id of the composition it made. A slot that is another token follows it; the token being deleted leaves
+  // the slot with the value it had.
+  addComposition: (composition: Omit<Composition, "id">) => string;
+  updateComposition: (id: string, updates: Partial<Composition>) => void;
+  deleteComposition: (id: string) => void;
 
   addShadow: (token: Omit<ShadowToken, "id">) => void;
   updateShadow: (id: string, updates: Partial<ShadowToken>) => void;
@@ -258,6 +267,7 @@ export interface TokenData {
   shadows: ShadowToken[];
   numbers: NumberToken[];
   strings: StringToken[];
+  compositions: Composition[];
   components: ComponentDefinition[];
 }
 
@@ -271,6 +281,7 @@ export function emptyTokenData(): TokenData {
     shadows: [],
     numbers: [],
     strings: [],
+    compositions: [],
     components: [],
   };
 }
@@ -284,8 +295,15 @@ export const snapshotTokens = (s: TokenData): TokenData => ({
   shadows: s.shadows,
   numbers: s.numbers,
   strings: s.strings,
+  compositions: s.compositions,
   components: s.components,
 });
+
+// The tokens a composition's slots can be.
+const composeData = (s: TokenData): ComposeData => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii });
+
+// The compositions as they should be when tokens go: their slots keep the values the tokens had.
+const released = (s: TokenData, gone: string[]): Composition[] => releaseSlots(s.compositions, composeData(s), new Set(gone));
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -302,7 +320,7 @@ function toKebab(name: string): string {
 }
 
 
-const SLICE = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows", number: "numbers", string: "strings" } as const;
+const SLICE = { color: "colors", typography: "typography", spacing: "spacing", radius: "radii", shadow: "shadows", number: "numbers", string: "strings", composition: "compositions" } as const;
 
 type Arranged = { id: string; name: string; setId: string; group?: string; repoName?: string };
 const listOf = (s: TokenData, kind: TokenKind) => s[SLICE[kind]] as unknown as Arranged[];
@@ -359,7 +377,9 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         set((s) => {
           const colors = detachMissing(s.colors.filter((c) => c.setId !== setId));
           detached = before - aliasesIn(colors);
+          const gone = [...s.colors, ...s.numbers, ...s.strings, ...s.spacing, ...s.radii].filter((t) => t.setId === setId).map((t) => t.id);
           return {
+            compositions: released(s, gone).filter((c) => c.setId !== setId),
             sets: s.sets.filter((st) => st.id !== setId),
             colors,
             typography: s.typography.filter((t) => t.setId !== setId),
@@ -489,7 +509,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         })),
 
       deleteColor: (id) =>
-        set((s) => ({ colors: detachMissing(s.colors.filter((c) => c.id !== id)) })),
+        set((s) => ({ colors: detachMissing(s.colors.filter((c) => c.id !== id)), compositions: released(s, [id]) })),
 
       // ── Other token CRUD ────────────────────────────────────────────────────
 
@@ -557,7 +577,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       updateNumber: (id, updates) =>
         set((s) => ({ numbers: s.numbers.map((n) => (n.id === id ? { ...n, ...updates } : n)) })),
       deleteNumber: (id) =>
-        set((s) => ({ numbers: s.numbers.filter((n) => n.id !== id) })),
+        set((s) => ({ numbers: s.numbers.filter((n) => n.id !== id), compositions: released(s, [id]) })),
 
       addString: (token) => {
         const id = nanoid(6);
@@ -567,7 +587,17 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       updateString: (id, updates) =>
         set((s) => ({ strings: s.strings.map((t) => (t.id === id ? { ...t, ...updates } : t)) })),
       deleteString: (id) =>
-        set((s) => ({ strings: s.strings.filter((t) => t.id !== id) })),
+        set((s) => ({ strings: s.strings.filter((t) => t.id !== id), compositions: released(s, [id]) })),
+
+      addComposition: (composition) => {
+        const id = nanoid(6);
+        set((s) => ({ compositions: [...s.compositions, { ...composition, id, setId: composition.setId ?? s.sets[0]?.id ?? DEFAULT_SET_ID }] }));
+        return id;
+      },
+      updateComposition: (id, updates) =>
+        set((s) => ({ compositions: s.compositions.map((c) => (c.id === id ? { ...c, ...updates } : c)) })),
+      deleteComposition: (id) =>
+        set((s) => ({ compositions: s.compositions.filter((c) => c.id !== id) })),
 
       // ── Arranging ────────────────────────────────────────────────────────
 
@@ -631,6 +661,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
               c.themeValues = { ...(source as unknown as ColorToken).themeValues };
               if (c.themeAlias) c.themeAlias = { ...c.themeAlias };
             }
+            if (kind === "composition") (copy as unknown as Composition).slots = (source as unknown as Composition).slots.map((x) => ({ ...x }));
             out.splice(at + 1, 0, copy);
             made.push(copy.id);
           }
@@ -642,7 +673,9 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       deleteTokens: (kind, ids) =>
         set((s) => {
           const next = withList(kind, listOf(s, kind).filter((t) => !ids.includes(t.id))) as Partial<TokenData>;
-          return (kind === "color" ? { ...next, colors: detachMissing(next.colors!) } : next) as never;
+          const withColors = kind === "color" ? { ...next, colors: detachMissing(next.colors!) } : next;
+          // Compositions that had one of these as a part keep the value it had.
+          return (kind === "composition" ? withColors : { ...withColors, compositions: released(s, ids) }) as never;
         }),
 
       renameGroup: (kind, setId, from, to) =>
@@ -712,7 +745,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       },
 
       replaceTokenData: (data) =>
-        set({ sets: data.sets, colors: data.colors, typography: data.typography, spacing: data.spacing, radii: data.radii, shadows: data.shadows, numbers: data.numbers ?? [], strings: data.strings ?? [], components: data.components }),
+        set({ sets: data.sets, colors: data.colors, typography: data.typography, spacing: data.spacing, radii: data.radii, shadows: data.shadows, numbers: data.numbers ?? [], strings: data.strings ?? [], compositions: data.compositions ?? [], components: data.components }),
 
       // ── Load / Export / Import ──────────────────────────────────────────────
 
@@ -774,6 +807,24 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
           for (const t of strings) group[t.name] = t.use === "font-family" ? { $value: t.value, $type: "fontFamily" } : { $value: t.value, $type: "string" };
           tokens.string = group;
         }
+        const data = composeData(get());
+        const { compositions } = get();
+        if (compositions.length) {
+          const group: Record<string, unknown> = {};
+          const dtcg = (name: string) => name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+          for (const c of compositions) {
+            const v = resolve(c, data);
+            if (c.kind === "typography") {
+              group[c.name] = { $type: "typography", $value: Object.fromEntries(Object.entries(v).map(([k, x]) => [dtcg(k), x])) };
+            } else if (c.kind === "shadow") {
+              group[c.name] = { $type: "shadow", $value: { x: v.x ?? "0px", y: v.y ?? "0px", blur: v.blur ?? "0px", spread: v.spread ?? "0px", color: v.color ?? "#00000040", ...(c.inset ? { inset: true } : {}) } };
+            } else {
+              // A custom composition is a group of the tokens it is made of.
+              group[c.name] = Object.fromEntries(c.slots.filter((x) => v[x.name] !== undefined).map((x) => [x.name, { $value: v[x.name], $type: x.type === "number" ? (x.unit ? "dimension" : "number") : x.type === "color" ? "color" : "string" }]));
+            }
+          }
+          tokens.composition = group;
+        }
         return JSON.stringify(tokens, null, 2);
       },
 
@@ -790,6 +841,10 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
         for (const sh of shadows) lines.push(`  --shadow-${toKebab(sh.name.replace(/^shadow-/, ""))}: ${sh.x}px ${sh.y}px ${sh.blur}px ${sh.spread}px ${sh.color};`);
         for (const n of get().numbers) lines.push(`  --${toKebab(n.name)}: ${n.value}${n.unit};`);
         for (const t of get().strings) lines.push(`  --${toKebab(t.name)}: ${t.value};`);
+        for (const c of get().compositions) {
+          if (c.kind === "shadow") { lines.push(`  --shadow-${toKebab(c.name.replace(/^shadow-/, ""))}: ${previewStyle(c, composeData(get())).boxShadow};`); continue; }
+          for (const [slotName, text] of Object.entries(resolve(c, composeData(get())))) lines.push(`  --${toKebab(c.name)}-${slotName}: ${text};`);
+        }
         lines.push("}");
         return lines.join("\n");
       },

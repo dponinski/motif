@@ -34,10 +34,10 @@ const check = (name, ok, detail = "") => {
   const saved = async () => { await page.waitForTimeout(1500); return page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].tokens); };
 
   // ── What there is to make ─────────────────────────────────────────────────
-  check("the tabs are the three types, then the kinds that have their own", (await tabs()).join() === "Colors,Numbers,Strings,Typography,Spacing,Radii,Shadows", (await tabs()).join());
+  check("the tabs are the three types, compositions, then the kinds that have their own", (await tabs()).join() === "Colors,Numbers,Strings,Compositions,Typography,Spacing,Radii,Shadows", (await tabs()).join());
   await page.getByRole("button", { name: "New token" }).click();
   const items = await page.getByRole("menuitem").allInnerTexts();
-  check("New token asks what it is: Color, Number or String, then Spacing, Radius, Shadow or Text style", items.map((t) => t.split("\n")[0].trim()).join() === "Color,Number,String,Spacing,Radius,Shadow,Text style", items.join("|"));
+  check("New token asks what it is: Color, Number, String or Composition, then Spacing, Radius, Shadow or Text style", items.map((t) => t.split("\n")[0].trim()).join() === "Color,Number,String,Composition,Spacing,Radius,Shadow,Text style", items.join("|"));
   await page.keyboard.press("Escape");
 
   // ── A Number ──────────────────────────────────────────────────────────────
