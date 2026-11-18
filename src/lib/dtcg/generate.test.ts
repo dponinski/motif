@@ -96,3 +96,15 @@ describe("numbers and strings that differ by theme", () => {
     expect(css).not.toMatch(/--text-ratio[^;]*1\.75/);
   });
 });
+
+describe("compositions that differ by theme", () => {
+  it("are in their theme's block of the stylesheet", async () => {
+    const css = generateCss(writeDtcg(fixture(), { files: "single" }).files);
+    const dark = [...css.matchAll(/\.dark\s*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
+    // a text style: the parts that differ; a shadow: the whole value (it is one variable); a custom composition: the parts that differ
+    expect(dark).toMatch(/--text-heading--line-height:\s*1\.4/);
+    expect(dark).toMatch(/--shadow-card:[^;]*2px/);
+    expect(dark).toMatch(/--composition-badge-label:\s*Nouveau/);
+    expect(css).toMatch(/--text-heading--line-height:\s*1\.2/);
+  });
+});

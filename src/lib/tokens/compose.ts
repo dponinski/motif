@@ -1,13 +1,22 @@
 import type { Composition, Slot, TokenType, Unit } from "./model";
 
+// What a part is in a theme: the value or token it has of its own there, else the one every theme has.
+export function slotIn(slot: Slot, themeId?: string): Slot {
+  const own = themeId ? slot.themes?.[themeId] : undefined;
+  if (!own) return slot;
+  const { themes: _all, ref: _r, value: _v, unit: _u, ...rest } = slot;
+  void _all; void _r; void _v; void _u;
+  return { ...rest, ...(own.ref ? { ref: own.ref } : { ...(own.value !== undefined ? { value: own.value } : {}), ...(own.unit !== undefined ? { unit: own.unit } : {}) }) };
+}
+
 // Compositions: tokens that go together as one (a text style is a font family String, a size Number, a weight, a line height). Each part (a
 // slot) is a value of its own or another token of the same type, so changing that token changes every composition that uses it.
 
 // The tokens a slot can be, wherever they are kept in the store.
 export interface ComposeData {
   colors: { id: string; name: string; setId: string; value: string }[];
-  numbers: { id: string; name: string; setId: string; value: number; unit: Unit }[];
-  strings: { id: string; name: string; setId: string; value: string }[];
+  numbers: { id: string; name: string; setId: string; value: number; unit: Unit; themeValues?: Record<string, number> }[];
+  strings: { id: string; name: string; setId: string; value: string; themeValues?: Record<string, string> }[];
   spacing: { id: string; name: string; setId: string; value: number }[];
   radii: { id: string; name: string; setId: string; value: number }[];
 }
@@ -18,20 +27,21 @@ export interface Choice { id: string; name: string; setId: string; text: string 
 
 // The tokens of a type that a slot can point at: a Number is a Number, a spacing or a radius (those are lengths in pixels), a String is a
 // String, a Color is a Color.
-export function choicesFor(data: ComposeData, type: TokenType): Choice[] {
+export function choicesFor(data: ComposeData, type: TokenType, themeId?: string): Choice[] {
   if (type === "color") return data.colors.map((c) => ({ id: c.id, name: c.name, setId: c.setId, text: c.value }));
-  if (type === "string") return data.strings.map((s) => ({ id: s.id, name: s.name, setId: s.setId, text: s.value }));
+  if (type === "string") return data.strings.map((s) => ({ id: s.id, name: s.name, setId: s.setId, text: (themeId ? s.themeValues?.[themeId] : undefined) ?? s.value }));
   return [
-    ...data.numbers.map((n) => ({ id: n.id, name: n.name, setId: n.setId, text: `${n.value}${n.unit}` })),
+    ...data.numbers.map((n) => ({ id: n.id, name: n.name, setId: n.setId, text: `${(themeId ? n.themeValues?.[themeId] : undefined) ?? n.value}${n.unit}` })),
     ...data.spacing.map((n) => ({ id: n.id, name: n.name, setId: n.setId, text: `${n.value}px` })),
     ...data.radii.map((n) => ({ id: n.id, name: n.name, setId: n.setId, text: `${n.value}px` })),
   ];
 }
 
 // What a slot is: the token it points at (as that token is now), else the value it has of its own. Null when there is nothing.
-export function slotText(slot: Slot, data: ComposeData): string | null {
+export function slotText(part: Slot, data: ComposeData, themeId?: string): string | null {
+  const slot = slotIn(part, themeId);
   if (slot.ref) {
-    const hit = choicesFor(data, slot.type).find((c) => c.id === slot.ref);
+    const hit = choicesFor(data, slot.type, themeId).find((c) => c.id === slot.ref);
     if (hit) return hit.text;
   }
   if (slot.value === undefined || slot.value === "") return null;
@@ -42,20 +52,32 @@ export function slotText(slot: Slot, data: ComposeData): string | null {
 export const slotMissing = (slot: Slot, data: ComposeData): boolean => !!slot.ref && !choicesFor(data, slot.type).some((c) => c.id === slot.ref);
 
 // The slots of a composition as text, by name.
-export function resolve(c: Pick<Composition, "slots">, data: ComposeData): Record<string, string> {
+export function resolve(c: Pick<Composition, "slots">, data: ComposeData, themeId?: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const slot of c.slots) { const t = slotText(slot, data); if (t !== null) out[slot.name] = t; }
+  for (const slot of c.slots) { const t = slotText(slot, data, themeId); if (t !== null) out[slot.name] = t; }
   return out;
 }
 
 // Compositions in which the tokens `gone` were slots: each slot keeps the value the token had (`data` is the tokens as they were).
 export function releaseSlots(compositions: Composition[], data: ComposeData, gone: ReadonlySet<string>): Composition[] {
-  if (!compositions.some((c) => c.slots.some((s) => s.ref && gone.has(s.ref)))) return compositions;
+  const points = (s: Slot) => (s.ref && gone.has(s.ref)) || Object.values(s.themes ?? {}).some((t) => t.ref && gone.has(t.ref));
+  if (!compositions.some((c) => c.slots.some(points))) return compositions;
   return compositions.map((c) => {
-    if (!c.slots.some((s) => s.ref && gone.has(s.ref))) return c;
+    if (!c.slots.some(points)) return c;
     return {
       ...c,
       slots: c.slots.map((s): Slot => {
+        if (!points(s)) return s;
+        // A theme's own token that goes keeps the value it had in that theme.
+        if (s.themes && Object.values(s.themes).some((t) => t.ref && gone.has(t.ref))) {
+          const themes = Object.fromEntries(Object.entries(s.themes).map(([id, t]) => {
+            if (!t.ref || !gone.has(t.ref)) return [id, t];
+            const text = slotText(s, data, id);
+            const m = text !== null && s.type === "number" ? /^(-?[\d.]+)(px|rem|em|%)?$/.exec(text) : null;
+            return [id, m ? { value: m[1], unit: (m[2] ?? "") as Unit } : text === null ? {} : { value: text }];
+          }));
+          s = { ...s, themes };
+        }
         if (!s.ref || !gone.has(s.ref)) return s;
         const { ref: _, ...rest } = s;
         const text = slotText(s, data);
@@ -96,8 +118,8 @@ export function newSlotName(slots: Slot[]): string {
 const length = (t: string | undefined, fallback = "0px") => (t === undefined ? fallback : /^-?[\d.]+$/.test(t) ? `${t}px` : t);
 
 // The style a composition gives a sample: a text style the font, a shadow the box shadow. Nothing for a custom one.
-export function previewStyle(c: Pick<Composition, "kind" | "slots" | "inset">, data: ComposeData): Record<string, string | number> {
-  const v = resolve(c, data);
+export function previewStyle(c: Pick<Composition, "kind" | "slots" | "inset">, data: ComposeData, themeId?: string): Record<string, string | number> {
+  const v = resolve(c, data, themeId);
   if (c.kind === "typography") {
     const style: Record<string, string | number> = {};
     if (v["font-family"]) style.fontFamily = v["font-family"];
@@ -114,6 +136,6 @@ export function previewStyle(c: Pick<Composition, "kind" | "slots" | "inset">, d
 }
 
 // What the composition says in a line, for a list and for search.
-export function summary(c: Pick<Composition, "slots">, data: ComposeData): string {
-  return c.slots.map((s) => `${s.name} ${slotText(s, data) ?? "—"}`).join(" · ");
+export function summary(c: Pick<Composition, "slots">, data: ComposeData, themeId?: string): string {
+  return c.slots.map((s) => `${s.name} ${slotText(s, data, themeId) ?? "—"}`).join(" · ");
 }

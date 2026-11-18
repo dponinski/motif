@@ -192,8 +192,20 @@ export function readDtcg(files: DtcgFiles, existing?: StoredTokenData): Read {
   };
   const SLOT_TYPE: Record<string, TokenType> = { "font-family": "string", "font-size": "number", "font-weight": "number", "line-height": "number", "letter-spacing": "number", x: "number", y: "number", blur: "number", spread: "number", color: "color" };
 
+  // What a part has in a theme that is not the first, when that theme's file says something about it and it differs from the part.
+  const inThemes = (slot: Slot, cs: { themes: { key: string }[] }, setThemes: { id: string }[], read: (themeKey: string) => Slot | null): Slot => {
+    const themes: Record<string, { value?: string; unit?: Unit; ref?: string }> = {};
+    cs.themes.forEach((t, i) => {
+      if (i === 0) return;
+      const other = read(t.key);
+      if (!other || JSON.stringify([other.ref, other.value, other.unit]) === JSON.stringify([slot.ref, slot.value, slot.unit])) return;
+      themes[setThemes[i].id] = other.ref ? { ref: other.ref } : { ...(other.value !== undefined ? { value: other.value } : {}), ...(other.unit !== undefined ? { unit: other.unit } : {}) };
+    });
+    return Object.keys(themes).length ? { ...slot, themes } : slot;
+  };
+
   for (const f of base) {
-    const { set } = setOf(f);
+    const { set, cs } = setOf(f);
     const group = typeof f.ext.group === "string" ? f.ext.group : undefined;
     const repoName = typeof f.ext.repoName === "string" ? f.ext.repoName : undefined;
     const head = { name: nameOf(f), setId: set.id, ...(group ? { group } : {}), ...(repoName !== undefined ? { repoName } : {}) };
@@ -204,7 +216,7 @@ export function readDtcg(files: DtcgFiles, existing?: StoredTokenData): Read {
         const slotName = typeof child.ext.slot === "string" ? child.ext.slot : child.path[child.path.length - 1];
         const type: TokenType = child.type === "color" ? "color" : child.type === "dimension" || child.type === "number" ? "number" : "string";
         const slot = slotOf(slotName, type, child.value);
-        if (slot) slots.push(slot);
+        if (slot) slots.push(inThemes(slot, cs, set.themes, (themeKey) => { const o = overrides.get(`${themeKey}\0${keyOf(child.path)}`); return o ? slotOf(slotName, type, o.value) : null; }));
       }
       compositions.push({ id: idFor(set.name, f.path), ...head, kind: "custom", slots });
     } else if ((f.type === "typography" || f.type === "shadow") && isObject(f.value)) {
@@ -213,7 +225,10 @@ export function readDtcg(files: DtcgFiles, existing?: StoredTokenData): Read {
       for (const [slotName, prop] of Object.entries(props)) {
         if (!(prop in f.value)) continue;
         const slot = slotOf(slotName, SLOT_TYPE[slotName], f.value[prop]);
-        if (slot) slots.push(slot);
+        if (slot) slots.push(inThemes(slot, cs, set.themes, (themeKey) => {
+          const o = overrides.get(`${themeKey}\0${keyOf(f.path)}`);
+          return o && isObject(o.value) && prop in o.value ? slotOf(slotName, SLOT_TYPE[slotName], o.value[prop]) : null;
+        }));
       }
       if (Array.isArray(f.ext.extra)) slots.push(...(f.ext.extra as Slot[]));
       compositions.push({

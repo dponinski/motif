@@ -37,14 +37,14 @@ export function fixture(): StoredTokenData {
     compositions: [
       { id: "c-head", name: "heading", kind: "typography", setId: "set-sem", group: "text", slots: [
         { name: "font-family", type: "string", ref: "s-sans" }, { name: "font-size", type: "number", ref: "n-xl" }, { name: "font-weight", type: "number", ref: "n-bold" },
-        { name: "line-height", type: "number", value: "1.2", unit: "" }, { name: "letter-spacing", type: "number", value: "-0.5", unit: "px" },
+        { name: "line-height", type: "number", value: "1.2", unit: "", themes: { [SD]: { value: "1.4", unit: "" } } }, { name: "letter-spacing", type: "number", value: "-0.5", unit: "px" },
       ] },
       { id: "c-card", name: "card", kind: "shadow", setId: "set-sem", inset: true, slots: [
-        { name: "x", type: "number", value: "0", unit: "px" }, { name: "y", type: "number", value: "4", unit: "px" }, { name: "blur", type: "number", value: "8", unit: "px" },
+        { name: "x", type: "number", value: "0", unit: "px" }, { name: "y", type: "number", value: "4", unit: "px", themes: { [SD]: { value: "2", unit: "px" } } }, { name: "blur", type: "number", value: "8", unit: "px" },
         { name: "spread", type: "number", value: "0", unit: "px" }, { name: "color", type: "color", ref: "overlay" },
       ] },
       { id: "c-badge", name: "badge", kind: "custom", setId: "set-sem", slots: [
-        { name: "background", type: "color", ref: "brand" }, { name: "Padding X", type: "number", ref: "sp4" }, { name: "label", type: "string", value: "New" },
+        { name: "background", type: "color", ref: "brand", themes: { [SD]: { ref: "accent" } } }, { name: "Padding X", type: "number", ref: "sp4" }, { name: "label", type: "string", value: "New", themes: { [SD]: { value: "Nouveau" } } },
       ] },
     ],
   };

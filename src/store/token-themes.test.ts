@@ -66,3 +66,44 @@ describe("numbers and strings in themes", () => {
     expect(themes().length).toBe(1);
   });
 });
+
+describe("compositions in themes", () => {
+  const made = () => {
+    const set = store().sets[0].id;
+    const dark = store().addThemeToSet(set, "Dark");
+    const size = store().addNumber({ name: "text-xl", value: 1.5, unit: "rem", setId: set });
+    store().setNumberThemeValue(size, dark, 1.75);
+    const id = store().addComposition({
+      name: "heading", kind: "typography", setId: set,
+      slots: [{ name: "font-size", type: "number", ref: size }, { name: "line-height", type: "number", value: "1.2", unit: "", themes: { [dark]: { value: "1.4", unit: "" } } }],
+    });
+    return { set, dark, size, id };
+  };
+
+  it("have parts that are another value in a theme, and the value the token has there", async () => {
+    const { dark, id } = made();
+    const { resolve } = await import("../lib/tokens/compose");
+    const c = store().compositions.find((x) => x.id === id)!;
+    const data = { colors: store().colors, numbers: store().numbers, strings: store().strings, spacing: store().spacing, radii: store().radii };
+    expect(resolve(c, data)).toEqual({ "font-size": "1.5rem", "line-height": "1.2" });
+    expect(resolve(c, data, dark)).toEqual({ "font-size": "1.75rem", "line-height": "1.4" });
+  });
+
+  it("are copied with a theme that is duplicated and lose a theme that is deleted", () => {
+    const { set, dark, id } = made();
+    const copy = store().duplicateTheme(set, dark);
+    expect(store().compositions.find((x) => x.id === id)!.slots[1].themes).toEqual({ [dark]: { value: "1.4", unit: "" }, [copy]: { value: "1.4", unit: "" } });
+    store().deleteThemeFromSet(set, dark);
+    expect(store().compositions.find((x) => x.id === id)!.slots[1].themes).toEqual({ [copy]: { value: "1.4", unit: "" } });
+    store().deleteThemeFromSet(set, copy);
+    expect(store().compositions.find((x) => x.id === id)!.slots[1].themes).toBeUndefined();
+  });
+
+  it("keep what a part had in a theme when the token it was there goes", () => {
+    const { set, dark, id } = made();
+    const other = store().addNumber({ name: "tight", value: 1.1, unit: "", setId: set });
+    store().updateComposition(id, { slots: [{ name: "line-height", type: "number", value: "1.2", unit: "", themes: { [dark]: { ref: other } } }] });
+    store().deleteNumber(other);
+    expect(store().compositions.find((x) => x.id === id)!.slots[0].themes).toEqual({ [dark]: { value: "1.1", unit: "" } });
+  });
+});

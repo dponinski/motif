@@ -42,6 +42,16 @@ export interface Slot {
   value?: string;
   unit?: Unit;
   ref?: string;
+  // What the part is in a theme that has one of its own (theme id -> a literal, or another token): the part's own value or token is the one
+  // every other theme has.
+  themes?: Record<string, SlotValue>;
+}
+
+// A part's value in a theme: a literal (with its unit, for a number) or another token.
+export interface SlotValue {
+  value?: string;
+  unit?: Unit;
+  ref?: string;
 }
 
 // Tokens that go together as one: a text style (font family, size, weight, line height) or a shadow (offsets, blur, spread, color).
