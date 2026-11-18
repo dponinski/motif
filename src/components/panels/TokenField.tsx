@@ -304,7 +304,7 @@ function SaveAsToken({ label, save }: { label: string; save: SaveToken }) {
             </span>
           </label>
           <p className="mt-1.5 min-h-[1rem] text-2xs text-text-tertiary">{problem && typed ? problem : "It goes in the tokens linked to the repository, and is sent with the next sync."}</p>
-          <button type="button" disabled={!!problem} onClick={go} className="mt-1 w-full rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Save and use</button>
+          <button type="button" disabled={!!problem} onClick={go} className="mt-1 w-full rounded bg-blaze px-2 min-h-11 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Save and use</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

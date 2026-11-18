@@ -47,7 +47,7 @@ function downloadText(filename: string, content: string) {
   a.click();
 }
 
-const headerButton = "flex items-center gap-1 px-2.5 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors disabled:opacity-30 disabled:hover:bg-transparent";
+const headerButton = "flex items-center gap-1 px-2.5 min-h-11 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors disabled:opacity-30 disabled:hover:bg-transparent";
 
 // The tokens of the project: sets and themes on the left, and for the open set a tab for each kind of token.
 export default function TokensView({ onClose }: { onClose?: () => void }) {

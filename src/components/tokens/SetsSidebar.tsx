@@ -56,7 +56,7 @@ export default function SetsSidebar({
     });
   };
 
-  const field = "w-full rounded border bg-surface-subtle px-1.5 py-0.5 text-xs text-text-primary outline-none border-accent";
+  const field = "w-full rounded border bg-surface-subtle px-1.5 min-h-11 py-0.5 text-xs text-text-primary outline-none border-accent";
 
   return (
     <div className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">

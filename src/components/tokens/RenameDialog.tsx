@@ -20,7 +20,7 @@ import { isDtcgLink, repoSlug, stylesheetLink, useGitStore, type GitConnection }
 import { editTokens } from "@/store/token-history";
 import { nameAtPlace, pathInFiles, type Row } from "./rows";
 
-const field = "rounded border border-line bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
+const field = "rounded border border-line bg-surface-base px-2 min-h-11 py-1 text-xs text-text-primary outline-none focus:border-accent";
 const primary = "h-11 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 
 // Renames a token the repository names: finds every place the repository's code names it, and puts the new names among the changes

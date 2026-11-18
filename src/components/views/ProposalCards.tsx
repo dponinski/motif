@@ -14,7 +14,7 @@ import { stylesheetLink, useGitStore } from "@/store/git";
 import { useAIStore, type AIMessage } from "@/store/ai";
 import { useChatSource } from "./chat-source";
 
-const button = "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors disabled:opacity-50";
+const button = "flex items-center gap-1.5 px-2.5 min-h-11 py-1.5 text-xs font-medium rounded-md border transition-colors disabled:opacity-50";
 const primary = `${button} bg-accent/15 hover:bg-accent/25 text-accent border-accent/30`;
 const quiet = `${button} border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle`;
 

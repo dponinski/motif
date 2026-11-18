@@ -147,8 +147,8 @@ export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
           className={cn("rounded border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent", f.width ?? "w-40", f.mono && "font-mono", bad === f.key ? "border-danger" : "border-surface-border")}
         />
       ))}
-      <button type="button" onClick={submit} className="rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze hover:bg-blaze/90">Add</button>
-      <button type="button" onClick={onClose} className="rounded px-2 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary">Done</button>
+      <button type="button" onClick={submit} className="rounded bg-blaze px-2 min-h-11 py-1 text-xs font-medium text-on-blaze hover:bg-blaze/90">Add</button>
+      <button type="button" onClick={onClose} className="rounded px-2 min-h-11 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary">Done</button>
       <span className="text-2xs text-text-tertiary">Enter adds it and stays for the next</span>
     </div>
   );

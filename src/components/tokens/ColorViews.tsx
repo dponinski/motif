@@ -135,10 +135,10 @@ function AliasField({ token, theme, ctx }: { token: ColorToken; theme: TokenThem
             {choices}
             {!options.some((c) => targetKey(c, token.setId) === target) && <option value={target}>{label}</option>}
           </select>
-          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${label}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
+          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${label}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 min-h-11 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
         </>
       ) : (
-        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-line bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none">
+        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-line bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none">
           <option value="">Make it another token…</option>
           {choices}
         </select>
@@ -173,16 +173,16 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       })}
       <div className="flex items-center gap-1.5 border-t border-surface-border pt-2">
         <span className="text-2xs text-text-tertiary">Group</span>
-        <select aria-label={`Group of ${row.name}`} value={row.group} onChange={(e) => ctx.act.toGroup([row.id], e.target.value)} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 py-0.5 text-xs text-text-primary outline-none">
+        <select aria-label={`Group of ${row.name}`} value={row.group} onChange={(e) => ctx.act.toGroup([row.id], e.target.value)} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 min-h-11 py-0.5 text-xs text-text-primary outline-none">
           {[...new Set([...ctx.groups, row.group])].map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </div>
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => copy(hexOf(valueIn(token, ctx.shown[0]?.id ?? ctx.themes[0].id)))} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> Hex</button>
-        <button type="button" onClick={() => copy(`var(--${row.linked ? row.name : cssName(row.name)})`)} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> var()</button>
-        <button type="button" onClick={() => { ctx.act.duplicate([row.id]); ctx.setOpenId(null); }} className="rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary">Duplicate</button>
+        <button type="button" onClick={() => copy(hexOf(valueIn(token, ctx.shown[0]?.id ?? ctx.themes[0].id)))} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> Hex</button>
+        <button type="button" onClick={() => copy(`var(--${row.linked ? row.name : cssName(row.name)})`)} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> var()</button>
+        <button type="button" onClick={() => { ctx.act.duplicate([row.id]); ctx.setOpenId(null); }} className="rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary">Duplicate</button>
         <div className="flex-1" />
-        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => { ctx.act.remove([row.id]); ctx.setOpenId(null); }} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /> Delete</button>
+        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => { ctx.act.remove([row.id]); ctx.setOpenId(null); }} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /> Delete</button>
       </div>
       {row.use && (
         <p className="text-2xs text-text-tertiary" data-usage>

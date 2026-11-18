@@ -51,7 +51,7 @@ function Visual({ row }: { row: Row }) {
   }
 }
 
-const selectClass = "rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
+const selectClass = "rounded border border-surface-border bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
 
 function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const set = (patch: Record<string, unknown>) => ctx.act.update(row, patch);

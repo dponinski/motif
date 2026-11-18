@@ -107,16 +107,16 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
           </button>
           {menu && (
             <div className="absolute right-0 top-7 z-10 w-44 overflow-hidden rounded-md border border-surface-border bg-surface-raised text-[14px] shadow-lg" onClick={(e) => e.stopPropagation()}>
-              <button className="w-full px-3 py-1.5 text-left text-text-secondary hover:bg-surface-subtle hover:text-text-primary" onClick={() => { setEditing(true); setMenu(false); }}>
+              <button className="w-full px-3 min-h-11 py-1.5 text-left text-text-secondary hover:bg-surface-subtle hover:text-text-primary" onClick={() => { setEditing(true); setMenu(false); }}>
                 Rename
               </button>
               {moves.map((m) => (
-                <button key={m.teamId ?? "own"} className="w-full truncate px-3 py-1.5 text-left text-text-secondary hover:bg-surface-subtle hover:text-text-primary" onClick={() => void move(m.teamId)}>
+                <button key={m.teamId ?? "own"} className="w-full truncate px-3 min-h-11 py-1.5 text-left text-text-secondary hover:bg-surface-subtle hover:text-text-primary" onClick={() => void move(m.teamId)}>
                   Move to {m.label}
                 </button>
               ))}
               {canDelete && (
-                <button className="w-full px-3 py-1.5 text-left text-danger hover:bg-danger/10" onClick={() => { setConfirming(true); setMenu(false); }}>
+                <button className="w-full px-3 min-h-11 py-1.5 text-left text-danger hover:bg-danger/10" onClick={() => { setConfirming(true); setMenu(false); }}>
                   Delete
                 </button>
               )}
@@ -257,7 +257,7 @@ export default function Dashboard() {
               </div>
               <NewProjectDialog
                 trigger={
-                  <button className="bg-blaze hover:bg-blaze/90 text-on-blaze text-[14px] font-medium px-5 py-2 rounded-lg transition-colors">
+                  <button className="bg-blaze hover:bg-blaze/90 text-on-blaze text-[14px] font-medium px-5 min-h-11 py-2 rounded-lg transition-colors">
                     Connect a repository
                   </button>
                 }

@@ -77,7 +77,7 @@ export default function GroupedTokens({
               )}
               <span className="text-2xs text-text-tertiary tabular-nums">{items.length}</span>
               <div className="flex-1" />
-              <button type="button" onClick={() => onAdding(group)} aria-label={`Add to ${group}`} title={`Add a token to ${group}`} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs text-text-tertiary opacity-0 transition-opacity hover:bg-surface-overlay hover:text-text-primary focus:opacity-100 group-hover/head:opacity-100">
+              <button type="button" onClick={() => onAdding(group)} aria-label={`Add to ${group}`} title={`Add a token to ${group}`} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-0.5 text-2xs text-text-tertiary opacity-0 transition-opacity hover:bg-surface-overlay hover:text-text-primary focus:opacity-100 group-hover/head:opacity-100">
                 <Plus size={10} /> Add
               </button>
             </div>
@@ -93,7 +93,7 @@ export default function GroupedTokens({
         </section>
       )}
       {newGroup === null ? (
-        <button type="button" onClick={() => setNewGroup("")} className="flex w-full items-center gap-1.5 px-4 py-2 text-left text-2xs text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-secondary">
+        <button type="button" onClick={() => setNewGroup("")} className="flex w-full items-center gap-1.5 px-4 min-h-11 py-2 text-left text-2xs text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-secondary">
           <Plus size={10} /> New group
         </button>
       ) : (

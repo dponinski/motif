@@ -148,7 +148,7 @@ export default function ChatView() {
       {locked && (
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-surface-border bg-surface-subtle px-3 py-2 text-xs text-text-secondary" data-chat-locked>
           <span className="flex-1">Sign in to use the assistant.</span>
-          <button onClick={auth.openDialog} className="rounded bg-blaze px-2.5 py-1 font-medium text-on-blaze hover:bg-blaze/90">Sign in</button>
+          <button onClick={auth.openDialog} className="rounded bg-blaze px-2.5 min-h-11 py-1 font-medium text-on-blaze hover:bg-blaze/90">Sign in</button>
         </div>
       )}
 

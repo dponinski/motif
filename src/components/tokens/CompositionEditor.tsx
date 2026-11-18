@@ -11,7 +11,7 @@ import { CommitInput } from "./fields";
 
 // The parts of a composition: each is a value of its own or another token of its type (which it then follows), and what it comes to.
 
-const selectClass = "rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
+const selectClass = "rounded border border-surface-border bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
 
 export function useComposeData(): ComposeData {
   return useDesignSystemStore(useShallow((s): ComposeData => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
@@ -137,7 +137,7 @@ export default function CompositionEditor({ composition, onChange }: { compositi
         <div className="flex items-center gap-2 pt-1">
           <span className="text-2xs text-text-tertiary">Add a part</span>
           {(["color", "number", "string"] as TokenType[]).map((t) => (
-            <button key={t} type="button" aria-label={`Add a ${t} part to ${composition.name}`} onClick={() => add(t)} className="flex items-center gap-1 rounded border border-line px-2 py-0.5 text-2xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><Plus size={9} /> {t[0].toUpperCase() + t.slice(1)}</button>
+            <button key={t} type="button" aria-label={`Add a ${t} part to ${composition.name}`} onClick={() => add(t)} className="flex items-center gap-1 rounded border border-line px-2 min-h-11 py-0.5 text-2xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><Plus size={9} /> {t[0].toUpperCase() + t.slice(1)}</button>
           ))}
         </div>
       )}

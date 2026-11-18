@@ -39,7 +39,7 @@ function AliasPopover({ alias, count, onDone, className }: { alias: AliasBulk; c
             {alias.themes.map((t) => (
               <label key={t.id} className="flex items-center gap-2 text-2xs text-text-tertiary">
                 <span className="w-12 flex-shrink-0">{t.name}</span>
-                <select aria-label={`${t.name} becomes`} value={choice[t.id] ?? KEEP} onChange={(e) => setChoice((c) => ({ ...c, [t.id]: e.target.value }))} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 py-1 text-xs text-text-primary outline-none">
+                <select aria-label={`${t.name} becomes`} value={choice[t.id] ?? KEEP} onChange={(e) => setChoice((c) => ({ ...c, [t.id]: e.target.value }))} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 min-h-11 py-1 text-xs text-text-primary outline-none">
                   <option value={KEEP}>Leave as it is</option>
                   <option value={DETACH}>Detach (keep the color it is)</option>
                   {alias.targets.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}
@@ -47,7 +47,7 @@ function AliasPopover({ alias, count, onDone, className }: { alias: AliasBulk; c
               </label>
             ))}
           </div>
-          <button type="button" disabled={!chosen} onClick={go} className="mt-3 w-full rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Apply</button>
+          <button type="button" disabled={!chosen} onClick={go} className="mt-3 w-full rounded bg-blaze px-2 min-h-11 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Apply</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -70,7 +70,7 @@ function CopyThemePopover({ copy, count, onDone, className }: { copy: CopyThemeB
     setOpen(false);
     onDone(`${name(to)} now has ${name(from)}'s ${count === 1 ? "color" : `${count} colors`}.`);
   };
-  const select = "min-w-0 flex-1 rounded border border-surface-border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent";
+  const select = "min-w-0 flex-1 rounded border border-surface-border bg-surface-base px-1.5 min-h-11 py-1 text-xs text-text-primary outline-none focus:border-accent";
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild><button type="button" className={className}><ArrowRightLeft size={12} /> Copy between themes…</button></Popover.Trigger>
@@ -85,7 +85,7 @@ function CopyThemePopover({ copy, count, onDone, className }: { copy: CopyThemeB
               <select aria-label="Copy into theme" value={to} onChange={(e) => setTo(e.target.value)} className={select}>{copy.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
             </label>
           </div>
-          <button type="button" disabled={from === to} onClick={go} className="mt-3 w-full rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Copy</button>
+          <button type="button" disabled={from === to} onClick={go} className="mt-3 w-full rounded bg-blaze px-2 min-h-11 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Copy</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -131,7 +131,7 @@ export default function BulkBar({
   const linked = picked.filter((r) => r.linked).length;
   const used = picked.filter((r) => (r.use?.n ?? 0) > 0).length;
   const others = sets.filter((s) => s.id !== setId);
-  const button = "flex items-center gap-1.5 rounded px-2 py-1 text-xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary";
+  const button = "flex items-center gap-1.5 rounded px-2 min-h-11 py-1 text-xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary";
 
   return (
     <div role="toolbar" aria-label="Selected tokens" data-bulk-bar className="flex flex-shrink-0 items-center gap-1 border-b border-accent/30 bg-accent/10 px-4 py-1.5">
@@ -143,7 +143,7 @@ export default function BulkBar({
           <Popover.Content align="start" sideOffset={4} aria-label="Move to group" className="z-50 w-56 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-xl">
             <div className="max-h-48 overflow-y-auto">
               {groups.map((g) => (
-                <button key={g} type="button" onClick={() => { onGroup(g); setGroupOpen(false); }} className="block w-full truncate rounded px-2 py-1 text-left text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">{g}</button>
+                <button key={g} type="button" onClick={() => { onGroup(g); setGroupOpen(false); }} className="block w-full truncate rounded px-2 min-h-11 py-1 text-left text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">{g}</button>
               ))}
             </div>
             <div className="mt-1 flex items-center gap-1 border-t border-surface-border pt-1.5">
@@ -167,7 +167,7 @@ export default function BulkBar({
             <Popover.Content align="start" sideOffset={4} aria-label="Move to set" className="z-50 w-52 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-xl">
               {others.map((s) => (
                 <Popover.Close key={s.id} asChild>
-                  <button type="button" onClick={() => onSet(s.id)} className="block w-full truncate rounded px-2 py-1 text-left text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">{s.name}</button>
+                  <button type="button" onClick={() => onSet(s.id)} className="block w-full truncate rounded px-2 min-h-11 py-1 text-left text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">{s.name}</button>
                 </Popover.Close>
               ))}
               <p className="mt-1 border-t border-surface-border px-2 pt-1.5 text-2xs text-text-tertiary">In the other set they are Motif&apos;s own until that set is synced.</p>

@@ -70,7 +70,7 @@ function Segment({ set, theme, on, onShow, onRename, onDuplicate, onDelete }: {
   const repo = useRepoTheme(set, theme);
   return (
     <span className={cn("group/theme flex items-center rounded", on ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")} data-theme-segment={theme.id} onContextMenu={(e) => { e.preventDefault(); setOpen(true); }}>
-      <button type="button" aria-pressed={on} onClick={onShow} onDoubleClick={onRename} className="rounded-l px-2 py-1 text-xs" title={`Show ${theme.name}. Double-click to rename`}>{theme.name}</button>
+      <button type="button" aria-pressed={on} onClick={onShow} onDoubleClick={onRename} className="rounded-l px-2 min-h-11 py-1 text-xs" title={`Show ${theme.name}. Double-click to rename`}>{theme.name}</button>
       {repo && (
         <span
           data-theme-repo={repo.key ?? "motif-only"}
@@ -80,7 +80,7 @@ function Segment({ set, theme, on, onShow, onRename, onDuplicate, onDelete }: {
       )}
       <Menu.Root open={open} onOpenChange={setOpen}>
         <Menu.Trigger asChild>
-          <button type="button" aria-label={`Theme menu: ${theme.name}`} className={cn("rounded-r px-1 py-1 text-text-tertiary hover:text-text-primary focus-visible:opacity-100", on || open ? "opacity-100" : "opacity-0 group-hover/theme:opacity-100")}>
+          <button type="button" aria-label={`Theme menu: ${theme.name}`} className={cn("rounded-r px-1 min-h-11 py-1 text-text-tertiary hover:text-text-primary focus-visible:opacity-100", on || open ? "opacity-100" : "opacity-0 group-hover/theme:opacity-100")}>
             <MoreHorizontal size={11} />
           </button>
         </Menu.Trigger>
@@ -116,11 +116,11 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
     onAdd(trimmed, from, dark);
     setOpen(false);
   };
-  const field = "rounded border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none";
+  const field = "rounded border bg-surface-base px-1.5 min-h-11 py-1 text-xs text-text-primary outline-none";
   return (
     <Popover.Root open={open} onOpenChange={reset}>
       <Popover.Trigger asChild>
-        <button type="button" aria-label="Add theme" title="Add a theme: it starts as a copy of one you choose, or a dark version of it" className="flex items-center gap-1 rounded px-1.5 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><Plus size={11} /> Add</button>
+        <button type="button" aria-label="Add theme" title="Add a theme: it starts as a copy of one you choose, or a dark version of it" className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><Plus size={11} /> Add</button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} aria-label="New theme" className="z-50 w-72 rounded-lg border border-surface-border bg-surface-raised p-3 shadow-xl">
@@ -149,7 +149,7 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
                 <span className="block text-2xs leading-snug text-text-tertiary">Turns each color&apos;s lightness around and keeps its hue. A color that is another token stays that token.</span>
               </span>
             </label>
-            <button type="button" disabled={!trimmed || bad} onClick={create} className="rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Create theme</button>
+            <button type="button" disabled={!trimmed || bad} onClick={create} className="rounded bg-blaze px-2 min-h-11 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Create theme</button>
           </div>
         </Popover.Content>
       </Popover.Portal>
@@ -168,7 +168,7 @@ export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown:
       <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Themes</span>
       <div role="group" aria-label="Theme shown" className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5">
         {set.themes.length > 1 && (
-          <button type="button" aria-label="All themes" aria-pressed={shown === "all"} onClick={() => onShow("all")} title="Show every theme side by side" className={cn("rounded px-2 py-1 text-xs", shown === "all" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>All</button>
+          <button type="button" aria-label="All themes" aria-pressed={shown === "all"} onClick={() => onShow("all")} title="Show every theme side by side" className={cn("rounded px-2 min-h-11 py-1 text-xs", shown === "all" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>All</button>
         )}
         {set.themes.map((t) => renaming === t.id ? (
           <NameField key={t.id} initial={t.name} label={`Name of ${t.name}`} taken={taken(t.id)} onCancel={() => setRenaming(null)} onDone={(name) => { editTokens(() => ds().renameTheme(set.id, t.id, name)); setRenaming(null); }} />

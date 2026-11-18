@@ -159,7 +159,7 @@ function ComponentCard({ c }: { c: RepoComponent }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-surface-border bg-surface-raised">
-      <button className="flex w-full items-center gap-2 px-3 py-2.5 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
+      <button className="flex w-full items-center gap-2 px-3 min-h-11 py-2.5 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
         {open ? <ChevronDown size={12} className="flex-shrink-0 text-text-tertiary" /> : <ChevronRight size={12} className="flex-shrink-0 text-text-tertiary" />}
         <span className="text-sm font-medium text-text-primary">{c.name}</span>
         <span className={cn(chip, SUPPORT_STYLE[c.support.level])}>{SUPPORT_LABEL[c.support.level]}</span>
@@ -294,7 +294,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
             <Boxes size={11} /> {imported === null ? `Import ${importCount} components` : `Imported ${imported}`}
           </button>
         )}
-        <button onClick={rescan} disabled={busy} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
+        <button onClick={rescan} disabled={busy} className="flex items-center gap-1 rounded px-2.5 min-h-11 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
           {busy ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Rescan
         </button>
         <div className="h-5 w-px bg-surface-border" />
@@ -341,7 +341,7 @@ export default function RepoView({ onClose }: { onClose: () => void }) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-surface-base">
         <p className="text-xs text-text-tertiary">Nothing has been scanned yet. Scan a repository from Source control.</p>
-        <button onClick={onClose} className="rounded-md border border-line px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back to Git</button>
+        <button onClick={onClose} className="rounded-md border border-line px-3 min-h-11 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back to Git</button>
       </div>
     );
   }

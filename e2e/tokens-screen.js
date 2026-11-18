@@ -63,7 +63,7 @@ const extra = {
   await page.screenshot({ path: `${OUT}/tokens-editor.png` });
   await editor.getByLabel("Light value of primary-500").fill("not a color");
   await editor.getByLabel("Light value of primary-500").press("Enter");
-  check("a value that isn't a color is refused", (await editor.getByLabel("Light value of primary-500").evaluate((e) => e.className.includes("border-red"))) && (await page.locator('button[aria-label^="primary-500:"]').getAttribute("aria-label")).includes("#6366f1"));
+  check("a value that isn't a color is refused", (await editor.getByLabel("Light value of primary-500").evaluate((e) => e.className.includes("border-danger"))) && (await page.locator('button[aria-label^="primary-500:"]').getAttribute("aria-label")).includes("#6366f1"));
   await editor.getByLabel("Light value of primary-500").fill("rgb(255 0 0)");
   await editor.getByLabel("Light value of primary-500").press("Enter");
   check("one that is a color is taken, in any notation", await settle(async () => (await page.locator('button[aria-label^="primary-500:"]').getAttribute("aria-label")).includes("#ff0000")));
@@ -92,7 +92,7 @@ const extra = {
   await page.getByRole("button", { name: "Rename gray-50" }).click();
   await page.getByLabel("Name of gray-50").fill("gray-150");
   await page.getByLabel("Name of gray-50").press("Enter");
-  check("a name that is taken is refused", await page.getByLabel("Name of gray-50").evaluate((e) => e.className.includes("border-red")));
+  check("a name that is taken is refused", await page.getByLabel("Name of gray-50").evaluate((e) => e.className.includes("border-danger")));
   await page.getByLabel("Name of gray-50").press("Escape");
   check("a token the repository names can't be renamed here, and says why", (await page.getByRole("button", { name: "Rename brand" }).count()) === 0 && (await page.locator('[title^="Named by the repository (brand)"]').count()) === 1);
 

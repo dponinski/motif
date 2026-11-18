@@ -19,7 +19,7 @@ import { editTokens } from "@/store/token-history";
 type Tab = "paste" | "scale";
 type ScaleKind = "color" | "spacing" | "radius" | "typography" | "number";
 
-const field = "rounded border border-line bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
+const field = "rounded border border-line bg-surface-base px-2 min-h-11 py-1 text-xs text-text-primary outline-none focus:border-accent";
 const label = "flex flex-col gap-1 text-2xs text-text-tertiary";
 const STATUS: Record<PlanItem["status"], { text: string; className: string }> = {
   new: { text: "New", className: "bg-mint-soft text-success" },
@@ -104,8 +104,8 @@ function PlanPanel({ drafts, notes, set, onDone }: { drafts: Draft[]; notes: str
         <span className="flex-1 text-2xs text-text-tertiary" data-plan-summary>
           {chosen.length === 0 ? "Nothing selected" : [added ? `${added} to add` : "", updated ? `${updated} to change` : ""].filter(Boolean).join(" · ")}
         </span>
-        <button type="button" onClick={onDone} className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Cancel</button>
-        <button type="button" onClick={add} disabled={chosen.length === 0} className="rounded bg-blaze px-3 py-1.5 text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-40">
+        <button type="button" onClick={onDone} className="rounded px-3 min-h-11 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Cancel</button>
+        <button type="button" onClick={add} disabled={chosen.length === 0} className="rounded bg-blaze px-3 min-h-11 py-1.5 text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-40">
           {chosen.length === 0 ? "Add tokens" : `Add ${chosen.length} ${chosen.length === 1 ? "token" : "tokens"}`}
         </button>
       </div>
@@ -214,7 +214,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex gap-0.5 rounded bg-surface-subtle p-0.5" role="group" aria-label="Kind of scale">
         {tabs.map(([k, name]) => (
-          <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={cn("flex-1 rounded px-2 py-1 text-xs", kind === k ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>{name}</button>
+          <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={cn("flex-1 rounded px-2 min-h-11 py-1 text-xs", kind === k ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>{name}</button>
         ))}
       </div>
 
@@ -238,7 +238,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
           </div>
           <div className="flex flex-wrap gap-1" role="group" aria-label="Steps">
             {RAMP_STEPS.map((s) => (
-              <button key={s} type="button" aria-pressed={steps.includes(s)} onClick={() => setSteps((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))} className={cn("rounded-full border px-2 py-0.5 text-2xs tabular-nums", steps.includes(s) ? "border-accent/50 bg-accent/15 text-accent" : "border-line text-text-tertiary hover:text-text-secondary")}>{s}</button>
+              <button key={s} type="button" aria-pressed={steps.includes(s)} onClick={() => setSteps((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))} className={cn("rounded-full border px-2 min-h-11 py-0.5 text-2xs tabular-nums", steps.includes(s) ? "border-accent/50 bg-accent/15 text-accent" : "border-line text-text-tertiary hover:text-text-secondary")}>{s}</button>
             ))}
           </div>
           {ramp && (
@@ -305,7 +305,7 @@ export default function AddTokensDialog({ open, onOpenChange, set, kind }: { ope
             <Dialog.Title className="text-sm font-medium">Add tokens to {set.name}</Dialog.Title>
             <div className="ml-3 flex gap-0.5 rounded bg-surface-subtle p-0.5" role="tablist" aria-label="How to add">
               {([["paste", "Paste"], ["scale", "Scale"]] as [Tab, string][]).map(([id, name]) => (
-                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("rounded px-2.5 py-1 text-xs", tab === id ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>{name}</button>
+                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("rounded px-2.5 min-h-11 py-1 text-xs", tab === id ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>{name}</button>
               ))}
             </div>
             <div className="flex-1" />

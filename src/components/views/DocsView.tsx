@@ -219,7 +219,7 @@ function PageEditor({ page, ctx }: { page: DocPage; ctx: DocsContext }) {
         ))}
 
         <AddBlockMenu onAdd={(type) => insert(type, page.blocks.length - 1)}>
-          <button className="flex items-center gap-1.5 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-800">
+          <button className="flex items-center gap-1.5 rounded-md border border-dashed border-neutral-300 px-3 min-h-11 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-800">
             <Plus size={12} /> Add block
           </button>
         </AddBlockMenu>
@@ -262,7 +262,7 @@ function Sidebar({
                 page.id === selectedId ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
               )}
             >
-              <button className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-xs" onClick={() => onSelect(page.id)}>
+              <button className="min-w-0 flex-1 truncate px-2 min-h-11 py-1.5 text-left text-xs" onClick={() => onSelect(page.id)}>
                 {page.title || "Untitled"}
               </button>
               {sectionIndex === 0 && (
@@ -373,7 +373,7 @@ export default function DocsView({ projectId, onClose }: { projectId: string; on
             </button>
           ))}
         </div>
-        <button onClick={exportSite} disabled={preparing} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
+        <button onClick={exportSite} disabled={preparing} className="flex items-center gap-1 rounded px-2.5 min-h-11 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
           <Download size={11} /> {preparing ? "Preparing previews…" : "Export HTML"}
         </button>
 

@@ -108,7 +108,7 @@ export default function RepoComponentsSection() {
               c.id === activeId ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
             )}
           >
-            <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left">
+            <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 min-h-11 py-1.5 text-left">
               <span className="flex-1 truncate text-xs">{c.name}</span>
               {drafts.some((d) => d.id === c.id) && <span className="rounded bg-mint-soft px-1 text-2xs text-success" title="Made here, not in the repository yet">new</span>}
               <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", DOT[c.support.level])} title={DOT_LABEL[c.support.level]} />
