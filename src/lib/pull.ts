@@ -3,6 +3,7 @@ import { describeUpdate } from "./preview/library";
 import { scanBranch } from "./read-repository";
 import type { RepoAnalysis } from "./repo-scan/types";
 import { convertAnalysis } from "./dtcg/convert";
+import { migrateStylesheetLink } from "./dtcg/migrate";
 import { readRepoTokenFiles, type RepoTokenFiles } from "./dtcg/repo";
 import { planDtcgSync, resolveDtcg, takeDtcg, type DtcgLink, type DtcgPlan } from "./dtcg/sync";
 import type { DtcgFiles } from "./dtcg/types";
@@ -187,4 +188,28 @@ export function finishPull(pending: PendingConflicts, takeTheirs: number[]): str
   applySyncPlan(link, plan, takeTheirs, state);
   const n = plan.toMotif.length + plan.merge.conflicts.length;
   return `${plural(n, "token change")} taken, ${takeTheirs.length} of the ${plural(plan.merge.conflicts.length, "clash", "clashes")} in favour of the repository`;
+}
+
+// A project linked to the repository's stylesheets (which carry colors, spacing, radii and shadows of one set and nothing else) moves to design
+// tokens files, which carry every token, keeping what was changed here and not sent. Not for Tailwind 3 (its config isn't read as files yet), nor
+// while a token change is in the pull request (it would be written twice).
+export function moveToDesignTokenFiles(connection: GitConnection): { ok: boolean; message: string } {
+  const git = useGitStore.getState();
+  const analysis = git.analysis;
+  const slug = repoSlug(connection);
+  const link = stylesheetLink(git.tokenLink);
+  if (!analysis || !link || link.repo !== slug) return { ok: false, message: "There is no link to the repository's stylesheets to move." };
+  if (link.branch !== connection.defaultBranch) return { ok: false, message: `The tokens are linked to ${link.branch}, not to ${connection.defaultBranch}. Pull first.` };
+  if (analysis.stack.tailwindVersion === 3) return { ok: false, message: "Moving to design tokens files isn't available for Tailwind 3 yet." };
+  if (link.staged && link.staged.paths.length > 0) return { ok: false, message: "Token changes are already in your pull request. Merge or discard it first, then move the tokens." };
+  const conversion = convertAnalysis(analysis, slug);
+  if (!conversion) return { ok: false, message: "The repository's stylesheets have no variables that can become design tokens." };
+  const ds = useDesignSystemStore.getState();
+  if (!ds.sets.some((s) => s.id === link.setId)) return { ok: false, message: "The linked set is gone. Pull to link the tokens again." };
+
+  const out = migrateStylesheetLink({ link, slices: tokenSlices(), legacy: toStored(snapshotTokens(ds)), conversion, repo: slug });
+  ds.replaceTokenData(fromStored(out.data));
+  git.setTokenLink(out.link);
+  const waiting = out.carried.added + out.carried.changed + out.carried.removed;
+  return { ok: true, message: `The tokens are design tokens files now${waiting > 0 ? `, with the ${waiting} change${waiting === 1 ? "" : "s"} that were waiting` : ""}. The first push writes them.` };
 }

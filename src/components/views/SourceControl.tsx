@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { diffLines } from "@/lib/edit/diff";
 import { stackLine, stylingLine, supportCounts } from "@/lib/repo-scan/summary";
 import { scanBranch } from "@/lib/read-repository";
+import { moveToDesignTokenFiles } from "@/lib/pull";
 import { planExport, readRepoState } from "@/lib/token-sync/flow";
 import { stageDtcgTokens } from "@/lib/work/dtcg-tokens";
 import { toStored } from "@/lib/tokens/migrate";
@@ -291,6 +292,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
   const host = useGitHost(connection ?? NO_CONNECTION);
   const { status: account, login } = useAccount(useShallow((s) => ({ status: s.status, login: s.login })));
   const pull = usePullRepository();
+  const [moved, setMoved] = useState<{ ok: boolean; message: string } | null>(null);
   const linkedSetName = useDesignSystemStore((s) => s.sets.find((x) => x.id === link?.setId)?.name);
   const { busy: pulling, notice, behind } = usePullStatus();
   // A repository with no commits has nothing to start a branch from: the first commit is offered here, where sending happens.
@@ -430,7 +432,16 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
         <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link data-dtcg>{converting ? <>Tokens: the variables in your stylesheets ({converting.converted.length}) will move into design tokens files in {filesDir} with the first push, and {filesOutput} is generated from them. {converting.left.length > 0 ? `${converting.left.length} stay where they are.` : ""} Sync shows the check that every value comes out the same.</> : filesNew ? <>Tokens: every set will go into design tokens files in {filesDir} with the first push.</> : <>Tokens: every set is synced with the design tokens files in {filesDir}. Pull brings in what changed there; Push sends Motif&apos;s token changes to the files{filesOutput ? ` and writes ${filesOutput} from them` : ""}.</>}</p>
       )}
       {link && link.repo === slug && (
-        <p className="text-2xs leading-relaxed text-text-tertiary" data-token-link>Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository.{tailwind3 ? " Moving them into design tokens files isn’t available for Tailwind 3 yet; they are changed in the stylesheet and config as before." : ""}</p>
+        <div className="flex flex-col gap-1.5" data-token-link>
+          <p className="text-2xs leading-relaxed text-text-tertiary">Tokens: the set “{linkedSetName ?? "?"}” is linked to this repository’s stylesheets. Only its colors, spacing, radii and shadows are sent; Numbers, Strings, compositions and the tokens of other sets stay in Motif.{tailwind3 ? " Moving them into design tokens files isn’t available for Tailwind 3 yet; they are changed in the stylesheet and config as before." : ""}</p>
+          {!tailwind3 && (
+            <div className="flex flex-col items-start gap-1">
+              <button className={secondary} data-move-to-files onClick={() => setMoved(moveToDesignTokenFiles(connection))}>Move to design tokens files</button>
+              <p className="text-2xs leading-relaxed text-text-tertiary">Every token is sent that way, and what is waiting now is kept.</p>
+            </div>
+          )}
+          {moved && <p role="status" className={`text-2xs leading-relaxed ${moved.ok ? "text-text-secondary" : "text-danger"}`}>{moved.message}</p>}
+        </div>
       )}
 
       <Details connection={connection} onOpenReport={onOpenReport} />

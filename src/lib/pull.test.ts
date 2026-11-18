@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { GitHost, RepoReader } from "./github";
 import { memoryReader } from "./repo-scan";
 import { loadFixture } from "./repo-scan/fixtures";
-import { finishPull, pullRepository } from "./pull";
+import { finishPull, moveToDesignTokenFiles, pullRepository } from "./pull";
+import { waitingDtcgChanges } from "./work/dtcg-tokens";
+import { toStored } from "./tokens/migrate";
 import { readRepoState } from "./token-sync/flow";
 import { importRepoTokens } from "../store/token-sync";
-import { emptyTokenData, useDesignSystemStore } from "../store/design-system";
+import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "../store/design-system";
 import { isDtcgLink, stylesheetLink, useGitStore, type GitConnection } from "../store/git";
 import { useLibraryStore } from "../store/library";
 
@@ -228,3 +230,46 @@ describe("a repository whose tokens are variables in its stylesheets, on a later
   });
 });
 
+
+describe("moving a project linked to the stylesheets to design tokens files", () => {
+  const files = loadFixture("motif-test-system");
+
+  it("keeps what was waiting, and sends what the stylesheets never carried", async () => {
+    await linkedBefore(files);
+    const before = ds().colors.length;
+    expect(sheetLink()).not.toBeNull();
+    // Changes made here and not sent: a color changed, a color made, a Number and a String (which that link never carried).
+    ds().updateColorThemeValue(color("primary").id, light(), "#123456");
+    ds().addColor({ name: "accent-2", value: "#ff00aa", group: "base", setId: ds().sets[0].id });
+    ds().addNumber({ name: "scale", value: 12, unit: "px", setId: ds().sets[0].id });
+    ds().addString({ name: "family", value: "Inter, sans-serif", setId: ds().sets[0].id } as never);
+
+    const out = moveToDesignTokenFiles(connection);
+    expect(out.ok).toBe(true);
+    const link = git().tokenLink;
+    expect(isDtcgLink(link) && !!link.convert).toBe(true);
+    expect(sheetLink()).toBeNull();
+    expect(ds().colors.length).toBe(before + 1);
+    expect(ds().colors.find((c) => c.name === "primary" || c.repoName === "primary")!.themeValues[light()]).toBe("#123456");
+    expect(ds().numbers.map((n) => n.name)).toContain("scale");
+    expect(ds().strings.map((n) => n.name)).toContain("family");
+
+    // What the first push sends is the difference: the changed color, the color made, the Number and the String.
+    const waiting = waitingDtcgChanges(isDtcgLink(link) ? link : null, toStored(snapshotTokens(ds()))).map((c) => c.name);
+    expect(waiting.join(" ")).toMatch(/primary/);
+    expect(waiting.join(" ")).toMatch(/accent-2/);
+    expect(waiting.join(" ")).toMatch(/scale/);
+    expect(waiting.join(" ")).toMatch(/family/);
+  });
+
+  it("refuses while token changes are in the pull request, and for Tailwind 3", async () => {
+    await linkedBefore(files);
+    const staged = sheetLink()!;
+    git().setTokenLink({ ...staged, staged: { doc: staged.base, paths: [CSS] } });
+    expect(moveToDesignTokenFiles(connection).ok).toBe(false);
+    git().setTokenLink(staged);
+    git().setAnalysis({ ...git().analysis!, stack: { ...git().analysis!.stack, tailwindVersion: 3 } });
+    expect(moveToDesignTokenFiles(connection).message).toMatch(/Tailwind 3/);
+    expect(sheetLink()).not.toBeNull();
+  });
+});
