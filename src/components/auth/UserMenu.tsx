@@ -30,7 +30,7 @@ export default function UserMenu() {
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <button className="flex h-7 items-center gap-1.5 rounded-md border border-surface-border px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="Your account">
+        <button className="flex h-7 items-center gap-1.5 rounded-md border border-line px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="Your account">
           {user.avatar ? <img src={user.avatar} alt="" className="h-4 w-4 rounded-full" referrerPolicy="no-referrer" /> : <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[9px] font-semibold text-on-cobalt">{label[0]?.toUpperCase()}</span>}
           <span className="max-w-[160px] truncate">{label}</span>
         </button>

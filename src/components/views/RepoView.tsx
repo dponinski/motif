@@ -341,7 +341,7 @@ export default function RepoView({ onClose }: { onClose: () => void }) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-surface-base">
         <p className="text-xs text-text-tertiary">Nothing has been scanned yet. Scan a repository from Source control.</p>
-        <button onClick={onClose} className="rounded-md border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back to Git</button>
+        <button onClick={onClose} className="rounded-md border border-line px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back to Git</button>
       </div>
     );
   }

@@ -39,7 +39,7 @@ function AliasPopover({ alias, count, onDone, className }: { alias: AliasBulk; c
             {alias.themes.map((t) => (
               <label key={t.id} className="flex items-center gap-2 text-2xs text-text-tertiary">
                 <span className="w-12 flex-shrink-0">{t.name}</span>
-                <select aria-label={`${t.name} becomes`} value={choice[t.id] ?? KEEP} onChange={(e) => setChoice((c) => ({ ...c, [t.id]: e.target.value }))} className="min-w-0 flex-1 rounded border border-surface-border bg-surface-base px-1 py-1 text-xs text-text-primary outline-none">
+                <select aria-label={`${t.name} becomes`} value={choice[t.id] ?? KEEP} onChange={(e) => setChoice((c) => ({ ...c, [t.id]: e.target.value }))} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 py-1 text-xs text-text-primary outline-none">
                   <option value={KEEP}>Leave as it is</option>
                   <option value={DETACH}>Detach (keep the color it is)</option>
                   {alias.targets.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}

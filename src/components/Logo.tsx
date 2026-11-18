@@ -20,3 +20,34 @@ export default function Logo({ size = 24, className }: { size?: number; classNam
     </span>
   );
 }
+
+// The brand pattern: the four logo shapes tiled on a 64px grid with an 8px gap, as one tidy band (a cover or an empty state), in at most five colors.
+// One band to a page; never scattered.
+const TILES: { shape: "circle" | "square" | "quarter" | "leaf"; fill: string }[][] = [
+  [{ shape: "circle", fill: "var(--blaze)" }, { shape: "square", fill: "var(--cobalt)" }, { shape: "quarter", fill: "var(--sun)" }, { shape: "leaf", fill: "var(--mint)" }, { shape: "circle", fill: "var(--ink)" }, { shape: "square", fill: "var(--blaze)" }],
+  [{ shape: "leaf", fill: "var(--cobalt)" }, { shape: "quarter", fill: "var(--blaze)" }, { shape: "circle", fill: "var(--mint)" }, { shape: "square", fill: "var(--ink)" }, { shape: "quarter", fill: "var(--cobalt)" }, { shape: "leaf", fill: "var(--sun)" }],
+];
+
+export function Pattern({ className }: { className?: string }) {
+  const size = 64;
+  const gap = 8;
+  const cols = TILES[0].length;
+  const width = cols * size + (cols - 1) * gap;
+  const height = TILES.length * size + (TILES.length - 1) * gap;
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="presentation" aria-hidden="true" className={className} data-motif-pattern>
+      {TILES.flatMap((row, r) => row.map((t, c) => {
+        const x = c * (size + gap);
+        const y = r * (size + gap);
+        const half = size / 2;
+        const shape = {
+          circle: <circle cx={x + half} cy={y + half} r={half} fill={t.fill} />,
+          square: <rect x={x} y={y} width={size} height={size} rx={10} fill={t.fill} />,
+          quarter: <path d={`M${x} ${y + size} L${x + size} ${y + size} A${size} ${size} 0 0 0 ${x} ${y} Z`} fill={t.fill} />,
+          leaf: <path d={`M${x} ${y} H${x + half} A${half} ${half} 0 0 1 ${x + size} ${y + half} V${y + size} H${x + half} A${half} ${half} 0 0 1 ${x} ${y + half} Z`} fill={t.fill} />,
+        }[t.shape];
+        return <g key={`${r}-${c}`}>{shape}</g>;
+      }))}
+    </svg>
+  );
+}

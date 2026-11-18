@@ -182,7 +182,7 @@ summary:focus-visible,
 
 /* Input styles */
 .input-sm {
-  @apply bg-surface-subtle border border-surface-border rounded text-text-primary text-sm px-2 py-1 w-full outline-none
+  @apply bg-surface-subtle border border-line rounded text-text-primary text-sm px-2 py-1 w-full outline-none
          focus:border-accent focus:ring-1 focus:ring-accent/20
          placeholder:text-text-tertiary transition-colors;
 }

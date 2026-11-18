@@ -26,7 +26,7 @@ function Body() {
       {others.length > 0 && <ChangeList changes={others} label="Also coming from the repository" />}
       <div className="flex gap-2">
         <button className="h-7 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze hover:bg-blaze/90" onClick={done}>Apply my choices</button>
-        <button className="h-7 rounded-md border border-surface-border px-3 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => usePullStatus.getState().set({ pending: null, notice: { text: "The repository's token changes were left for later: pull again to take them.", ok: true } })}>Decide later</button>
+        <button className="h-7 rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle" onClick={() => usePullStatus.getState().set({ pending: null, notice: { text: "The repository's token changes were left for later: pull again to take them.", ok: true } })}>Decide later</button>
       </div>
     </div>
   );

@@ -139,7 +139,7 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
               {bad && <span role="alert" className="text-2xs text-danger">There is a theme called that</span>}
             </label>
             <label className="flex flex-col gap-1 text-2xs text-text-tertiary">Start from
-              <select aria-label="Start new theme from" value={from} onChange={(e) => setFrom(e.target.value)} className={cn(field, "border-surface-border focus:border-accent")}>
+              <select aria-label="Start new theme from" value={from} onChange={(e) => setFrom(e.target.value)} className={cn(field, "border-line focus:border-accent")}>
                 {set.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </label>

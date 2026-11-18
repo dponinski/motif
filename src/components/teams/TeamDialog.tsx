@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
 import { useTeams, type Member, type TeamView } from "@/store/teams";
 
-const btn = "h-7 rounded-md border border-surface-border px-2.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
+const btn = "h-7 rounded-md border border-line px-2.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
 const btnPrimary = "flex h-7 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 
 function Avatar({ member }: { member: Pick<Member, "name" | "email" | "avatar"> }) {

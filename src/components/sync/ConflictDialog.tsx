@@ -49,7 +49,7 @@ export default function ConflictDialog({ id, conflict, name, resolve }: { id: st
                 <button onClick={() => void resolve(id, "local")} data-keep="local" className="h-8 flex-1 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze hover:bg-blaze/90">
                   {conflict.deleted ? "Keep this copy" : conflict.updatedBy ? "Keep my version" : "Keep this device's version"}
                 </button>
-                <button onClick={() => void resolve(id, "server")} data-keep="server" className="h-8 flex-1 rounded-md border border-surface-border px-3 text-xs font-medium text-text-secondary hover:bg-surface-subtle hover:text-text-primary">
+                <button onClick={() => void resolve(id, "server")} data-keep="server" className="h-8 flex-1 rounded-md border border-line px-3 text-xs font-medium text-text-secondary hover:bg-surface-subtle hover:text-text-primary">
                   {conflict.deleted ? "Delete it here too" : conflict.updatedBy ? `Use ${conflict.updatedBy}'s version` : "Use the other version"}
                 </button>
               </div>

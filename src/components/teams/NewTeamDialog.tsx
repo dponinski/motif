@@ -28,7 +28,7 @@ export default function NewTeamDialog({ onCreated }: { onCreated?: (teamId: stri
   return (
     <Dialog.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) setError(null); }}>
       <Dialog.Trigger asChild>
-        <button className="flex h-7 items-center gap-1.5 rounded-md border border-surface-border px-3 text-[12px] text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary">
+        <button className="flex h-7 items-center gap-1.5 rounded-md border border-line px-3 text-[12px] text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary">
           <Users size={12} /> New team
         </button>
       </Dialog.Trigger>

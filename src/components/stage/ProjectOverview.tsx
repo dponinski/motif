@@ -60,7 +60,7 @@ export default function ProjectOverview() {
               <h1 className="text-lg font-semibold text-text-primary">The repository couldn&apos;t be read</h1>
               <p className="mt-1 break-words text-xs leading-relaxed text-danger" role="alert">{error}</p>
               <div className="mt-4 flex items-center gap-2">
-                <button onClick={() => void read()} className={cn(button, "border border-surface-border text-text-secondary hover:bg-surface-subtle hover:text-text-primary")}>Try again</button>
+                <button onClick={() => void read()} className={cn(button, "border border-line text-text-secondary hover:bg-surface-subtle hover:text-text-primary")}>Try again</button>
                 <SignInButton />
               </div>
             </>

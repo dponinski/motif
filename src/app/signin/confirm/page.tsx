@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -42,8 +43,8 @@ function Confirm() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface-base p-6 text-text-primary">
-      <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-6 shadow-lg">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-on-cobalt">M</div>
+      <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-6">
+        <Logo size={28} />
         {error ? (
           <>
             <p className="text-sm font-medium" role="alert">{error}</p>

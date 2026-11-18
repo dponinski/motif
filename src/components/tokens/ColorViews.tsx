@@ -131,14 +131,14 @@ function AliasField({ token, theme, ctx }: { token: ColorToken; theme: TokenThem
           <span className="flex min-w-0 items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent" title={`${theme.name} is the token ${label}`} data-alias-chip>
             <CornerDownRight size={10} aria-hidden /><span className="truncate">{label}</span>
           </span>
-          <select aria-label={`Token that ${token.name} is in ${theme.name}`} value={target} onChange={(e) => ctx.act.setAlias(token.id, theme.id, e.target.value)} className="w-5 flex-shrink-0 rounded border border-surface-border bg-surface-base text-2xs text-text-primary outline-none">
+          <select aria-label={`Token that ${token.name} is in ${theme.name}`} value={target} onChange={(e) => ctx.act.setAlias(token.id, theme.id, e.target.value)} className="w-5 flex-shrink-0 rounded border border-line bg-surface-base text-2xs text-text-primary outline-none">
             {choices}
             {!options.some((c) => targetKey(c, token.setId) === target) && <option value={target}>{label}</option>}
           </select>
           <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${label}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
         </>
       ) : (
-        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none">
+        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-line bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none">
           <option value="">Make it another token…</option>
           {choices}
         </select>
@@ -173,7 +173,7 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       })}
       <div className="flex items-center gap-1.5 border-t border-surface-border pt-2">
         <span className="text-2xs text-text-tertiary">Group</span>
-        <select aria-label={`Group of ${row.name}`} value={row.group} onChange={(e) => ctx.act.toGroup([row.id], e.target.value)} className="min-w-0 flex-1 rounded border border-surface-border bg-surface-base px-1 py-0.5 text-xs text-text-primary outline-none">
+        <select aria-label={`Group of ${row.name}`} value={row.group} onChange={(e) => ctx.act.toGroup([row.id], e.target.value)} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 py-0.5 text-xs text-text-primary outline-none">
           {[...new Set([...ctx.groups, row.group])].map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </div>

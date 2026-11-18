@@ -64,7 +64,7 @@ function Body({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-3" data-created-notes>
         <p className="text-sm text-text-primary">{name} is made.</p>
         {notes.map((n) => <p key={n} className="text-xs leading-relaxed text-ink">{n}</p>)}
-        <button onClick={onClose} className="h-8 self-start rounded-md border border-surface-border px-3 text-xs text-text-secondary hover:bg-surface-subtle">Close</button>
+        <button onClick={onClose} className="h-8 self-start rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle">Close</button>
       </div>
     );
   }

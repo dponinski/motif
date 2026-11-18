@@ -32,7 +32,7 @@ import { discardChanges, editScope, useTokenChanges, useWorkActions } from "@/co
 // see what is waiting, push it as one pull request.
 
 const primary = "flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
-const secondary = "flex h-7 items-center justify-center gap-1.5 rounded-md border border-surface-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
+const secondary = "flex h-7 items-center justify-center gap-1.5 rounded-md border border-line px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
 
 // A new file is all additions: there is no empty line before it to show as taken away.
 function diffOf(f: ChangedFile) {
@@ -421,7 +421,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
           <p className="text-xs text-text-primary">Give up all {files.length} changed file{files.length === 1 ? "" : "s"}? The next push puts back the originals in the pull request.</p>
           <div className="flex gap-2">
             <button className="h-6 rounded bg-danger px-2 text-xs font-medium text-text-inverse" onClick={() => { discardChanges(files.map((f) => f.path)); setConfirming(false); }}>Discard all</button>
-            <button className="h-6 rounded border border-surface-border px-2 text-xs text-text-secondary" onClick={() => setConfirming(false)}>Keep</button>
+            <button className="h-6 rounded border border-line px-2 text-xs text-text-secondary" onClick={() => setConfirming(false)}>Keep</button>
           </div>
         </div>
       )}

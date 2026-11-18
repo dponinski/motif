@@ -49,7 +49,7 @@ export function AccountMenu() {
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <button className="flex h-7 items-center gap-1.5 rounded-md border border-surface-border px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="GitHub account">
+        <button className="flex h-7 items-center gap-1.5 rounded-md border border-line px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="GitHub account">
           {avatar ? <img src={avatar} alt="" className="h-4 w-4 rounded-full" /> : <Github size={12} />}
           <span>{login ?? "Signed in"}</span>
         </button>

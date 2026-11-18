@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -33,8 +34,8 @@ export default function InvitePage() {
     <main className="flex min-h-screen items-center justify-center bg-surface-base p-6 text-text-primary">
       <AccountNotices />
       <AuthDialog />
-      <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-6 shadow-lg" data-invite-page>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-on-cobalt">M</div>
+      <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-6" data-invite-page>
+        <Logo size={28} />
         {status === "unknown" ? (
           <p className="flex items-center gap-2 text-xs text-text-tertiary"><Loader2 size={12} className="animate-spin" /> One moment…</p>
         ) : status === "unavailable" ? (

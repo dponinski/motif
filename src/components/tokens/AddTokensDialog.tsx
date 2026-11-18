@@ -19,7 +19,7 @@ import { editTokens } from "@/store/token-history";
 type Tab = "paste" | "scale";
 type ScaleKind = "color" | "spacing" | "radius" | "typography" | "number";
 
-const field = "rounded border border-surface-border bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
+const field = "rounded border border-line bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
 const label = "flex flex-col gap-1 text-2xs text-text-tertiary";
 const STATUS: Record<PlanItem["status"], { text: string; className: string }> = {
   new: { text: "New", className: "bg-mint-soft text-success" },
@@ -238,7 +238,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
           </div>
           <div className="flex flex-wrap gap-1" role="group" aria-label="Steps">
             {RAMP_STEPS.map((s) => (
-              <button key={s} type="button" aria-pressed={steps.includes(s)} onClick={() => setSteps((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))} className={cn("rounded-full border px-2 py-0.5 text-2xs tabular-nums", steps.includes(s) ? "border-accent/50 bg-accent/15 text-accent" : "border-surface-border text-text-tertiary hover:text-text-secondary")}>{s}</button>
+              <button key={s} type="button" aria-pressed={steps.includes(s)} onClick={() => setSteps((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]))} className={cn("rounded-full border px-2 py-0.5 text-2xs tabular-nums", steps.includes(s) ? "border-accent/50 bg-accent/15 text-accent" : "border-line text-text-tertiary hover:text-text-secondary")}>{s}</button>
             ))}
           </div>
           {ramp && (

@@ -1,6 +1,6 @@
 "use client";
 
-import Logo from "@/components/Logo";
+import Logo, { Pattern } from "@/components/Logo";
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -138,7 +138,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
           <p className="text-[12px] text-text-primary">{project.teamId ? `Delete this design system for everyone in ${teamName ?? "the team"}?` : saved ? "Delete this project from your account?" : "Delete this project from this browser?"}</p>
           <p className="text-[11px] text-text-tertiary">{project.teamId ? "Every member loses it. The repository is not touched." : saved ? "It is removed from all your devices. The repository is not touched." : "The repository is not touched. Unsent edits to it are kept."}</p>
           <div className="flex gap-2">
-            <button className="h-7 rounded-md border border-surface-border px-3 text-[12px] text-text-secondary hover:bg-surface-subtle" onClick={() => setConfirming(false)}>Cancel</button>
+            <button className="h-7 rounded-md border border-line px-3 text-[12px] text-text-secondary hover:bg-surface-subtle" onClick={() => setConfirming(false)}>Cancel</button>
             <button className="h-7 rounded-md bg-danger px-3 text-[12px] font-medium text-text-inverse hover:bg-danger/90" onClick={() => remove(project.id)}>Delete</button>
           </div>
         </div>
@@ -247,7 +247,9 @@ export default function Dashboard() {
         {sorted.length === 0 && teams.length === 0 ? (
           invites.length > 0 ? null : (
             <div className="flex flex-col items-center justify-center min-h-[55vh] gap-5 text-center">
+              <Pattern className="max-w-full" />
               <div>
+                <p className="font-display text-[30px] font-bold leading-tight tracking-[-0.01em] text-text-primary mb-1">Design it. Push it.</p>
                 <p className="text-[15px] font-medium text-text-primary mb-1">Connect your design system</p>
                 <p className="max-w-sm text-[12px] leading-relaxed text-text-secondary">
                   Motif works on the React components and tokens in a GitHub repository. Connect one to preview, edit and document them, with every change sent back as a pull request.
