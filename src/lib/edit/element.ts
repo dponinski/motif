@@ -15,7 +15,7 @@ export interface Part {
 export interface ClassSlot {
   id: string;
   label: string;
-  kind: "literal" | "cn" | "cva-base" | "cva-variant";
+  kind: "literal" | "cn" | "cn-when" | "cva-base" | "cva-variant";
   // A string written as "a " + "b" is one slot made of several parts.
   parts: Part[];
   // A variant's classes only apply while that variant is chosen.
@@ -35,6 +35,8 @@ export interface ElementInfo {
   // The classes that apply right now: every active slot, in order.
   classes: string;
   text: { start: number; end: number; value: string } | null;
+  // The CSS properties (font-size, padding) the element sets in its own `style={{ ... }}`, which outrank any class.
+  inlineProps: string[];
   canDelete: boolean;
   // Exactly one element inside it, so taking the wrapper off leaves that element.
   canUnwrap: boolean;
@@ -150,7 +152,14 @@ function classNameSlots(ctx: FileContext, expr: AnyNode, values: Record<string, 
         const parts = partsOf(ctx.code, arg);
         const inner = unwrap(arg);
         if (parts) slots.push({ id: `${slots.length}`, label: "Classes", kind: "cn", parts, active: true });
-        else if (inner?.type === "CallExpression" && (inner.callee as AnyNode).type === "Identifier" && ctx.cvas.has((inner.callee as AnyNode).name as string)) {
+        else if (inner?.type === "ConditionalExpression" || (inner?.type === "LogicalExpression" && inner.operator !== "??" )) {
+          // `open && "p-4"` or `open ? "p-4" : "p-2"`: the classes of each branch, which apply whenever the condition lets them.
+          const branches = inner.type === "ConditionalExpression" ? [inner.consequent, inner.alternate] : [inner.right];
+          for (const branch of branches as AnyNode[]) {
+            const found = partsOf(ctx.code, branch);
+            if (found && found.some((q) => q.text.trim() !== "")) slots.push({ id: `${slots.length}`, label: "When", kind: "cn-when", parts: found, active: true });
+          }
+        } else if (inner?.type === "CallExpression" && (inner.callee as AnyNode).type === "Identifier" && ctx.cvas.has((inner.callee as AnyNode).name as string)) {
           const name = (inner.callee as AnyNode).name as string;
           cvaSlots(ctx, ctx.cvas.get(name)!, name, values, slots);
         }
@@ -189,6 +198,26 @@ export const siblings = (ctx: FileContext, el: AnyNode): { parent: AnyNode; list
   return { parent, list, index: list.indexOf(el) };
 };
 
+
+const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const camel = (name: string) => name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+
+// The `style={{ ... }}` object of an element, when it is written out as an object.
+function styleObject(el: AnyNode): { attr: AnyNode; object: AnyNode } | null {
+  const attr = ((el.openingElement as AnyNode).attributes as AnyNode[]).find((a) => a.type === "JSXAttribute" && nameOf(a.name) === "style");
+  const value = attr?.value as AnyNode | null | undefined;
+  const object = value?.type === "JSXExpressionContainer" ? unwrap(value.expression as AnyNode) : null;
+  return attr && object?.type === "ObjectExpression" ? { attr, object } : null;
+}
+
+const inlineEntries = (object: AnyNode): { name: string; node: AnyNode }[] =>
+  (object.properties as AnyNode[]).flatMap((p) => {
+    if (p.type !== "ObjectProperty" || p.computed) return [];
+    const key = p.key as AnyNode;
+    const name = key.type === "StringLiteral" ? (key.value as string) : nameOf(key);
+    return name ? [{ name: kebab(name), node: p }] : [];
+  });
+
 export async function analyze(path: string, code: string, start: number, values: Record<string, string> = {}): Promise<ElementInfo | null> {
   const ctx = await context(path, code);
   const el = findElement(ctx, start);
@@ -215,6 +244,7 @@ export async function analyze(path: string, code: string, start: number, values:
     className, dynamicReason: reason, slots,
     classes: slots.filter((s) => s.active).map(slotText).join(" "),
     text: textOf(code, el),
+    inlineProps: (() => { const st = styleObject(el); return st ? inlineEntries(st.object).map((e) => e.name) : []; })(),
     canDelete: !!sib,
     canUnwrap: (() => {
       const kids = (el.children as AnyNode[]).filter((c) => !(c.type === "JSXText" && String(c.value).trim() === ""));
@@ -273,7 +303,19 @@ export async function setGroup(path: string, code: string, start: number, groupI
 
   const active = info.slots.filter((s) => s.active);
   const holder = [...active].reverse().find((s) => hasGroup(slotText(s), group, modifier, names));
-  if (holder) return done(code, slotEdits(holder, group, value, modifier, names), start, summary);
+  if (holder) {
+    // A class that a condition adds (`open && "bg-blue-500"`) is over the plain one only while the condition holds, and under it
+    // otherwise: to show, the value goes into the plain classes and into every condition that sets this group as well.
+    let also: ClassSlot[] = [];
+    if (holder.kind === "cn-when") {
+      also = active.filter((s) => s !== holder && (s.kind === "literal" || s.kind === "cn" || s.kind === "cn-when") && hasGroup(slotText(s), group, modifier, names));
+      // Nothing outside a condition sets it yet: the plain classes get it as well, or it would show only while the condition holds.
+      const plain = [...active].reverse().find((s) => s.kind === "literal" || s.kind === "cn");
+      if (value !== null && plain && !also.includes(plain)) also.push(plain);
+    }
+    const edits = [holder, ...also].flatMap((s) => slotEdits(s, group, value, modifier, names));
+    return done(code, edits, start, also.length ? `${summary} (in every condition that sets it)` : summary);
+  }
   if (value === null) return { code, selection: start, summary };
 
   // A state goes next to the plain class it is a state of (dark:bg-x beside bg-x), so a variant's own colors
@@ -287,6 +329,34 @@ export async function setGroup(path: string, code: string, start: number, groupI
   const el = findElement(ctx, start)!;
   const at = ((el.openingElement as AnyNode).name as AnyNode).end as number;
   return done(code, [{ start: at, end: at, text: ` className="${modifier}${group.write(value)}"` }], start, summary);
+}
+
+
+// Takes properties out of an element's `style={{ ... }}` (the style attribute goes when none are left). A class written for a property
+// that is set inline never shows, because the inline value outranks it: a control that writes the class takes the property out.
+export async function removeInlineStyle(path: string, code: string, start: number, props: string[]): Promise<EditResult | null> {
+  const ctx = await context(path, code);
+  const el = findElement(ctx, start);
+  const st = el && styleObject(el);
+  if (!el || !st) return null;
+  const entries = inlineEntries(st.object);
+  const gone = entries.filter((e) => props.includes(e.name));
+  if (gone.length === 0) return null;
+  const all = st.object.properties as AnyNode[];
+  const wholly = gone.length === all.length;
+  const edits: Edit[] = [];
+  if (wholly) {
+    // The attribute and the space before it.
+    let from = st.attr.start as number;
+    while (from > 0 && /[ \t]/.test(code[from - 1])) from--;
+    edits.push({ start: from, end: st.attr.end as number, text: "" });
+  } else {
+    // What is left of the object, each property as it was written.
+    const kept = all.filter((p) => !gone.some((e) => e.node === p)).map((p) => code.slice(p.start as number, p.end as number));
+    edits.push({ start: (st.object.start as number) + 1, end: (st.object.end as number) - 1, text: ` ${kept.join(", ")} ` });
+  }
+  const info = await analyze(path, code, start);
+  return done(code, edits, start, `${info?.tag ?? "element"}: ${gone.map((e) => e.name).join(", ")} taken out of the inline style`);
 }
 
 // Replaces the whole text of a slot (the raw class editor).
