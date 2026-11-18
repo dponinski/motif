@@ -219,7 +219,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       style={{ gridTemplateColumns: ctx.columns.template }}
       onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("input,button,select")) ctx.drag.press(e, row.id); }}
       onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) ctx.selection.click(row.id, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey }); }}
-      className={cn("group/row relative grid items-center gap-x-2 border-b border-surface-border/60 px-4 min-h-[3.25rem] py-1 transition-colors", picked ? "bg-accent/10" : "hover:bg-surface-subtle", dragged && "opacity-40")}
+      className={cn("group/row relative grid items-center gap-x-2 border-b border-ink/[0.06] px-4 min-h-[2.75rem] py-0.5 transition-colors", picked ? "bg-accent/10" : "hover:bg-surface-subtle/60", dragged && "opacity-40")}
     >
       {over && <span aria-hidden className={cn("absolute inset-x-0 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}
       <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
@@ -246,7 +246,6 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
         );
       })}
       <span />
-      <span role="cell" className="text-2xs text-text-tertiary">Color</span>
       <div role="cell" className="flex items-center justify-end gap-1.5">
         <Badges row={row} hasRepo={ctx.hasRepo} />
         <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 focus-within:opacity-100 group-hover/row:opacity-100">
@@ -260,7 +259,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
 
 export function ListBody({ rows, ctx }: { rows: Row[]; ctx: ColorCtx }) {
   return (
-    <div className="pb-2" data-list-group role="rowgroup">
+    <div className="" data-list-group role="rowgroup">
       {rows.map((r) => <ListRow key={r.id} row={r} ctx={ctx} />)}
     </div>
   );

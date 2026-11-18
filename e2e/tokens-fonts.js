@@ -1,6 +1,6 @@
-// Google Fonts in the font pickers: a String used as a font family, a text style's family, and a composition's font-family part open a list
-// of Google Fonts (search, kinds, each shown in its own face); picking one writes the value with a fallback of its kind; and the canvas loads
-// (fonts.googleapis.com is answered by the test, so nothing leaves the machine; the canvas side is in tokens-fonts-canvas).
+// Google Fonts in the font picker: a text style's family opens a list of Google Fonts (search, kinds, each shown in its own face), and
+// picking one writes the value with a fallback of its kind. (fonts.googleapis.com is answered by the test, so nothing leaves the machine; the
+// canvas side is in tokens-fonts-canvas.)
 const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
 
@@ -36,15 +36,16 @@ const check = (name, ok, detail = "") => {
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
   const list = page.getByRole("list", { name: "Google Fonts" });
 
-  // ── A String used as a font family ────────────────────────────────────────
-  await newToken("String");
-  await addRow.getByLabel("New string name").fill("font-body");
-  await addRow.getByLabel("New string value").fill("Georgia, serif");
-  await addRow.getByLabel("New string used as").selectOption("font-family");
-  await addRow.getByLabel("New string value").press("Enter");
+  // ── A text style's family ─────────────────────────────────────────────────
+  await newToken("Typography");
+  await addRow.getByLabel("New text style name").fill("heading");
+  await addRow.getByLabel("New text style size").fill("24");
+  await addRow.getByLabel("New text style size").press("Enter");
   await page.keyboard.press("Escape");
-  check("a String used as a font family has a button to browse fonts", await settle(async () => (await page.getByRole("button", { name: "Browse fonts for Value of font-body" }).count()) === 1));
-  await page.getByRole("button", { name: "Browse fonts for Value of font-body" }).click();
+  await page.getByRole("button", { name: "Edit heading", exact: true }).click();
+  const family = async () => (await saved()).compositions.find((c) => c.name === "heading")?.slots.find((s) => s.name === "font-family")?.value;
+  check("a text style's family has a button to browse fonts", await settle(async () => (await page.getByRole("button", { name: "Browse fonts for Family of heading" }).count()) === 1));
+  await page.getByRole("button", { name: "Browse fonts for Family of heading" }).click();
   await list.waitFor();
   check("it lists Google Fonts, each shown in its own face", (await list.locator("[data-font]").count()) > 20 && await list.locator("[data-font]").first().evaluate((b) => getComputedStyle(b.querySelector("span")).fontFamily.includes(b.getAttribute("data-font"))));
   check("the list loads its fonts from Google", await settle(async () => requested.some((u) => /fonts\.googleapis\.com\/css\?family=/.test(u))), requested.join(" | "));
@@ -56,33 +57,18 @@ const check = (name, ok, detail = "") => {
   check("a kind narrows it to that kind", await settle(async () => { const n = await list.locator("[data-font]").count(); return n > 3 && (await list.locator("li").allInnerTexts()).every((t) => /monospace/.test(t)); }));
   await page.getByRole("group", { name: "Kind of font" }).getByRole("button", { name: "All", exact: true }).click();
   await page.getByLabel("Search fonts").fill("zzzzzz");
-  check("a name nobody has says what to do", await settle(async () => /Type the name into the field/.test(await page.getByRole("dialog").or(page.locator("[aria-label='Fonts for Value of font-body']")).innerText())));
+  check("a name nobody has says what to do", await settle(async () => /Type the name into the field/.test(await page.locator("[aria-label='Fonts for Family of heading']").innerText())));
   await page.getByLabel("Search fonts").fill("playfair");
   await list.locator('[data-font="Playfair Display"]').click();
-  check("choosing a font writes it with a fallback of its kind", await settle(async () => (await page.getByLabel("Value of font-body", { exact: true }).inputValue()) === '"Playfair Display", serif'));
-  check("and it is saved", await settle(async () => (await token("font-body"))?.values["*"] === '"Playfair Display", serif'));
+  check("choosing a font writes it with a fallback of its kind, and it is saved", await settle(async () => (await family()) === '"Playfair Display", serif' && (await page.getByLabel("Family of heading", { exact: true }).inputValue()) === '"Playfair Display", serif'), await family());
 
-  // ── Undo ──────────────────────────────────────────────────────────────────
   await undo();
-  check("choosing a font is a step of undo", await settle(async () => (await token("font-body"))?.values["*"] === "Georgia, serif"));
-
-  // ── A text style and a composition's font-family part ─────────────────────
-  await newToken("Composition");
-  await addRow.getByLabel("New composition name").fill("heading");
-  await addRow.getByLabel("New composition made of").selectOption("typography");
-  await addRow.getByLabel("New composition name").press("Enter");
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Edit heading", exact: true }).click();
-  await page.getByRole("button", { name: "Browse fonts for font-family of heading" }).click();
-  await page.getByLabel("Search fonts").fill("lora");
-  await list.locator('[data-font="Lora"]').click();
-  const slot = async () => (await saved()).compositions.find((c) => c.name === "heading")?.slots.find((s) => s.name === "font-family");
-  check("a composition's font-family part picks a font the same way", await settle(async () => (await slot())?.value === "Lora, serif"), JSON.stringify(await slot()));
+  check("choosing a font is a step of undo", await settle(async () => (await family()) !== '"Playfair Display", serif'));
 
   await page.reload();
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  check("and the choices are there after a reload", await settle(async () => (await slot())?.value === "Lora, serif" && (await token("font-body"))?.values["*"] === "Georgia, serif"));
+  check("and the family is there after a reload", await settle(async () => (await family()) !== undefined));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

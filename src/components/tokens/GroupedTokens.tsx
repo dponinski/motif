@@ -44,10 +44,10 @@ export default function GroupedTokens({
         const isFolded = folded.has(group);
         const target = drag.over?.type === "group" && drag.over.group === group;
         return (
-          <section key={group} data-group={group} className="mb-1">
+          <section key={group} data-group={group}>
             <div
               data-group-drop={group}
-              className={cn("group/head flex items-center gap-2 py-1.5 pl-10 pr-4 transition-colors", target ? "bg-accent/15 outline outline-1 -outline-offset-1 outline-accent" : "hover:bg-surface-subtle")}
+              className={cn("group/head flex items-center gap-2 border-b border-ink/[0.06] py-2 pl-10 pr-4 transition-colors", target ? "bg-accent/15 outline outline-1 -outline-offset-1 outline-accent" : "bg-surface-subtle/50 hover:bg-surface-subtle")}
             >
               <input
                 type="checkbox"

@@ -168,12 +168,11 @@ const check = (name, ok, detail = "") => {
   const addNumber = async (name, value, use) => {
     await page.getByRole("button", { name: /^Add to / }).first().click({ force: true });
     const add = page.locator("[data-add-row]");
-    await add.getByLabel("Type of the new token").selectOption("number");
-    await add.getByLabel("New number name").fill(name);
-    await add.getByLabel("New number value").fill(value);
-    await add.getByLabel("New number used as").selectOption(use);
-    await add.getByLabel("New number value").press("Enter");
-    await add.getByLabel("New number name").press("Escape");
+    await add.getByLabel("Type of the new token").selectOption(use);
+    await add.getByLabel(`New ${use} name`).fill(name);
+    await add.getByLabel(`New ${use} value`).fill(value);
+    await add.getByLabel(`New ${use} value`).press("Enter");
+    await add.getByLabel(`New ${use} name`).press("Escape");
   };
   await addNumber("card", "14", "radius");
   await addNumber("gutter", "22", "spacing");
