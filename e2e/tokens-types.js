@@ -37,7 +37,7 @@ const check = (name, ok, detail = "") => {
   check("the tabs are the three types, compositions, then the kinds that have their own", (await tabs()).join() === "Colors,Numbers,Strings,Compositions,Typography,Spacing,Radii,Shadows", (await tabs()).join());
   await page.getByRole("button", { name: "New token" }).click();
   const items = await page.getByRole("menuitem").allInnerTexts();
-  check("New token asks what it is: Color, Number, String or Composition, then Spacing, Radius, Shadow or Text style", items.map((t) => t.split("\n")[0].trim()).join() === "Color,Number,String,Composition,Spacing,Radius,Shadow,Text style", items.join("|"));
+  check("New token asks what it is: Color, Number, String or Composition, and nothing else", items.map((t) => t.split("\n")[0].trim()).join() === "Color,Number,String,Composition", items.join("|"));
   await page.keyboard.press("Escape");
 
   // ── A Number ──────────────────────────────────────────────────────────────
@@ -97,12 +97,6 @@ const check = (name, ok, detail = "") => {
   await page.getByLabel("Value of font-sans").press("Enter");
   check("its value is changed in the row", await settle(async () => (await page.getByLabel("Value of font-sans").inputValue()) === "Inter, system-ui"));
   await page.screenshot({ path: `${OUT}/tokens-strings.png` });
-
-  // ── The kinds that have their own place ───────────────────────────────────
-  await newToken("Spacing");
-  await addRow.waitFor();
-  check("Spacing opens the Spacing tab with its add row", (await page.getByRole("tab", { name: /^Spacing/ }).getAttribute("aria-selected")) === "true" && (await addRow.getByLabel("New spacing value").isVisible()));
-  await page.keyboard.press("Escape");
 
   // ── Saved as typed tokens ─────────────────────────────────────────────────
   const tokens = await saved();

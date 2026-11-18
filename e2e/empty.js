@@ -54,7 +54,7 @@ const check = (name, ok, detail = "") => {
 
   // ── Tokens go into the pull request before there is a commit: only Sync needs one ─────────────
   await page.getByRole("button", { name: /Add tokens/ }).click();
-  await page.getByRole("button", { name: "Repo sync" }).click();
+  await page.locator('nav button[title="Source control"]').click();
   const dialog = page.getByRole("dialog");
   const tokensFile = page.locator("[data-tokens-file]");
   await tokensFile.getByRole("button", { name: "Add to pull request" }).waitFor({ timeout: 20000 });

@@ -1,17 +1,13 @@
 "use client";
 
-import { exportCss, exportTokens } from "@/lib/tokens/exports";
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { X, Download, Upload, Palette, GitBranch, Layers, Undo2, Redo2, Plus } from "lucide-react";
-import FrameworkDialog from "@/components/git/FrameworkDialog";
+import { X, Palette, Undo2, Redo2, Plus } from "lucide-react";
 import SetsSidebar from "@/components/tokens/SetsSidebar";
-import ImportPanel from "@/components/tokens/ImportPanel";
 import KindPane from "@/components/tokens/KindPane";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenKind } from "@/store/design-system";
-import { useNavRequest } from "@/store/nav";
 import { redoTokens, undoTokens, useTokenHistory } from "@/store/token-history";
 
 const TABS: { kind: TokenKind; label: string }[] = [
@@ -25,35 +21,21 @@ const TABS: { kind: TokenKind; label: string }[] = [
   { kind: "shadow", label: "Shadows" },
 ];
 
-// What a new token can be: the three types, then the kinds that have their own place (and are what the repository reads and writes).
+// What a new token can be.
 const NEW_TOKEN: { kind: TokenKind; label: string; hint: string }[] = [
   { kind: "color", label: "Color", hint: "a color, in each theme" },
   { kind: "number", label: "Number", hint: "a size, a weight, a ratio, with its unit" },
   { kind: "string", label: "String", hint: "text, such as a font family" },
   { kind: "composition", label: "Composition", hint: "tokens that go together: a text style, a shadow" },
 ];
-const NEW_KIND: { kind: TokenKind; label: string }[] = [
-  { kind: "spacing", label: "Spacing" },
-  { kind: "radius", label: "Radius" },
-  { kind: "shadow", label: "Shadow" },
-  { kind: "typography", label: "Text style" },
-];
 const menuItem = "flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-xs text-text-secondary outline-none data-[highlighted]:bg-surface-subtle data-[highlighted]:text-text-primary";
-
-function downloadText(filename: string, content: string) {
-  const a = document.createElement("a");
-  a.href = "data:text/plain;charset=utf-8," + encodeURIComponent(content);
-  a.download = filename;
-  a.click();
-}
 
 const headerButton = "flex items-center gap-1 px-2.5 min-h-11 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors disabled:opacity-30 disabled:hover:bg-transparent";
 
 // The tokens of the project: sets and themes on the left, and for the open set a tab for each kind of token.
 export default function TokensView({ onClose }: { onClose?: () => void }) {
-  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions, exportTailwind } = useDesignSystemStore(useShallow((s) => ({
+  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions } = useDesignSystemStore(useShallow((s) => ({
     sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions,
-    exportTailwind: s.exportTailwind,
   })));
   const counts = {
     color: colors, typography, shadow: shadows, string: strings, composition: compositions,
@@ -64,8 +46,6 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
   const [kind, setKind] = useState<TokenKind>("color");
   // A kind chosen from New token opens with its add row ready.
   const [adding, setAdding] = useState(0);
-  const [showImport, setShowImport] = useState(false);
-  const [frameworkOpen, setFrameworkOpen] = useState(false);
   const canUndo = useTokenHistory((h) => h.past.length > 0);
   const canRedo = useTokenHistory((h) => h.future.length > 0);
 
@@ -97,7 +77,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
           {activeSet && (
             <Menu.Root>
               <Menu.Trigger asChild>
-                <button type="button" aria-label="New token" title="Make a token: pick what it is" className={cn(headerButton, "text-accent hover:text-accent")}><Plus size={12} /> New token</button>
+                <button type="button" aria-label="New token" title="Make a token: pick what it is" className="flex min-h-11 items-center gap-1.5 rounded-md bg-blaze px-3 text-sm font-semibold text-on-blaze transition-colors hover:bg-blaze/90"><Plus size={14} /> New token</button>
               </Menu.Trigger>
               <Menu.Portal>
                 <Menu.Content align="end" sideOffset={4} aria-label="New token" className="z-50 min-w-[230px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 shadow-lg">
@@ -107,21 +87,10 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
                       <span className="text-2xs text-text-tertiary">{t.hint}</span>
                     </Menu.Item>
                   ))}
-                  <Menu.Separator className="my-1 h-px bg-surface-border" />
-                  <Menu.Label className="px-3 py-1 text-2xs uppercase tracking-wide text-text-tertiary">Or a kind of its own</Menu.Label>
-                  {NEW_KIND.map((t) => (
-                    <Menu.Item key={t.kind} className={cn(menuItem, "py-1")} onSelect={() => { setKind(t.kind); setAdding((n) => n + 1); }}>{t.label}</Menu.Item>
-                  ))}
                 </Menu.Content>
               </Menu.Portal>
             </Menu.Root>
           )}
-          <button onClick={() => useNavRequest.getState().ask("git")} className={headerButton} title="Pull from the repository and push what is waiting"><GitBranch size={11} /> Repo sync</button>
-          <button onClick={() => setFrameworkOpen(true)} className={headerButton}><Layers size={11} /> Add a framework</button>
-          <button onClick={() => setShowImport(!showImport)} className={headerButton}><Upload size={11} /> Import</button>
-          <button onClick={() => downloadText("tokens.json", exportTokens(useDesignSystemStore.getState()))} className={headerButton}><Download size={11} /> JSON</button>
-          <button onClick={() => downloadText("tokens.css", exportCss(useDesignSystemStore.getState()))} className={headerButton}><Download size={11} /> CSS</button>
-          <button onClick={() => downloadText("tailwind.config.js", exportTailwind())} className={headerButton}><Download size={11} /> Tailwind</button>
         </div>
 
         <div className="w-px h-5 bg-surface-border" />
@@ -164,8 +133,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
 
               <div className="flex-1 overflow-hidden flex flex-col">
                 <KindPane key={`${activeSet.id}:${kind}:${adding}`} kind={kind} set={activeSet} sets={sets} addOnOpen={adding > 0} />
-                {showImport && <ImportPanel onClose={() => setShowImport(false)} setId={activeSet?.id} />}
-              </div>
+                              </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
@@ -179,7 +147,6 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <FrameworkDialog open={frameworkOpen} onOpenChange={setFrameworkOpen} />
     </div>
   );
 }

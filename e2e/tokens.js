@@ -279,9 +279,9 @@ const check = (name, ok, detail = "") => {
   await page.goto("http://localhost:3000/editor/tok00001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await nav("Tokens");
-  await page.getByRole("button", { name: "Repo sync" }).click();
+  await page.locator('nav button[title="Source control"]').click();
   await page.locator("[data-token-link]").waitFor({ timeout: 30000 });
-  check("the Tokens view opens the Source control panel, with the tokens linked to the repository's files", await page.locator("[data-token-link]").getByText(/design tokens files in src\/tokens/).first().isVisible());
+  check("Source control shows the token link, with the tokens linked to the repository's files", await page.locator("[data-token-link]").getByText(/design tokens files in src\/tokens/).first().isVisible());
 
   // ── A repository with no tokens ───────────────────────────────────────────
   await seed(page, "tok00002", { repo: "acme/bare", name: "Bare", extra: { tokens: {

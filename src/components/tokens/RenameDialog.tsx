@@ -164,7 +164,7 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
               spellCheck={false}
             />
           </label>
-          <p className="min-h-[1rem] text-2xs text-text-tertiary" data-rename-problem>{!linked ? "Link this repository's tokens first (Repo sync)." : to.trim() && to.trim() !== row?.name && problem ? problem : ""}</p>
+          <p className="min-h-[1rem] text-2xs text-text-tertiary" data-rename-problem>{!linked ? "Link this repository's tokens first (Source control)." : to.trim() && to.trim() !== row?.name && problem ? problem : ""}</p>
 
           {phase === "reading" && (
             <p className="flex items-center gap-2 text-xs text-text-secondary" role="status"><Loader2 size={12} className="animate-spin" /> Reading the code{progress ? ` (${progress[0]} of ${progress[1]} files)` : "…"}</p>
