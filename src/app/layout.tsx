@@ -1,4 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/figtree";
+import "@fontsource/dm-mono/400.css";
+import "@fontsource/dm-mono/500.css";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
 import SyncManager from "@/components/sync/SyncManager";
@@ -22,7 +26,7 @@ export default function RootLayout({
         {/* FOUC prevention: apply theme before first paint */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=JSON.parse(localStorage.getItem('motif-theme')||'{}');var mode=(s&&s.state&&s.state.mode)||'dark';var isDark=mode==='dark'||(mode==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',isDark?'dark':'light');}catch(e){}})();`,
+            __html: `(function(){try{var s=JSON.parse(localStorage.getItem('motif-theme')||'{}');var mode=(s&&s.state&&s.state.mode)||'system';var isDark=mode==='dark'||(mode==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',isDark?'dark':'light');}catch(e){}})();`,
           }}
         />
       </head>

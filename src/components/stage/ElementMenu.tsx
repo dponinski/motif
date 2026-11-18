@@ -18,7 +18,7 @@ export default function ElementMenu({ point, info, canPaste, actions, onClose }:
   const row = (label: string, shortcut: string | null, enabled: boolean, run: () => unknown, name?: string) => (
     <Menu.Item key={label} disabled={!enabled} onSelect={() => void run()} className={item} aria-label={name ?? label}>
       <span className="flex-1">{label}</span>
-      {shortcut && <kbd className="font-mono text-[10px] text-text-tertiary">{shortcut}</kbd>}
+      {shortcut && <kbd className="font-mono text-[12px] text-text-tertiary">{shortcut}</kbd>}
     </Menu.Item>
   );
   return (

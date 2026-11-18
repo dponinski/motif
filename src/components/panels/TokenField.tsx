@@ -121,7 +121,7 @@ export function ColorField({
           type="button"
           aria-label={label}
           data-value={value ?? ""}
-          className={cn("input-sm flex w-full min-w-0 items-center gap-1.5 text-left", flagged && "border-amber-500/60")}
+          className={cn("input-sm flex w-full min-w-0 items-center gap-1.5 text-left", flagged && "border-sun/60")}
         >
           <Swatch color={current ? colorOf(current.color, tokens) : null} />
           <span className={cn("min-w-0 flex-1 truncate", value === null && "text-text-tertiary")}>{value ?? (inherited ? `inherits ${inherited}` : "—")}</span>
@@ -226,7 +226,7 @@ export function ChoiceField({
   const flagged = value !== null && !!group.role && isFlagged(group.role, value, index);
   const option = (c: Choice) => <option key={c.value} value={c.value}>{shown(c.value)}{c.hint ? ` · ${c.hint}` : ""}</option>;
   return (
-    <select className={cn("input-sm w-full", flagged && "border-amber-500/60")} aria-label={label} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
+    <select className={cn("input-sm w-full", flagged && "border-sun/60")} aria-label={label} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
       <option value="">{inherited ? `inherits ${shown(inherited)}` : "—"}</option>
       {value !== null && !known && <option value={value}>{value}</option>}
       {tokens.length > 0 ? (
@@ -277,7 +277,7 @@ function SaveAsToken({ label, save }: { label: string; save: SaveToken }) {
           disabled={!!reason}
           aria-label={`Save ${label} as a token`}
           title={reason ?? "Make this value a token, and use it here"}
-          className="flex items-center gap-1 rounded border border-amber-500/40 px-1.5 py-0.5 text-text-primary hover:bg-amber-500/10 disabled:opacity-40 disabled:hover:bg-transparent"
+          className="flex items-center gap-1 rounded border border-sun/40 px-1.5 py-0.5 text-text-primary hover:bg-sun-soft disabled:opacity-40 disabled:hover:bg-transparent"
         >
           <Plus size={10} /> Save as token…
         </button>
@@ -293,7 +293,7 @@ function SaveAsToken({ label, save }: { label: string; save: SaveToken }) {
             <span className="flex items-center gap-1">
               {save.prefix && <span className="font-mono text-text-tertiary">{save.prefix}</span>}
               <input
-                className={cn("input-sm min-w-0 flex-1", problem && typed && "border-red-500/60")}
+                className={cn("input-sm min-w-0 flex-1", problem && typed && "border-danger/60")}
                 aria-label={`Name of the new ${save.kind} token`}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -304,7 +304,7 @@ function SaveAsToken({ label, save }: { label: string; save: SaveToken }) {
             </span>
           </label>
           <p className="mt-1.5 min-h-[1rem] text-2xs text-text-tertiary">{problem && typed ? problem : "It goes in the tokens linked to the repository, and is sent with the next sync."}</p>
-          <button type="button" disabled={!!problem} onClick={go} className="mt-1 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Save and use</button>
+          <button type="button" disabled={!!problem} onClick={go} className="mt-1 w-full rounded bg-blaze px-2 min-h-11 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Save and use</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -330,7 +330,7 @@ export function RawHint({
   const palette = statusOf(group.role, value, index) === "palette";
   const name = found ? shown(found.value) : "";
   return (
-    <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs text-amber-500", indent && "pl-[90px]")} data-raw={group.id}>
+    <div className={cn("flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs text-ink", indent && "pl-[90px]")} data-raw={group.id}>
       <span>{palette ? "Tailwind color, not a token" : "Not a token"}</span>
       {found && (
         <button
@@ -338,7 +338,7 @@ export function RawHint({
           onClick={() => onUse(found.value)}
           aria-label={`Use ${name} for ${label}`}
           title={found.exact ? `${name} is the same${found.hint ? ` (${found.hint})` : ""}` : `${name} is the closest${found.hint ? ` (${found.hint})` : ""}, not the same`}
-          className="flex items-center gap-1 rounded border border-amber-500/40 px-1.5 py-0.5 text-text-primary hover:bg-amber-500/10"
+          className="flex items-center gap-1 rounded border border-sun/40 px-1.5 py-0.5 text-text-primary hover:bg-sun-soft"
         >
           {found.swatch && <Swatch color={found.swatch} className="h-2.5 w-2.5" />}
           {found.exact ? "Use" : "Closest:"} {name}{!found.swatch && found.hint ? ` (${found.hint})` : ""}

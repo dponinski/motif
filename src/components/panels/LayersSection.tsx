@@ -36,8 +36,8 @@ function Node({ node, depth, selected, open, toggle, pick, press, drop, dragged 
           "mx-1 flex items-center rounded text-xs transition-colors",
           selected === node.start ? "bg-accent/15 text-accent" : node.selectable ? "text-text-secondary hover:bg-surface-subtle hover:text-text-primary" : "text-text-tertiary",
           dragged === node.start && "opacity-50",
-          drop?.start === node.start && drop.position === "before" && "shadow-[inset_0_2px_0_0_rgb(99,102,241)]",
-          drop?.start === node.start && drop.position === "after" && "shadow-[inset_0_-2px_0_0_rgb(99,102,241)]",
+          drop?.start === node.start && drop.position === "before" && "shadow-[inset_0_2px_0_0_var(--cobalt)]",
+          drop?.start === node.start && drop.position === "after" && "shadow-[inset_0_-2px_0_0_var(--cobalt)]",
           drop?.start === node.start && drop.position === "last-child" && "bg-accent/20 outline outline-1 outline-accent"
         )}
         style={{ paddingLeft: 4 + depth * 12 }}

@@ -49,13 +49,13 @@ export function AccountMenu() {
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <button className="flex h-7 items-center gap-1.5 rounded-md border border-surface-border px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="GitHub account">
+        <button className="flex h-11 items-center gap-1.5 rounded-md border border-line px-2 text-[14px] text-text-secondary transition-colors hover:text-text-primary" aria-label="GitHub account">
           {avatar ? <img src={avatar} alt="" className="h-4 w-4 rounded-full" /> : <Github size={12} />}
           <span>{login ?? "Signed in"}</span>
         </button>
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Content align="end" sideOffset={6} className="z-50 min-w-[200px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-[12px] text-text-secondary shadow-lg">
+        <Menu.Content align="end" sideOffset={6} className="z-50 min-w-[200px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-[14px] text-text-secondary shadow-lg">
           {login && (
             <Menu.Item asChild>
               <a href={`https://github.com/${login}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-1.5 outline-none hover:bg-surface-subtle hover:text-text-primary data-[highlighted]:bg-surface-subtle"><ExternalLink size={12} /> Your GitHub profile</a>
@@ -84,7 +84,7 @@ export function AccountNotices() {
   if (!notice && ended !== "expired") return null;
   return (
     <div className="pointer-events-none fixed inset-x-0 top-2 z-[60] flex justify-center px-4">
-      <div role="alert" className="pointer-events-auto flex max-w-lg items-center gap-3 rounded-md border border-amber-500/40 bg-surface-raised px-3 py-2 text-xs text-text-primary shadow-lg">
+      <div role="alert" className="pointer-events-auto flex max-w-lg items-center gap-3 rounded-md border border-sun/40 bg-surface-raised px-3 py-2 text-xs text-text-primary shadow-lg">
         <span className="min-w-0">{notice ?? "Your GitHub sign-in has expired."}</span>
         {(ended === "expired" || notice) && (
           <button

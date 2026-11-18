@@ -20,8 +20,8 @@ import { isDtcgLink, repoSlug, stylesheetLink, useGitStore, type GitConnection }
 import { editTokens } from "@/store/token-history";
 import { nameAtPlace, pathInFiles, type Row } from "./rows";
 
-const field = "rounded border border-surface-border bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
-const primary = "h-7 rounded-md bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50";
+const field = "rounded border border-line bg-surface-base px-2 min-h-11 py-1 text-xs text-text-primary outline-none focus:border-accent";
+const primary = "h-11 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 
 // Renames a token the repository names: finds every place the repository's code names it, and puts the new names among the changes
 // that Sync sends (one pull request), then renames Motif's token to match.
@@ -155,7 +155,7 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
             New name
             <input
               aria-label="New name"
-              className={cn(field, "font-mono", problem && to.trim() && to.trim() !== row?.name && "border-red-500/60")}
+              className={cn(field, "font-mono", problem && to.trim() && to.trim() !== row?.name && "border-danger/60")}
               value={to}
               disabled={phase !== "name"}
               onChange={(e) => { setTo(e.target.value); setError(null); }}
@@ -183,15 +183,15 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
                   {plan.places.length > 40 && <li className="px-2 py-1 text-text-tertiary">and {plan.places.length - 40} more files</li>}
                 </ul>
               )}
-              {plan.unreadable.length > 0 && <p className="text-2xs text-amber-500">Left as they are, because they couldn&apos;t be read as stylesheets: {plan.unreadable.join(", ")}</p>}
+              {plan.unreadable.length > 0 && <p className="text-2xs text-ink">Left as they are, because they couldn&apos;t be read as stylesheets: {plan.unreadable.join(", ")}</p>}
               <p className="text-2xs leading-relaxed text-text-tertiary">Class names built while the page runs (<code className="font-mono">{"`bg-${x}`"}</code>) can&apos;t be seen, and Markdown files (documentation) are left as they are, so check for those. Nothing is sent until you press Sync.</p>
             </div>
           )}
 
-          {error && <p role="alert" className="break-words text-xs text-red-400">{error}</p>}
+          {error && <p role="alert" className="break-words text-xs text-danger">{error}</p>}
 
           <div className="flex justify-end gap-2">
-            <button type="button" disabled={busy} onClick={onClose} className="h-7 rounded-md border border-surface-border px-3 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50">Cancel</button>
+            <button type="button" disabled={busy} onClick={onClose} className="h-11 rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50">Cancel</button>
             {phase === "name" || phase === "reading" ? (
               <button type="button" disabled={busy || !linked || !!problem || !to.trim() || to.trim() === row?.name} onClick={() => void find()} className={primary}>Find places</button>
             ) : (

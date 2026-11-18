@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -33,8 +34,8 @@ export default function InvitePage() {
     <main className="flex min-h-screen items-center justify-center bg-surface-base p-6 text-text-primary">
       <AccountNotices />
       <AuthDialog />
-      <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-6 shadow-lg" data-invite-page>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-sm font-bold text-white">M</div>
+      <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-surface-border bg-surface-raised p-6" data-invite-page>
+        <Logo size={28} />
         {status === "unknown" ? (
           <p className="flex items-center gap-2 text-xs text-text-tertiary"><Loader2 size={12} className="animate-spin" /> One moment…</p>
         ) : status === "unavailable" ? (
@@ -45,7 +46,7 @@ export default function InvitePage() {
               <p className="text-sm font-medium" role="status">You&apos;re in {joined}.</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">Its design systems are on your dashboard.</p>
             </div>
-            <Link href="/" className="flex h-9 items-center justify-center rounded-md bg-accent text-sm font-medium text-white transition-colors hover:bg-accent/90">Open the dashboard</Link>
+            <Link href="/" className="flex h-11 items-center justify-center rounded-md bg-blaze text-sm font-medium text-on-blaze transition-colors hover:bg-blaze/90">Open the dashboard</Link>
           </>
         ) : !user ? (
           <>
@@ -53,7 +54,7 @@ export default function InvitePage() {
               <p className="text-sm font-medium">You&apos;ve been invited to a team on Motif</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">Sign in with the email address the invitation was sent to, and you can join.</p>
             </div>
-            <button onClick={openDialog} className="flex h-9 items-center justify-center rounded-md bg-accent text-sm font-medium text-white transition-colors hover:bg-accent/90">Sign in to join</button>
+            <button onClick={openDialog} className="flex h-11 items-center justify-center rounded-md bg-blaze text-sm font-medium text-on-blaze transition-colors hover:bg-blaze/90">Sign in to join</button>
           </>
         ) : (
           <>
@@ -61,8 +62,8 @@ export default function InvitePage() {
               <p className="text-sm font-medium">Join the team</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">as <span className="text-text-primary" data-invite-email>{user.email}</span></p>
             </div>
-            {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
-            <button onClick={() => void join()} disabled={busy} className="flex h-9 items-center justify-center gap-2 rounded-md bg-accent text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-60">
+            {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+            <button onClick={() => void join()} disabled={busy} className="flex h-11 items-center justify-center gap-2 rounded-md bg-blaze text-sm font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-60">
               {busy && <Loader2 size={14} className="animate-spin" />} Join
             </button>
           </>

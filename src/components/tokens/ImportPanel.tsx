@@ -48,8 +48,8 @@ export default function ImportPanel({ onClose, setId }: { onClose: () => void; s
       />
       {msg && <p className="text-2xs mt-1 text-accent">{msg}</p>}
       <div className="flex gap-2 mt-2">
-        <button onClick={handleImport} className="flex-1 bg-accent hover:bg-accent/90 text-white text-xs py-1.5 rounded transition-colors">Import</button>
-        <button onClick={onClose} className="flex-1 border border-surface-border text-text-secondary hover:text-text-primary text-xs py-1.5 rounded transition-colors">Cancel</button>
+        <button onClick={handleImport} className="flex-1 bg-blaze hover:bg-blaze/90 text-on-blaze text-xs py-1.5 rounded transition-colors">Import</button>
+        <button onClick={onClose} className="flex-1 border border-line text-text-secondary hover:text-text-primary text-xs py-1.5 rounded transition-colors">Cancel</button>
       </div>
     </div>
   );

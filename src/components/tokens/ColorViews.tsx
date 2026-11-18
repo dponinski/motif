@@ -73,7 +73,7 @@ const usedTitle = (row: Row) => `Used ${row.use!.n} time${row.use!.n === 1 ? "" 
 export function Badges({ row, hasRepo }: { row: Row; hasRepo: boolean }) {
   return (
     <span className="flex items-center gap-1.5 text-2xs">
-      {row.changed && <span title="Changed in Motif since the last sync" className="rounded bg-amber-500/15 px-1 text-amber-500">changed</span>}
+      {row.changed && <span title="Changed in Motif since the last sync" className="rounded bg-sun-soft px-1 text-ink">changed</span>}
       {hasRepo && !row.linked && <span title="Not in the repository yet: it is added with the next sync" className="text-text-tertiary">Motif only</span>}
       {row.readonly && <span title="Defined where Motif can't edit it yet" className="text-text-tertiary"><Lock size={10} aria-label="Read-only" /></span>}
       {row.unused && <span data-unused title="Nothing in the repository's components or stylesheets uses it (class names and var() are looked for)" className="rounded bg-surface-overlay px-1 text-text-tertiary">unused</span>}
@@ -104,7 +104,7 @@ function Contrast({ value }: { value: string }) {
     const r = contrastRatio(value, against);
     if (r === null) return null;
     const grade = gradeOf(r);
-    return <span key={name} title={`Contrast with ${name}`} className={cn("rounded px-1 text-2xs tabular-nums", grade === "fails" ? "bg-red-500/10 text-red-400" : "bg-surface-overlay text-text-secondary")}>{name} {(Math.floor(r * 10) / 10).toFixed(1)} {grade}</span>;
+    return <span key={name} title={`Contrast with ${name}`} className={cn("rounded px-1 text-2xs tabular-nums", grade === "fails" ? "bg-danger/10 text-danger" : "bg-surface-overlay text-text-secondary")}>{name} {(Math.floor(r * 10) / 10).toFixed(1)} {grade}</span>;
   };
   return <span className="flex flex-wrap gap-1">{on("#ffffff", "white")}{on("#000000", "black")}</span>;
 }
@@ -131,14 +131,14 @@ function AliasField({ token, theme, ctx }: { token: ColorToken; theme: TokenThem
           <span className="flex min-w-0 items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent" title={`${theme.name} is the token ${label}`} data-alias-chip>
             <CornerDownRight size={10} aria-hidden /><span className="truncate">{label}</span>
           </span>
-          <select aria-label={`Token that ${token.name} is in ${theme.name}`} value={target} onChange={(e) => ctx.act.setAlias(token.id, theme.id, e.target.value)} className="w-5 flex-shrink-0 rounded border border-surface-border bg-surface-base text-2xs text-text-primary outline-none">
+          <select aria-label={`Token that ${token.name} is in ${theme.name}`} value={target} onChange={(e) => ctx.act.setAlias(token.id, theme.id, e.target.value)} className="w-5 flex-shrink-0 rounded border border-line bg-surface-base text-2xs text-text-primary outline-none">
             {choices}
             {!options.some((c) => targetKey(c, token.setId) === target) && <option value={target}>{label}</option>}
           </select>
-          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${label}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
+          <button type="button" aria-label={`Detach ${token.name} (${theme.name}) from ${label}`} title="Keep the color it is now, and stop following the token" onClick={() => ctx.act.setAlias(token.id, theme.id, null)} className="flex items-center gap-1 rounded px-1 min-h-11 py-0.5 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Unlink size={10} /> Detach</button>
         </>
       ) : (
-        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none">
+        <select aria-label={`Make ${token.name} (${theme.name}) another token`} value="" onChange={(e) => { if (e.target.value) ctx.act.setAlias(token.id, theme.id, e.target.value); }} className="min-w-0 max-w-full rounded border border-line bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none">
           <option value="">Make it another token…</option>
           {choices}
         </select>
@@ -155,7 +155,7 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       <div className="flex items-center gap-2">
         <InlineName row={row} taken={ctx.taken} onRename={(n) => ctx.act.rename(row.id, n)} className="text-sm font-medium text-text-primary" />
         <div className="flex-1" />
-        {row.changed && <span className="rounded bg-amber-500/15 px-1 text-2xs text-amber-500">changed</span>}
+        {row.changed && <span className="rounded bg-sun-soft px-1 text-2xs text-ink">changed</span>}
       </div>
       {ctx.themes.map((theme) => {
         const value = valueIn(token, theme.id);
@@ -173,16 +173,16 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       })}
       <div className="flex items-center gap-1.5 border-t border-surface-border pt-2">
         <span className="text-2xs text-text-tertiary">Group</span>
-        <select aria-label={`Group of ${row.name}`} value={row.group} onChange={(e) => ctx.act.toGroup([row.id], e.target.value)} className="min-w-0 flex-1 rounded border border-surface-border bg-surface-base px-1 py-0.5 text-xs text-text-primary outline-none">
+        <select aria-label={`Group of ${row.name}`} value={row.group} onChange={(e) => ctx.act.toGroup([row.id], e.target.value)} className="min-w-0 flex-1 rounded border border-line bg-surface-base px-1 min-h-11 py-0.5 text-xs text-text-primary outline-none">
           {[...new Set([...ctx.groups, row.group])].map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </div>
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => copy(hexOf(valueIn(token, ctx.shown[0]?.id ?? ctx.themes[0].id)))} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> Hex</button>
-        <button type="button" onClick={() => copy(`var(--${row.linked ? row.name : cssName(row.name)})`)} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> var()</button>
-        <button type="button" onClick={() => { ctx.act.duplicate([row.id]); ctx.setOpenId(null); }} className="rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary">Duplicate</button>
+        <button type="button" onClick={() => copy(hexOf(valueIn(token, ctx.shown[0]?.id ?? ctx.themes[0].id)))} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> Hex</button>
+        <button type="button" onClick={() => copy(`var(--${row.linked ? row.name : cssName(row.name)})`)} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> var()</button>
+        <button type="button" onClick={() => { ctx.act.duplicate([row.id]); ctx.setOpenId(null); }} className="rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary">Duplicate</button>
         <div className="flex-1" />
-        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => { ctx.act.remove([row.id]); ctx.setOpenId(null); }} className="flex items-center gap-1 rounded px-1.5 py-1 text-2xs text-text-secondary hover:bg-red-500/10 hover:text-red-400"><Trash2 size={10} /> Delete</button>
+        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => { ctx.act.remove([row.id]); ctx.setOpenId(null); }} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /> Delete</button>
       </div>
       {row.use && (
         <p className="text-2xs text-text-tertiary" data-usage>
@@ -231,10 +231,10 @@ function Swatch({ row, label, ctx }: { row: Row; label: string; ctx: ColorCtx })
           <div className="mt-1 flex items-center gap-1">
             <span className="truncate text-2xs font-medium text-text-secondary" title={row.name}>{label}</span>
             {token.themeAlias && <span title={aliasTitle(token, ctx)} data-alias-mark className="flex-shrink-0 text-accent"><CornerDownRight size={9} aria-label={`${row.name} is another token`} /></span>}
-            {row.changed && <span aria-label="Changed" title="Changed in Motif since the last sync" className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-500" />}
+            {row.changed && <span aria-label="Changed" title="Changed in Motif since the last sync" className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-sun" />}
             {row.readonly && <Lock size={8} aria-label="Read-only" className="flex-shrink-0 text-text-tertiary" />}
           </div>
-          {values.map((v, i) => <p key={i} className="truncate font-mono text-[10px] leading-tight text-text-tertiary" title={`${ctx.shown[i].name}: ${v}`}>{hexOf(v)}</p>)}
+          {values.map((v, i) => <p key={i} className="truncate font-mono text-[12px] leading-tight text-text-tertiary" title={`${ctx.shown[i].name}: ${v}`}>{hexOf(v)}</p>)}
         </div>
       </Popover.Anchor>
       <Popover.Portal>
@@ -271,7 +271,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
     >
       {over && <span aria-hidden className={cn("absolute inset-x-0 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}
       <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 flex-shrink-0 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
-      <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--accent,#6366f1)]" />
+      <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
       <InlineName row={row} taken={ctx.taken} onRename={(n) => ctx.act.rename(row.id, n)} className="w-44 flex-shrink-0 text-xs text-text-primary" />
       {ctx.shown.map((theme) => {
         const value = valueIn(token, theme.id);
@@ -296,7 +296,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       <Badges row={row} hasRepo={ctx.hasRepo} />
       <div className="flex w-12 flex-shrink-0 items-center justify-end gap-0.5 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
         <button type="button" aria-label={`Duplicate ${row.name}`} onClick={() => ctx.act.duplicate([row.id])} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /></button>
-        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-red-400/10 hover:text-red-400"><Trash2 size={10} /></button>
+        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /></button>
       </div>
     </div>
   );

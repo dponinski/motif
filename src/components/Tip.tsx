@@ -17,7 +17,7 @@ export default function Tip({ label, shortcut, side = "bottom", children }: { la
       <Tooltip.Portal>
         <Tooltip.Content side={side} sideOffset={6} className="z-[60] flex items-center gap-1.5 rounded bg-text-primary px-2 py-1 text-2xs text-surface-base shadow-lg">
           {label}
-          {shortcut && <kbd className="rounded bg-white/20 px-1 font-mono text-[10px]">{shortcut}</kbd>}
+          {shortcut && <kbd className="rounded bg-white/20 px-1 font-mono text-[12px]">{shortcut}</kbd>}
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>

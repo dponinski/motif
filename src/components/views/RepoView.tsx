@@ -16,8 +16,8 @@ import { errorMessage, useGitHost } from "@/components/git/hooks";
 type Tab = "setup" | "tokens" | "components" | "warnings";
 
 const SUPPORT_STYLE: Record<Support, string> = {
-  editable: "bg-emerald-500/15 text-emerald-500",
-  partial: "bg-amber-500/15 text-amber-500",
+  editable: "bg-mint-soft text-success",
+  partial: "bg-sun-soft text-ink",
   "view-only": "bg-surface-subtle text-text-tertiary",
 };
 const SUPPORT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
@@ -60,7 +60,7 @@ function Setup({ a }: { a: RepoAnalysis }) {
   return (
     <dl className="mx-auto max-w-3xl px-6 py-4">
       <Row label="Repository">{a.repo} <span className="text-text-tertiary">· {a.ref}</span></Row>
-      <Row label="Stack">{stackLine(stack)}{!stack.supported && <span className="ml-2 text-amber-500">Not supported yet</span>}</Row>
+      <Row label="Stack">{stackLine(stack)}{!stack.supported && <span className="ml-2 text-ink">Not supported yet</span>}</Row>
       <Row label="Styling">
         <p>{stylingLine(stack)}</p>
         {stack.styling.evidence.length > 0 && (
@@ -159,7 +159,7 @@ function ComponentCard({ c }: { c: RepoComponent }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-surface-border bg-surface-raised">
-      <button className="flex w-full items-center gap-2 px-3 py-2.5 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
+      <button className="flex w-full items-center gap-2 px-3 min-h-11 py-2.5 text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
         {open ? <ChevronDown size={12} className="flex-shrink-0 text-text-tertiary" /> : <ChevronRight size={12} className="flex-shrink-0 text-text-tertiary" />}
         <span className="text-sm font-medium text-text-primary">{c.name}</span>
         <span className={cn(chip, SUPPORT_STYLE[c.support.level])}>{SUPPORT_LABEL[c.support.level]}</span>
@@ -195,7 +195,7 @@ function ComponentCard({ c }: { c: RepoComponent }) {
                 <tbody>
                   {c.props.map((p) => (
                     <tr key={p.name} className="border-t border-surface-border-subtle align-top">
-                      <td className="py-1.5 pr-3 font-mono text-text-primary">{p.name}{p.required && <span className="text-red-400" title="Required"> *</span>}</td>
+                      <td className="py-1.5 pr-3 font-mono text-text-primary">{p.name}{p.required && <span className="text-danger" title="Required"> *</span>}</td>
                       <td className="py-1.5 pr-3 font-mono text-2xs text-text-secondary">{p.type}</td>
                       <td className="py-1.5 pr-3 font-mono text-2xs text-text-secondary">{p.default ?? "—"}</td>
                       <td className="py-1.5 text-text-secondary">{p.description ?? ""}</td>
@@ -213,7 +213,7 @@ function ComponentCard({ c }: { c: RepoComponent }) {
             {c.root && <span>Renders <span className="font-mono text-text-secondary">&lt;{c.root}&gt;</span></span>}
             {c.hooks.length > 0 && <span>· uses {c.hooks.map((h) => <span key={h} className={cn(chip, "mr-1 bg-surface-subtle font-mono text-text-secondary")}>{h}</span>)}</span>}
           </div>
-          {c.notes.length > 0 && <ul className="list-disc pl-4 text-amber-500">{c.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
+          {c.notes.length > 0 && <ul className="list-disc pl-4 text-ink">{c.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
         </div>
       )}
     </div>
@@ -285,7 +285,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
         <span className="text-sm font-semibold text-text-primary">Repository</span>
         <span className="truncate text-xs text-text-tertiary">{analysis.repo} · {analysis.ref}</span>
         <div className="flex-1" />
-        {error && <span className="text-xs text-red-400">{error}</span>}
+        {error && <span className="text-xs text-danger">{error}</span>}
         {importCount > 0 && (
           <button
             onClick={() => setImported(useLibraryStore.getState().importComponents(analysis))}
@@ -294,7 +294,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
             <Boxes size={11} /> {imported === null ? `Import ${importCount} components` : `Imported ${imported}`}
           </button>
         )}
-        <button onClick={rescan} disabled={busy} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
+        <button onClick={rescan} disabled={busy} className="flex items-center gap-1 rounded px-2.5 min-h-11 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
           {busy ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />} Rescan
         </button>
         <div className="h-5 w-px bg-surface-border" />
@@ -324,7 +324,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
         {tab === "tokens" && <Tokens a={analysis} />}
         {tab === "components" && <Components a={analysis} />}
         {tab === "warnings" && (
-          <ul className="mx-auto max-w-3xl list-disc px-10 py-4 text-xs text-amber-500">
+          <ul className="mx-auto max-w-3xl list-disc px-10 py-4 text-xs text-ink">
             {analysis.warnings.map((w) => <li key={w} className="py-1">{w}</li>)}
           </ul>
         )}
@@ -341,7 +341,7 @@ export default function RepoView({ onClose }: { onClose: () => void }) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-surface-base">
         <p className="text-xs text-text-tertiary">Nothing has been scanned yet. Scan a repository from Source control.</p>
-        <button onClick={onClose} className="rounded-md border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back to Git</button>
+        <button onClick={onClose} className="rounded-md border border-line px-3 min-h-11 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back to Git</button>
       </div>
     );
   }

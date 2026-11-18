@@ -105,7 +105,7 @@ function AddBlockMenu({ onAdd, children }: { onAdd: (type: BlockType) => void; c
   );
 }
 
-const pickerClass = "h-6 max-w-[140px] rounded border border-neutral-200 bg-white px-1 text-[11px] text-neutral-700 outline-none";
+const pickerClass = "h-6 max-w-[140px] rounded border border-neutral-200 bg-white px-1 text-[14px] text-neutral-700 outline-none";
 
 // ── Blocks ────────────────────────────────────────────────────────────────────
 
@@ -219,7 +219,7 @@ function PageEditor({ page, ctx }: { page: DocPage; ctx: DocsContext }) {
         ))}
 
         <AddBlockMenu onAdd={(type) => insert(type, page.blocks.length - 1)}>
-          <button className="flex items-center gap-1.5 rounded-md border border-dashed border-neutral-300 px-3 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-800">
+          <button className="flex items-center gap-1.5 rounded-md border border-dashed border-neutral-300 px-3 min-h-11 py-1.5 text-xs text-neutral-500 hover:border-neutral-400 hover:text-neutral-800">
             <Plus size={12} /> Add block
           </button>
         </AddBlockMenu>
@@ -262,14 +262,14 @@ function Sidebar({
                 page.id === selectedId ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
               )}
             >
-              <button className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-xs" onClick={() => onSelect(page.id)}>
+              <button className="min-w-0 flex-1 truncate px-2 min-h-11 py-1.5 text-left text-xs" onClick={() => onSelect(page.id)}>
                 {page.title || "Untitled"}
               </button>
               {sectionIndex === 0 && (
                 <span className="hidden flex-shrink-0 items-center pr-1 group-hover:flex">
                   <button title="Move up" disabled={i === 0} onClick={() => movePage(page.id, -1)} className="rounded p-0.5 hover:bg-surface-overlay disabled:opacity-30"><ArrowUp size={10} /></button>
                   <button title="Move down" disabled={i === section.pages.length - 1} onClick={() => movePage(page.id, 1)} className="rounded p-0.5 hover:bg-surface-overlay disabled:opacity-30"><ArrowDown size={10} /></button>
-                  <button title="Delete page" onClick={() => deletePage(page.id)} className="rounded p-0.5 hover:bg-surface-overlay hover:text-red-400"><Trash2 size={10} /></button>
+                  <button title="Delete page" onClick={() => deletePage(page.id)} className="rounded p-0.5 hover:bg-surface-overlay hover:text-danger"><Trash2 size={10} /></button>
                 </span>
               )}
             </div>
@@ -373,7 +373,7 @@ export default function DocsView({ projectId, onClose }: { projectId: string; on
             </button>
           ))}
         </div>
-        <button onClick={exportSite} disabled={preparing} className="flex items-center gap-1 rounded px-2.5 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
+        <button onClick={exportSite} disabled={preparing} className="flex items-center gap-1 rounded px-2.5 min-h-11 py-1.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-60">
           <Download size={11} /> {preparing ? "Preparing previews…" : "Export HTML"}
         </button>
 

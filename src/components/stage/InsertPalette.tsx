@@ -77,7 +77,7 @@ export default function InsertPalette({ components, onInsert, onDrag }: {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label="Add an element">
         <Popover.Trigger asChild>
-          <button type="button" aria-label="Add element" data-tour="add" className="flex h-7 items-center gap-1 rounded bg-surface-subtle px-2 text-xs text-text-secondary transition-colors hover:bg-surface-border hover:text-text-primary">
+          <button type="button" aria-label="Add element" data-tour="add" className="flex h-11 items-center gap-1 rounded bg-surface-subtle px-2 text-xs text-text-secondary transition-colors hover:bg-surface-border hover:text-text-primary">
             <Plus size={12} /> Add
           </button>
         </Popover.Trigger>

@@ -56,7 +56,7 @@ export default function SetsSidebar({
     });
   };
 
-  const field = "w-full rounded border bg-surface-subtle px-1.5 py-0.5 text-xs text-text-primary outline-none border-accent";
+  const field = "w-full rounded border bg-surface-subtle px-1.5 min-h-11 py-0.5 text-xs text-text-primary outline-none border-accent";
 
   return (
     <div className="w-[220px] flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised overflow-hidden">
@@ -115,7 +115,7 @@ export default function SetsSidebar({
                   {sets.length > 1 && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleting(s); }}
-                      className="p-0.5 rounded text-text-tertiary hover:text-red-400 hover:bg-red-400/10"
+                      className="p-0.5 rounded text-text-tertiary hover:text-danger hover:bg-danger/10"
                       title="Delete set"
                       aria-label={`Delete ${s.name}`}
                     >

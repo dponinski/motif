@@ -55,7 +55,7 @@ export default function GroupedTokens({
                 checked={all}
                 ref={(el) => { if (el) el.indeterminate = some && !all; }}
                 onChange={() => selection.setMany(ids, !all)}
-                className="h-3 w-3 flex-shrink-0 accent-[var(--accent,#6366f1)]"
+                className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]"
               />
               <button type="button" onClick={() => fold(group)} aria-expanded={!isFolded} aria-label={`${isFolded ? "Open" : "Fold"} ${group}`} className="text-text-tertiary hover:text-text-primary">
                 {isFolded ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
@@ -93,7 +93,7 @@ export default function GroupedTokens({
         </section>
       )}
       {newGroup === null ? (
-        <button type="button" onClick={() => setNewGroup("")} className="flex w-full items-center gap-1.5 px-4 py-2 text-left text-2xs text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-secondary">
+        <button type="button" onClick={() => setNewGroup("")} className="flex w-full items-center gap-1.5 px-4 min-h-11 py-2 text-left text-2xs text-text-tertiary transition-colors hover:bg-surface-subtle hover:text-text-secondary">
           <Plus size={10} /> New group
         </button>
       ) : (

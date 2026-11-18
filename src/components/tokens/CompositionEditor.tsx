@@ -11,7 +11,7 @@ import { CommitInput } from "./fields";
 
 // The parts of a composition: each is a value of its own or another token of its type (which it then follows), and what it comes to.
 
-const selectClass = "rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
+const selectClass = "rounded border border-surface-border bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
 
 export function useComposeData(): ComposeData {
   return useDesignSystemStore(useShallow((s): ComposeData => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
@@ -77,7 +77,7 @@ function SlotRow({ composition, slot, data, sets, onSlot, onRemove, onRename }: 
         </>
       )}
       {slot.ref && (
-        <span data-slot-token className={missing ? "rounded bg-red-400/10 px-1.5 py-0.5 text-2xs text-red-400" : "rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent"}>
+        <span data-slot-token className={missing ? "rounded bg-danger/10 px-1.5 py-0.5 text-2xs text-danger" : "rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent"}>
           {linked ? `${linked.setId === composition.setId ? "" : `${sets.find((s) => s.id === linked.setId)?.name ?? "Another set"} / `}${linked.name}` : "A token that is gone"}
         </span>
       )}
@@ -95,7 +95,7 @@ function SlotRow({ composition, slot, data, sets, onSlot, onRemove, onRename }: 
         ))}
       </select>
       <span data-slot-text className="min-w-0 truncate text-2xs text-text-tertiary">{text ?? "—"}</span>
-      {onRemove && <button type="button" aria-label={`Remove ${label}`} onClick={onRemove} className="rounded p-1 text-text-tertiary hover:bg-red-400/10 hover:text-red-400"><X size={10} /></button>}
+      {onRemove && <button type="button" aria-label={`Remove ${label}`} onClick={onRemove} className="rounded p-1 text-text-tertiary hover:bg-danger/10 hover:text-danger"><X size={10} /></button>}
     </div>
   );
 }
@@ -116,7 +116,7 @@ export default function CompositionEditor({ composition, onChange }: { compositi
           <Sample composition={composition} />
           {composition.kind === "shadow" && (
             <label className="flex items-center gap-1.5 text-2xs text-text-tertiary">
-              <input type="checkbox" aria-label={`Inset ${composition.name}`} checked={!!composition.inset} onChange={(e) => onChange({ inset: e.target.checked })} className="h-3 w-3 accent-[var(--accent,#6366f1)]" /> Inset
+              <input type="checkbox" aria-label={`Inset ${composition.name}`} checked={!!composition.inset} onChange={(e) => onChange({ inset: e.target.checked })} className="h-3 w-3 accent-[var(--cobalt)]" /> Inset
             </label>
           )}
         </div>
@@ -137,7 +137,7 @@ export default function CompositionEditor({ composition, onChange }: { compositi
         <div className="flex items-center gap-2 pt-1">
           <span className="text-2xs text-text-tertiary">Add a part</span>
           {(["color", "number", "string"] as TokenType[]).map((t) => (
-            <button key={t} type="button" aria-label={`Add a ${t} part to ${composition.name}`} onClick={() => add(t)} className="flex items-center gap-1 rounded border border-surface-border px-2 py-0.5 text-2xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><Plus size={9} /> {t[0].toUpperCase() + t.slice(1)}</button>
+            <button key={t} type="button" aria-label={`Add a ${t} part to ${composition.name}`} onClick={() => add(t)} className="flex items-center gap-1 rounded border border-line px-2 min-h-11 py-0.5 text-2xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><Plus size={9} /> {t[0].toUpperCase() + t.slice(1)}</button>
           ))}
         </div>
       )}

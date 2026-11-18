@@ -51,7 +51,7 @@ function Visual({ row }: { row: Row }) {
   }
 }
 
-const selectClass = "rounded border border-surface-border bg-surface-base px-1 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
+const selectClass = "rounded border border-surface-border bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
 
 function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const set = (patch: Record<string, unknown>) => ctx.act.update(row, patch);
@@ -148,7 +148,7 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
         className={cn("group/row flex items-center gap-3 px-4 py-1.5 transition-colors", picked ? "bg-accent/10" : "hover:bg-surface-subtle")}
       >
         <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 flex-shrink-0 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
-        <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--accent,#6366f1)]" />
+        <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
         <Visual row={row} />
         <InlineName row={row} taken={ctx.taken} onRename={(n) => ctx.act.rename(row.id, n)} className="w-40 flex-shrink-0 text-xs text-text-primary" />
         <Fields row={row} ctx={ctx} />
@@ -163,7 +163,7 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
             <button type="button" data-rename-open aria-label={`Rename ${row.name} in the repository`} title="Rename in the repository" onClick={() => ctx.rename!(row)} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Pencil size={10} /></button>
           )}
           <button type="button" aria-label={`Duplicate ${row.name}`} onClick={() => ctx.act.duplicate([row.id])} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /></button>
-          <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-red-400/10 hover:text-red-400"><Trash2 size={10} /></button>
+          <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /></button>
         </div>
       </div>
       {open && expandable && <Expanded row={row} ctx={ctx} />}

@@ -197,8 +197,8 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
       <p className="text-sm font-medium text-text-primary">No {NOUN[kind]} tokens in {set.name} yet</p>
       <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">{kind === "composition" ? "Put tokens together as one: a text style from a font family, a size and a weight, or a shadow. Each part is a value of its own or another token." : "Add the first one below, or bring them in from the repository with Repo sync."}</p>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => setAdding("base")} className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90">Add a {NOUN[kind]}</button>
-        {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} className="rounded border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>}
+        <button type="button" onClick={() => setAdding("base")} className="rounded bg-blaze px-3 min-h-11 py-1.5 text-xs font-medium text-on-blaze hover:bg-blaze/90">Add a {NOUN[kind]}</button>
+        {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} className="rounded border border-line px-3 min-h-11 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>}
       </div>
     </div>
   ) : (
@@ -213,7 +213,7 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
       <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-surface-border px-4 py-2">
         <label className="relative">
           <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary" />
-          <input ref={search} aria-label="Search tokens" placeholder="Search (press /)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setQuery(""); e.currentTarget.blur(); } }} className="w-52 rounded border border-surface-border bg-surface-base py-1 pl-6 pr-2 text-xs text-text-primary outline-none focus:border-accent" />
+          <input ref={search} aria-label="Search tokens" placeholder="Search (press /)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setQuery(""); e.currentTarget.blur(); } }} className="w-52 rounded border border-line bg-surface-base py-1 pl-6 pr-2 text-xs text-text-primary outline-none focus:border-accent" />
         </label>
         {([["all", "All"], ["changed", "Changed"], ["unsynced", "Not in repository"], ["readonly", "Read-only"], ...(counted ? [["unused", "Unused"]] : []), ...(multiTheme ? [["differs", "Differ between themes"], ["same", "Same in every theme"]] : [])] as [Only, string][]).map(([id, label]) => (
           <button key={id} type="button" aria-pressed={shownOnly === id} onClick={() => setOnly(id)} className={chip(shownOnly === id)}>{label}</button>
@@ -222,15 +222,15 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
           <button type="button" disabled title="Scan the repository again (in Source control) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
         )}
         <div className="flex-1" />
-        {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-surface-border px-2 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>}
+        {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-line px-2 min-h-11 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>}
         {colorsView && (
           <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5" role="group" aria-label="View">
-            <button type="button" aria-pressed={view === "palette"} onClick={() => setView("palette")} className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs", view === "palette" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><PaletteIcon size={11} /> Palette</button>
-            <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")} className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs", view === "list" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><Rows3 size={11} /> List</button>
+            <button type="button" aria-pressed={view === "palette"} onClick={() => setView("palette")} className={cn("flex items-center gap-1 rounded px-2 min-h-11 py-1 text-xs", view === "palette" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><PaletteIcon size={11} /> Palette</button>
+            <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")} className={cn("flex items-center gap-1 rounded px-2 min-h-11 py-1 text-xs", view === "list" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><Rows3 size={11} /> List</button>
           </div>
         )}
         {colorsView && (
-          <button type="button" onClick={() => editTokens(() => ds().regroupColors(set.id))} title="Put each color in the group its name says: a ramp like gray-50 … gray-900 is one group, a pair like primary and primary-foreground another" className="flex items-center gap-1 rounded px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary"><Wand2 size={11} /> Regroup by name</button>
+          <button type="button" onClick={() => editTokens(() => ds().regroupColors(set.id))} title="Put each color in the group its name says: a ramp like gray-50 … gray-900 is one group, a pair like primary and primary-foreground another" className="flex items-center gap-1 rounded px-2 min-h-11 py-1 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary"><Wand2 size={11} /> Regroup by name</button>
         )}
       </div>
 

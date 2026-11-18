@@ -63,8 +63,8 @@ function Body({ onClose }: { onClose: () => void }) {
     return (
       <div className="flex flex-col gap-3" data-created-notes>
         <p className="text-sm text-text-primary">{name} is made.</p>
-        {notes.map((n) => <p key={n} className="text-xs leading-relaxed text-amber-500">{n}</p>)}
-        <button onClick={onClose} className="h-8 self-start rounded-md border border-surface-border px-3 text-xs text-text-secondary hover:bg-surface-subtle">Close</button>
+        {notes.map((n) => <p key={n} className="text-xs leading-relaxed text-ink">{n}</p>)}
+        <button onClick={onClose} className="h-11 self-start rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle">Close</button>
       </div>
     );
   }
@@ -75,7 +75,7 @@ function Body({ onClose }: { onClose: () => void }) {
         <span className="text-2xs text-text-tertiary">Name</span>
         <input className="input-sm" aria-label="Component name" placeholder="Button" value={name} onChange={(e) => setName(e.target.value.trim())} autoComplete="off" autoFocus />
       </label>
-      {problem && <p className="text-xs text-red-400" role="alert" data-name-problem>{problem}</p>}
+      {problem && <p className="text-xs text-danger" role="alert" data-name-problem>{problem}</p>}
       <div className="rounded-md border border-surface-border px-3 py-2.5">
         <p className="mb-1.5 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Files it will be made of</p>
         <ul className="flex flex-col gap-0.5 font-mono text-2xs text-text-secondary">
@@ -88,8 +88,8 @@ function Body({ onClose }: { onClose: () => void }) {
           {tailwind ? "Styled with Tailwind classes, like the rest of this repository." : "Its styles go in the CSS file next to it, using your tokens as CSS variables."} Nothing is sent to the repository until you open a pull request.
         </p>
       </div>
-      {error && <p className="break-words text-xs text-red-400" role="alert">{error}</p>}
-      <button type="submit" disabled={busy || !name || !!problem || !analysis || !source} className="flex h-8 items-center justify-center gap-1.5 self-start rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50">
+      {error && <p className="break-words text-xs text-danger" role="alert">{error}</p>}
+      <button type="submit" disabled={busy || !name || !!problem || !analysis || !source} className="flex h-11 items-center justify-center gap-1.5 self-start rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-50">
         {busy && <Loader2 size={12} className="animate-spin" />} Create component
       </button>
     </form>

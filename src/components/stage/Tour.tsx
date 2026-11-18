@@ -111,8 +111,8 @@ export default function Tour({ onClose }: { onClose: () => void }) {
         <div className="mt-3 flex items-center gap-2">
           <span className="text-2xs tabular-nums text-text-tertiary">{index + 1} of {steps.length}</span>
           <div className="flex-1" />
-          {index > 0 && <button onClick={() => setIndex(index - 1)} className="rounded px-2 py-1 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back</button>}
-          <button onClick={() => (last ? onClose() : setIndex(index + 1))} className="rounded bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent/90">{last ? "Done" : "Next"}</button>
+          {index > 0 && <button onClick={() => setIndex(index - 1)} className="rounded px-2 min-h-11 py-1 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Back</button>}
+          <button onClick={() => (last ? onClose() : setIndex(index + 1))} className="rounded bg-blaze px-3 min-h-11 py-1 text-xs font-medium text-on-blaze hover:bg-blaze/90">{last ? "Done" : "Next"}</button>
         </div>
       </div>
     </>

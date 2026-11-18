@@ -1,41 +1,133 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Theme variables ─────────────────────────────────────────────────────── */
+/* ── Brand tokens ─────────────────────────────────────────────────────────────
+   Motif's design system: warm cream in light, plum-ink in dark, the same few cheerful colors in both. The variables keep the names the
+   app was built on (surface-*, text-*), mapped to the brand's (surface, surface-raised, surface-sunken, ink, ink-muted, line-soft). */
 
-:root {
-  --surface-base: #0a0a0a;
-  --surface-raised: #111111;
-  --surface-overlay: #181818;
-  --surface-subtle: #1f1f1f;
-  --surface-border: #282828;
-  --surface-border-subtle: #1e1e1e;
-  --text-primary: #f0f0f0;
-  --text-secondary: #888888;
-  --text-tertiary: #555555;
-  --text-inverse: #0a0a0a;
-  --scrollbar-thumb: #2e2e2e;
-  --scrollbar-thumb-hover: #444;
-  color-scheme: dark;
+:root,
+[data-theme="light"] {
+  --surface: #fbf7f0;
+  --surface-rgb: 251 247 240;
+  --surface-raised-brand: #ffffff;
+  --surface-raised-brand-rgb: 255 255 255;
+  --surface-sunken: #f3ede2;
+  --surface-sunken-rgb: 243 237 226;
+  --ink: #1f1a2e;
+  --ink-rgb: 31 26 46;
+  --ink-muted: #5e576f;
+  --ink-muted-rgb: 94 87 111;
+  --line: #8b8498;
+  --line-rgb: 139 132 152;
+  --focus: #1f1a2e;
+  --focus-rgb: 31 26 46;
+  --blaze: #e8572f;
+  --blaze-rgb: 232 87 47;
+  --cobalt: #2f4fd1;
+  --cobalt-rgb: 47 79 209;
+  --sun: #f0b445;
+  --sun-rgb: 240 180 69;
+  --mint: #6ccba9;
+  --mint-rgb: 108 203 169;
+  --bubblegum: #f0a9c3;
+  --bubblegum-rgb: 240 169 195;
+  --on-blaze: #1f1a2e;
+  --on-blaze-rgb: 31 26 46;
+  --on-cobalt: #ffffff;
+  --on-cobalt-rgb: 255 255 255;
+  --on-sun: #1f1a2e;
+  --on-sun-rgb: 31 26 46;
+  --on-mint: #1f1a2e;
+  --on-mint-rgb: 31 26 46;
+  --on-bubblegum: #1f1a2e;
+  --on-bubblegum-rgb: 31 26 46;
+  --blaze-soft: #fbe3da;
+  --blaze-soft-rgb: 251 227 218;
+  --cobalt-soft: #e3e8fa;
+  --cobalt-soft-rgb: 227 232 250;
+  --sun-soft: #faedd1;
+  --sun-soft-rgb: 250 237 209;
+  --mint-soft: #e0f3eb;
+  --mint-soft-rgb: 224 243 235;
+  --bubblegum-soft: #f9e4ec;
+  --bubblegum-soft-rgb: 249 228 236;
+  --link: #2f4fd1;
+  --link-rgb: 47 79 209;
+  --success: #0a6f82;
+  --success-rgb: 10 111 130;
+  --danger: #b73818;
+  --danger-rgb: 183 56 24;
+  --line-soft: #1f1a2e24;
+  --line-soft-alpha: 0.14;
+
+  --shadow-card: 0 1px 2px 0 rgba(31, 26, 46, 0.08);
+  --shadow-raised: 0 12px 32px 0 rgba(31, 26, 46, 0.1), 0 2px 6px 0 rgba(31, 26, 46, 0.06);
+
+  /* What the app's classes read. */
+  --surface-base: var(--surface);
+  --surface-raised: var(--surface-raised-brand);
+  --surface-overlay: var(--surface-raised-brand);
+  --surface-subtle: var(--surface-sunken);
+  --surface-border: var(--line-soft);
+  --surface-border-subtle: var(--line-soft);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-muted);
+  --text-tertiary: var(--ink-muted);
+  --text-inverse: var(--surface);
+  --scrollbar-thumb: #d6cdbd;
+  --scrollbar-thumb-hover: #b9ad98;
+  color-scheme: light;
 }
 
-[data-theme="light"] {
-  --surface-base: #f0f0f0;
-  --surface-raised: #ffffff;
-  --surface-overlay: #f7f7f7;
-  --surface-subtle: #efefef;
-  --surface-border: #e0e0e0;
-  --surface-border-subtle: #ebebeb;
-  --text-primary: #141414;
-  --text-secondary: #606060;
-  --text-tertiary: #9a9a9a;
-  --text-inverse: #ffffff;
-  --scrollbar-thumb: #ccc;
-  --scrollbar-thumb-hover: #bbb;
-  color-scheme: light;
+[data-theme="dark"] {
+  --surface: #17122a;
+  --surface-rgb: 23 18 42;
+  --surface-raised-brand: #221b38;
+  --surface-raised-brand-rgb: 34 27 56;
+  --surface-sunken: #110d20;
+  --surface-sunken-rgb: 17 13 32;
+  --ink: #f6f1e8;
+  --ink-rgb: 246 241 232;
+  --ink-muted: #b9b0d6;
+  --ink-muted-rgb: 185 176 214;
+  --line: #8f88ac;
+  --line-rgb: 143 136 172;
+  --focus: #f0b445;
+  --focus-rgb: 240 180 69;
+  --blaze: #f26b45;
+  --blaze-rgb: 242 107 69;
+  --cobalt: #8aa2f5;
+  --cobalt-rgb: 138 162 245;
+  --on-blaze: #1f1a2e;
+  --on-blaze-rgb: 31 26 46;
+  --on-cobalt: #17122a;
+  --on-cobalt-rgb: 23 18 42;
+  --blaze-soft: #3d2330;
+  --blaze-soft-rgb: 61 35 48;
+  --cobalt-soft: #262b52;
+  --cobalt-soft-rgb: 38 43 82;
+  --sun-soft: #3a3326;
+  --sun-soft-rgb: 58 51 38;
+  --mint-soft: #1f3a3a;
+  --mint-soft-rgb: 31 58 58;
+  --bubblegum-soft: #3a2540;
+  --bubblegum-soft-rgb: 58 37 64;
+  --link: #a5b8ff;
+  --link-rgb: 165 184 255;
+  --success: #5edcf0;
+  --success-rgb: 94 220 240;
+  --danger: #ff8a70;
+  --danger-rgb: 255 138 112;
+  --line-soft: #f6f1e82e;
+  --line-soft-alpha: 0.18;
+
+  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --shadow-raised: 0 12px 32px 0 rgba(0, 0, 0, 0.5), 0 2px 6px 0 rgba(0, 0, 0, 0.4);
+
+  --scrollbar-thumb: #3a3258;
+  --scrollbar-thumb-hover: #4d4373;
+  color-scheme: dark;
 }
 
 * {
@@ -48,10 +140,26 @@ body {
   overflow: hidden;
   background: var(--surface-base);
   color: var(--text-primary);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 13px;
+  font-family: 'Figtree Variable', 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 24px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Keyboard focus: a 3px ring, offset 2px, on every control (the brand's focus color: ink in light, sun in dark). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+[role="menuitem"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* Custom scrollbar */
@@ -75,7 +183,7 @@ body {
 
 /* Input styles */
 .input-sm {
-  @apply bg-surface-subtle border border-surface-border rounded text-text-primary text-sm px-2 py-1 w-full outline-none
+  @apply bg-surface-subtle border border-line rounded text-text-primary text-sm px-2 py-1 w-full outline-none
          focus:border-accent focus:ring-1 focus:ring-accent/20
          placeholder:text-text-tertiary transition-colors;
 }

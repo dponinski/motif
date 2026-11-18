@@ -11,7 +11,7 @@ import { usePullStatus } from "@/store/pull";
 import { useNavRequest } from "@/store/nav";
 import NewComponentDialog from "@/components/stage/NewComponentDialog";
 
-const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
+const DOT: Record<Support, string> = { editable: "bg-mint", partial: "bg-sun", "view-only": "bg-text-tertiary" };
 const DOT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
 
 function UpdateButton({ onResult }: { onResult: (text: string, ok: boolean) => void }) {
@@ -60,11 +60,11 @@ function ImportPrompt() {
     <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border px-3 py-3">
       <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary"><Boxes size={12} className="text-text-tertiary" /> Repository components</p>
       <p className="text-2xs leading-relaxed text-text-tertiary">Scan {slug} and bring its components in. They appear here, under Repository.</p>
-      <button onClick={run} disabled={busy} className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-accent text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-60" aria-label={`Scan and import components from ${slug}`}>
+      <button onClick={run} disabled={busy} className="flex h-11 items-center justify-center gap-1.5 rounded-md bg-blaze text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-60" aria-label={`Scan and import components from ${slug}`}>
         {busy ? <Loader2 size={12} className="animate-spin" /> : <Boxes size={12} />} {busy ? "Scanning…" : "Scan and import components"}
       </button>
       <button onClick={() => useNavRequest.getState().ask("git")} className="self-start text-2xs text-text-tertiary underline hover:text-text-primary">Choose a branch or see the report in Git</button>
-      {message && <p className={cn("text-2xs leading-relaxed", message.ok ? "text-text-tertiary" : "text-red-400")} role="status">{message.text}</p>}
+      {message && <p className={cn("text-2xs leading-relaxed", message.ok ? "text-text-tertiary" : "text-danger")} role="status">{message.text}</p>}
     </div>
   );
 }
@@ -93,7 +93,7 @@ export default function RepoComponentsSection() {
         {connection && repoSlug(connection) === source.repo && <UpdateButton onResult={(text, ok) => setStatus({ text, ok })} />}
       </div>
       <NewComponentDialog open={creating} onOpenChange={setCreating} />
-      {status && <p className={cn("flex-shrink-0 px-3 py-1 text-2xs", status.ok ? "text-text-tertiary" : "text-red-400")} role="status">{status.text}</p>}
+      {status && <p className={cn("flex-shrink-0 px-3 py-1 text-2xs", status.ok ? "text-text-tertiary" : "text-danger")} role="status">{status.text}</p>}
       {components.length > 8 && (
         <div className="flex-shrink-0 px-2 pt-1.5">
           <input className="input-sm" placeholder="Filter…" aria-label="Filter repository components" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -108,9 +108,9 @@ export default function RepoComponentsSection() {
               c.id === activeId ? "bg-accent/15 text-accent" : "text-text-secondary hover:bg-surface-subtle hover:text-text-primary"
             )}
           >
-            <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left">
+            <button onClick={() => setActive(c.id === activeId ? null : c.id)} title={`${c.file}:${c.line}`} className="flex min-w-0 flex-1 items-center gap-1.5 px-2 min-h-11 py-1.5 text-left">
               <span className="flex-1 truncate text-xs">{c.name}</span>
-              {drafts.some((d) => d.id === c.id) && <span className="rounded bg-emerald-500/15 px-1 text-2xs text-emerald-500" title="Made here, not in the repository yet">new</span>}
+              {drafts.some((d) => d.id === c.id) && <span className="rounded bg-mint-soft px-1 text-2xs text-success" title="Made here, not in the repository yet">new</span>}
               <span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", DOT[c.support.level])} title={DOT_LABEL[c.support.level]} />
             </button>
           </div>
