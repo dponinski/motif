@@ -5,15 +5,26 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useDesignSystemStore } from "@/store/design-system";
 import { editTokens } from "@/store/token-history";
+import { importDtcg } from "@/lib/dtcg/import";
+import { fromStored, toStored } from "@/lib/tokens/migrate";
 
 // Tokens from a W3C design tokens file, pasted in.
-export default function ImportPanel({ onClose }: { onClose: () => void }) {
+export default function ImportPanel({ onClose, setId }: { onClose: () => void; setId?: string }) {
   const { importFromJSON } = useDesignSystemStore(useShallow((s) => ({ importFromJSON: s.importFromJSON })));
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
 
   const handleImport = () => {
-    const result = editTokens(() => importFromJSON(text));
+    // A design tokens file (colors, numbers, strings, text styles, shadows, compositions) is read as one; an older shape of group (`colors`,
+    // `borderRadius`) by the older reader.
+    let legacy = false;
+    try { const j = JSON.parse(text) as Record<string, unknown>; legacy = "colors" in j || "borderRadius" in j; } catch { /* the reader says */ }
+    const state = useDesignSystemStore.getState();
+    const target = setId ?? state.sets[0]?.id;
+    const files = legacy || !target ? null : importDtcg(text, toStored(state), target);
+    const result = files
+      ? editTokens(() => { state.replaceTokenData(fromStored(files.data)); return { imported: files.imported, errors: files.imported === 0 ? files.notes : [] }; })
+      : editTokens(() => importFromJSON(text));
     if (result.errors.length) {
       setMsg(`Errors: ${result.errors.join(", ")}`);
     } else {

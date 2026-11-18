@@ -3,6 +3,7 @@ import { fromStored, migrateTokenData, toStored } from "../lib/tokens/migrate";
 import { presetSlots, previewStyle, resolve, slotMissing, slotText, usersOf, type ComposeData } from "../lib/tokens/compose";
 import { emptyTokenData, snapshotTokens, useDesignSystemStore } from "./design-system";
 import { editTokens, redoTokens, undoTokens, useTokenHistory } from "./token-history";
+import { exportCss, exportTokens } from "../lib/tokens/exports";
 
 const store = () => useDesignSystemStore.getState();
 const data = (): ComposeData => store();
@@ -111,9 +112,10 @@ describe("compositions", () => {
 
   it("are exported as design tokens and as variables", () => {
     typography();
-    const json = JSON.parse(store().exportTokens());
-    expect(json.composition.heading).toMatchObject({ $type: "typography", $value: { fontFamily: "Georgia, serif", fontSize: "1.5rem" } });
-    expect(store().exportCSS()).toContain("--heading-font-size: 1.5rem;");
+    const json = JSON.parse(exportTokens(store()));
+    // (The slots that are tokens are references to them, and the variable is that token's.)
+    expect(json.text.heading).toMatchObject({ $type: "typography", $value: { fontFamily: "{font.sans}", fontSize: "{text.xl}" } });
+    expect(exportCss(store())).toContain("--text-heading: var(--text-xl);");
   });
 });
 

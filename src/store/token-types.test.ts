@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { emptyTokenData, useDesignSystemStore } from "./design-system";
 import { editTokens, redoTokens, undoTokens, useTokenHistory } from "./token-history";
+import { exportCss, exportTokens } from "../lib/tokens/exports";
 
 const store = () => useDesignSystemStore.getState();
 const SET = "set-global";
@@ -79,11 +80,11 @@ describe("numbers and strings", () => {
     store().addNumber({ name: "text-lg", value: 1.125, unit: "rem", setId: SET });
     store().addNumber({ name: "ratio", value: 1.25, unit: "", setId: SET });
     store().addString({ name: "font-sans", value: "Inter", use: "font-family", setId: SET });
-    const json = JSON.parse(store().exportTokens());
-    expect(json.number["text-lg"]).toEqual({ $value: "1.125rem", $type: "dimension" });
-    expect(json.number.ratio).toEqual({ $value: 1.25, $type: "number" });
-    expect(json.string["font-sans"]).toEqual({ $value: "Inter", $type: "fontFamily" });
-    const css = store().exportCSS();
+    const json = JSON.parse(exportTokens(store()));
+    expect(json["text-lg"]).toMatchObject({ $value: { value: 1.125, unit: "rem" }, $type: "dimension" });
+    expect(json.ratio).toMatchObject({ $value: 1.25, $type: "number" });
+    expect(json.font.sans).toMatchObject({ $value: "Inter", $type: "fontFamily" });
+    const css = exportCss(store());
     expect(css).toContain("--text-lg: 1.125rem;");
     expect(css).toContain("--ratio: 1.25;");
     expect(css).toContain("--font-sans: Inter;");
