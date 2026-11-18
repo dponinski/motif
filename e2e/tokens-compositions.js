@@ -87,8 +87,8 @@ const extra = {
   await page.screenshot({ path: `${OUT}/tokens-compositions-editor.png` });
 
   // ── Following ─────────────────────────────────────────────────────────────
-  await page.getByLabel("Value of font-sans").fill("Merriweather, serif");
-  await page.getByLabel("Value of font-sans").press("Enter");
+  await page.getByLabel("Value of font-sans", { exact: true }).fill("Merriweather, serif");
+  await page.getByLabel("Value of font-sans", { exact: true }).press("Enter");
   await open("heading");
   check("when the token changes, so does the part", await settle(async () => (await slot("heading", "font-family").locator("[data-slot-text]").innerText()) === "Merriweather, serif"));
   check("and the search finds the composition by what a part is, with the String it follows", await (async () => { await page.getByLabel("Search tokens").fill("Merriweather"); const ok = await settle(async () => (await tabCount("Compositions")) === 1 && (await tabCount("Strings")) === 1); await page.getByLabel("Search tokens").fill(""); return ok; })());

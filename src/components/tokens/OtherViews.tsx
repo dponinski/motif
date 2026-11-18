@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
 import type { NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TokenTheme, TypographyToken, TokenKind } from "@/store/design-system";
 import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
+import FontField, { BrowseFonts } from "./FontField";
 import { CommitInput, InlineName } from "./fields";
 import { Badges } from "./ColorViews";
 import type { Row } from "./rows";
@@ -66,6 +67,7 @@ function ThemedValues({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const numeric = row.kind !== "string";
   const own = (themeId: string) => (themeId === baseId ? String(token.value) : token.themeValues?.[themeId] !== undefined ? String(token.themeValues[themeId]) : "");
   const unit = row.kind === "spacing" || row.kind === "radius" ? "px" : row.kind === "number" ? (row.token as NumberToken).unit : "";
+  const isFont = row.kind === "string" && (row.token as StringToken).use === "font-family";
   return (
     <>
       {ctx.shown.map((theme) => (
@@ -89,6 +91,7 @@ function ThemedValues({ row, ctx }: { row: Row; ctx: OtherCtx }) {
             }}
           />
           {unit && theme.id === ctx.shown[ctx.shown.length - 1].id ? unit : null}
+          {isFont && <BrowseFonts label={`${theme.name} value of ${row.name}`} current={own(theme.id) || String(token.value)} onPick={(v) => ctx.act.setThemeValue(row, theme.id, v)} />}
         </label>
       ))}
     </>
@@ -127,6 +130,7 @@ function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
       return (
         <>
           {themed ? <ThemedValues row={row} ctx={ctx} /> : <CommitInput value={x.value} label={`Value of ${row.name}`} frame className="w-56" invalidHint="Can't be empty" onCommit={(t) => { if (!t.trim()) return false; set({ value: t.trim() }); return true; }} />}
+          {!themed && x.use === "font-family" && <BrowseFonts label={`Value of ${row.name}`} current={x.value} onPick={(v) => set({ value: v })} />}
           <select aria-label={`Used as of ${row.name}`} value={x.use ?? ""} onChange={(e) => set({ use: e.target.value || undefined })} className={selectClass}>
             {STRING_USES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
           </select>
@@ -152,7 +156,10 @@ function Expanded({ row, ctx }: { row: Row; ctx: OtherCtx }) {
     const t = row.token as TypographyToken;
     return (
       <div className="flex flex-wrap items-end gap-3 border-t border-surface-border bg-surface-subtle/50 px-4 py-2 pl-11">
-        {field("Family", t.fontFamily, (x) => { if (!x.trim()) return false; set({ fontFamily: x.trim() }); return true; }, "w-40")}
+        <div className="flex flex-col gap-0.5 text-2xs text-text-tertiary">
+          Family
+          <FontField label={`Family of ${row.name}`} value={t.fontFamily} className="w-40" onCommit={(x) => { if (!x.trim()) return false; set({ fontFamily: x.trim() }); return true; }} />
+        </div>
         {field("Size", t.fontSize, asNumber("fontSize"))}
         {field("Weight", t.fontWeight, asNumber("fontWeight"))}
         {field("Line height", t.lineHeight, asNumber("lineHeight"))}

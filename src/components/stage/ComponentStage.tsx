@@ -16,6 +16,8 @@ import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { changedFiles, createdTexts, useEditStore } from "@/store/edit";
 import { activeComponent, useLibraryStore, type LibrarySource } from "@/store/library";
 import { usePreviewStore } from "@/store/preview";
+import { useDesignSystemStore } from "@/store/design-system";
+import { fontImport, googleFamiliesUsed } from "@/lib/fonts/used";
 import { useNavRequest } from "@/store/nav";
 import { useWorkRuntime } from "@/store/work";
 import { useTokenChanges } from "@/components/work/useWork";
@@ -104,7 +106,10 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
   // What Motif has changed in its tokens since the last sync, shown on the repository's own components.
   const motif = useTokenOverrides(source.repo);
-  const overridesCss = motif.shown;
+  // The Google Fonts Motif's tokens use are loaded whether or not the tokens are shown, so a component set in one looks right.
+  const { strings, typography, compositions } = useDesignSystemStore(useShallow((s) => ({ strings: s.strings, typography: s.typography, compositions: s.compositions })));
+  const fonts = useMemo(() => fontImport(googleFamiliesUsed({ strings, typography, compositions })), [strings, typography, compositions]);
+  const overridesCss = fonts + motif.shown;
   const themeCss = motif.theme;
 
   // The previews on the canvas: one, or several at different widths. What is sent to "the preview" goes to each of them.
