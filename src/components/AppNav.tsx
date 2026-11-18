@@ -51,13 +51,13 @@ export default function AppNav({
   ];
 
   return (
-    <nav className="w-10 flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised">
+    <nav className="w-14 flex-shrink-0 flex flex-col border-r border-surface-border bg-surface-raised">
       {/* Logo */}
       <Link
         href="/"
         title="Back to projects"
         data-bar
-        className="w-10 h-bar flex items-center justify-center border-b border-surface-border hover:bg-surface-subtle transition-colors flex-shrink-0"
+        className="w-14 h-bar flex items-center justify-center border-b border-surface-border hover:bg-surface-subtle transition-colors flex-shrink-0"
       >
         <Mark size={22} />
       </Link>
@@ -71,7 +71,7 @@ export default function AppNav({
           aria-label={item.id === "git" ? "Source control" : undefined}
           data-pulling={item.id === "git" && pulling ? "true" : undefined}
           className={cn(
-            "w-10 h-10 flex items-center justify-center transition-colors",
+            "w-14 h-14 flex items-center justify-center transition-colors",
             (activeNav === "repo" ? "git" : activeNav) === item.id
               ? "bg-accent/15 text-accent"
               : "text-text-tertiary hover:text-text-primary hover:bg-surface-subtle"

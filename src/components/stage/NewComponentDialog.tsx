@@ -64,7 +64,7 @@ function Body({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-3" data-created-notes>
         <p className="text-sm text-text-primary">{name} is made.</p>
         {notes.map((n) => <p key={n} className="text-xs leading-relaxed text-ink">{n}</p>)}
-        <button onClick={onClose} className="h-8 self-start rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle">Close</button>
+        <button onClick={onClose} className="h-11 self-start rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle">Close</button>
       </div>
     );
   }
@@ -89,7 +89,7 @@ function Body({ onClose }: { onClose: () => void }) {
         </p>
       </div>
       {error && <p className="break-words text-xs text-danger" role="alert">{error}</p>}
-      <button type="submit" disabled={busy || !name || !!problem || !analysis || !source} className="flex h-8 items-center justify-center gap-1.5 self-start rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-50">
+      <button type="submit" disabled={busy || !name || !!problem || !analysis || !source} className="flex h-11 items-center justify-center gap-1.5 self-start rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-50">
         {busy && <Loader2 size={12} className="animate-spin" />} Create component
       </button>
     </form>

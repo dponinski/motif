@@ -21,7 +21,7 @@ export default function UserMenu() {
 
   if (!user) {
     return (
-      <button onClick={openDialog} className="flex h-7 items-center gap-1.5 rounded-md bg-text-primary px-3 text-[12px] font-medium text-surface-base transition-opacity hover:opacity-90">
+      <button onClick={openDialog} className="flex h-11 items-center gap-1.5 rounded-md bg-text-primary px-3 text-[14px] font-medium text-surface-base transition-opacity hover:opacity-90">
         Sign in
       </button>
     );
@@ -30,13 +30,13 @@ export default function UserMenu() {
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <button className="flex h-7 items-center gap-1.5 rounded-md border border-line px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="Your account">
-          {user.avatar ? <img src={user.avatar} alt="" className="h-4 w-4 rounded-full" referrerPolicy="no-referrer" /> : <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[9px] font-semibold text-on-cobalt">{label[0]?.toUpperCase()}</span>}
+        <button className="flex h-11 items-center gap-1.5 rounded-md border border-line px-2 text-[14px] text-text-secondary transition-colors hover:text-text-primary" aria-label="Your account">
+          {user.avatar ? <img src={user.avatar} alt="" className="h-4 w-4 rounded-full" referrerPolicy="no-referrer" /> : <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[12px] font-semibold text-on-cobalt">{label[0]?.toUpperCase()}</span>}
           <span className="max-w-[160px] truncate">{label}</span>
         </button>
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Content align="end" sideOffset={6} className="z-50 min-w-[220px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-[12px] text-text-secondary shadow-lg">
+        <Menu.Content align="end" sideOffset={6} className="z-50 min-w-[220px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-[14px] text-text-secondary shadow-lg">
           <div className="border-b border-surface-border px-3 py-2">
             {user.name && <p className="truncate text-text-primary">{user.name}</p>}
             <p className="truncate text-text-tertiary" data-account-email>{user.email}</p>

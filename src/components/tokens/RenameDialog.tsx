@@ -21,7 +21,7 @@ import { editTokens } from "@/store/token-history";
 import { nameAtPlace, pathInFiles, type Row } from "./rows";
 
 const field = "rounded border border-line bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
-const primary = "h-7 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
+const primary = "h-11 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 
 // Renames a token the repository names: finds every place the repository's code names it, and puts the new names among the changes
 // that Sync sends (one pull request), then renames Motif's token to match.
@@ -191,7 +191,7 @@ function RenameBody({ row, kind, taken, onClose, connection }: { row: Row | null
           {error && <p role="alert" className="break-words text-xs text-danger">{error}</p>}
 
           <div className="flex justify-end gap-2">
-            <button type="button" disabled={busy} onClick={onClose} className="h-7 rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50">Cancel</button>
+            <button type="button" disabled={busy} onClick={onClose} className="h-11 rounded-md border border-line px-3 text-xs text-text-secondary hover:bg-surface-subtle disabled:opacity-50">Cancel</button>
             {phase === "name" || phase === "reading" ? (
               <button type="button" disabled={busy || !linked || !!problem || !to.trim() || to.trim() === row?.name} onClick={() => void find()} className={primary}>Find places</button>
             ) : (

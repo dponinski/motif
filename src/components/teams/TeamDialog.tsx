@@ -7,14 +7,14 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
 import { useTeams, type Member, type TeamView } from "@/store/teams";
 
-const btn = "h-7 rounded-md border border-line px-2.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
-const btnPrimary = "flex h-7 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
+const btn = "h-11 rounded-md border border-line px-2.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
+const btnPrimary = "flex h-11 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 
 function Avatar({ member }: { member: Pick<Member, "name" | "email" | "avatar"> }) {
   const label = member.name || member.email;
   return member.avatar
     ? <img src={member.avatar} alt="" className="h-6 w-6 flex-shrink-0 rounded-full" referrerPolicy="no-referrer" />
-    : <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-on-cobalt">{label[0]?.toUpperCase()}</span>;
+    : <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[12px] font-semibold text-on-cobalt">{label[0]?.toUpperCase()}</span>;
 }
 
 function Invite({ team }: { team: TeamView }) {
@@ -139,13 +139,13 @@ function Body({ teamId, onGone }: { teamId: string; onGone: () => void }) {
           <div className="flex items-center gap-2 text-xs text-text-secondary" role="alertdialog" aria-label="Leave the team">
             <span className="flex-1">Leave {team.name}? Its design systems leave this browser unless you have changes of your own in them.</span>
             <button className={btn} onClick={() => setConfirming(null)}>Stay</button>
-            <button className="h-7 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90" onClick={async () => { if (me && (await run(t.removeMember(team.id, me.id)))) { onGone(); void import("@/store/sync").then((m) => m.useSync.getState().sync()); } }}>Leave</button>
+            <button className="h-11 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90" onClick={async () => { if (me && (await run(t.removeMember(team.id, me.id)))) { onGone(); void import("@/store/sync").then((m) => m.useSync.getState().sync()); } }}>Leave</button>
           </div>
         ) : confirming === "delete" ? (
           <div className="flex items-center gap-2 text-xs text-text-secondary" role="alertdialog" aria-label="Delete the team">
             <span className="flex-1">Delete {team.name}? A team can be deleted once it has no design systems.</span>
             <button className={btn} onClick={() => setConfirming(null)}>Keep</button>
-            <button className="h-7 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90" onClick={async () => { if (await run(t.remove(team.id))) onGone(); else setConfirming(null); }}>Delete team</button>
+            <button className="h-11 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90" onClick={async () => { if (await run(t.remove(team.id))) onGone(); else setConfirming(null); }}>Delete team</button>
           </div>
         ) : (
           <div className="flex gap-2">

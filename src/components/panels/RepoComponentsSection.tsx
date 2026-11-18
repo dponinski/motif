@@ -60,7 +60,7 @@ function ImportPrompt() {
     <div className="flex flex-shrink-0 flex-col gap-2 border-b border-surface-border px-3 py-3">
       <p className="flex items-center gap-1.5 text-xs font-medium text-text-secondary"><Boxes size={12} className="text-text-tertiary" /> Repository components</p>
       <p className="text-2xs leading-relaxed text-text-tertiary">Scan {slug} and bring its components in. They appear here, under Repository.</p>
-      <button onClick={run} disabled={busy} className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-blaze text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-60" aria-label={`Scan and import components from ${slug}`}>
+      <button onClick={run} disabled={busy} className="flex h-11 items-center justify-center gap-1.5 rounded-md bg-blaze text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-60" aria-label={`Scan and import components from ${slug}`}>
         {busy ? <Loader2 size={12} className="animate-spin" /> : <Boxes size={12} />} {busy ? "Scanning…" : "Scan and import components"}
       </button>
       <button onClick={() => useNavRequest.getState().ask("git")} className="self-start text-2xs text-text-tertiary underline hover:text-text-primary">Choose a branch or see the report in Git</button>

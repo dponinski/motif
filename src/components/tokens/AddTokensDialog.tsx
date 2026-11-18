@@ -243,7 +243,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
           </div>
           {ramp && (
             <div className="flex overflow-hidden rounded-md border border-black/10" data-ramp-preview aria-label="Preview of the ramp">
-              {ramp.map((s) => <div key={s.step} className="flex h-10 flex-1 items-end justify-center pb-0.5 text-[9px] tabular-nums" style={{ backgroundColor: s.light, color: s.step >= 500 ? "#fff" : "#000" }}>{s.step}</div>)}
+              {ramp.map((s) => <div key={s.step} className="flex h-10 flex-1 items-end justify-center pb-0.5 text-[12px] tabular-nums" style={{ backgroundColor: s.light, color: s.step >= 500 ? "#fff" : "#000" }}>{s.step}</div>)}
             </div>
           )}
         </div>

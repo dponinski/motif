@@ -134,7 +134,7 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
     <Dialog.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setError(null); setBusy(null); setFilter(""); } }}>
       <Dialog.Trigger asChild>
         {trigger ?? (
-          <button className="flex items-center gap-1.5 h-7 bg-blaze hover:bg-blaze/90 text-on-blaze text-[12px] font-medium px-3 rounded-md transition-colors">
+          <button className="flex items-center gap-1.5 h-11 bg-blaze hover:bg-blaze/90 text-on-blaze text-[14px] font-medium px-3 rounded-md transition-colors">
             <Plus size={12} /> New project
           </button>
         )}

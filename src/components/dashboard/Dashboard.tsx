@@ -75,7 +75,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         <div className="min-w-0 flex-1">
           {editing ? (
             <input
-              className="w-full bg-transparent border-b border-accent text-[13px] font-semibold text-text-primary outline-none"
+              className="w-full bg-transparent border-b border-accent text-[14px] font-semibold text-text-primary outline-none"
               value={name}
               autoFocus
               aria-label="Project name"
@@ -88,10 +88,10 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
               }}
             />
           ) : (
-            <p className="truncate text-[13px] font-semibold text-text-primary">{project.name}</p>
+            <p className="truncate text-[14px] font-semibold text-text-primary">{project.name}</p>
           )}
           {connection && (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-text-tertiary">
+            <p className="mt-0.5 flex items-center gap-1 truncate text-[14px] text-text-tertiary">
               <GitBranch size={11} className="flex-shrink-0" />
               {connection.owner}/{connection.repo}
             </p>
@@ -106,7 +106,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
             <MoreHorizontal size={14} />
           </button>
           {menu && (
-            <div className="absolute right-0 top-7 z-10 w-44 overflow-hidden rounded-md border border-surface-border bg-surface-raised text-[12px] shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute right-0 top-7 z-10 w-44 overflow-hidden rounded-md border border-surface-border bg-surface-raised text-[14px] shadow-lg" onClick={(e) => e.stopPropagation()}>
               <button className="w-full px-3 py-1.5 text-left text-text-secondary hover:bg-surface-subtle hover:text-text-primary" onClick={() => { setEditing(true); setMenu(false); }}>
                 Rename
               </button>
@@ -125,21 +125,21 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
         </div>
       </div>
 
-      <p className="text-[11px] text-text-secondary">
+      <p className="text-[14px] text-text-secondary">
         {project.library.components.length > 0
           ? `${plural(project.library.components.length, "component")} · ${plural(tokenCount, "token")}`
           : "Not scanned yet"}
       </p>
-      <p className="text-[11px] text-text-tertiary" data-updated>Updated {formatDate(project.updatedAt)}{project.teamId && project.updatedBy ? ` · by ${project.updatedBy}` : ""}</p>
-      {moveError && <p className="text-[11px] text-danger" role="alert">{moveError}</p>}
+      <p className="text-[14px] text-text-tertiary" data-updated>Updated {formatDate(project.updatedAt)}{project.teamId && project.updatedBy ? ` · by ${project.updatedBy}` : ""}</p>
+      {moveError && <p className="text-[14px] text-danger" role="alert">{moveError}</p>}
 
       {confirming && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-surface-raised/95 p-4 text-center" onClick={(e) => e.stopPropagation()}>
-          <p className="text-[12px] text-text-primary">{project.teamId ? `Delete this design system for everyone in ${teamName ?? "the team"}?` : saved ? "Delete this project from your account?" : "Delete this project from this browser?"}</p>
-          <p className="text-[11px] text-text-tertiary">{project.teamId ? "Every member loses it. The repository is not touched." : saved ? "It is removed from all your devices. The repository is not touched." : "The repository is not touched. Unsent edits to it are kept."}</p>
+          <p className="text-[14px] text-text-primary">{project.teamId ? `Delete this design system for everyone in ${teamName ?? "the team"}?` : saved ? "Delete this project from your account?" : "Delete this project from this browser?"}</p>
+          <p className="text-[14px] text-text-tertiary">{project.teamId ? "Every member loses it. The repository is not touched." : saved ? "It is removed from all your devices. The repository is not touched." : "The repository is not touched. Unsent edits to it are kept."}</p>
           <div className="flex gap-2">
-            <button className="h-7 rounded-md border border-line px-3 text-[12px] text-text-secondary hover:bg-surface-subtle" onClick={() => setConfirming(false)}>Cancel</button>
-            <button className="h-7 rounded-md bg-danger px-3 text-[12px] font-medium text-text-inverse hover:bg-danger/90" onClick={() => remove(project.id)}>Delete</button>
+            <button className="h-11 rounded-md border border-line px-3 text-[14px] text-text-secondary hover:bg-surface-subtle" onClick={() => setConfirming(false)}>Cancel</button>
+            <button className="h-11 rounded-md bg-danger px-3 text-[14px] font-medium text-text-inverse hover:bg-danger/90" onClick={() => remove(project.id)}>Delete</button>
           </div>
         </div>
       )}
@@ -153,10 +153,10 @@ function Section({ title, children, team }: { title: string; children: React.Rea
   return (
     <section className="mb-8" data-section={team ? `team:${title}` : "personal"}>
       <div className="mb-3 flex items-center gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">{title}</p>
+        <p className="text-[14px] font-semibold uppercase tracking-wider text-text-tertiary">{title}</p>
         {team && (
           <>
-            <span className="rounded bg-surface-subtle px-1.5 py-0.5 text-[10px] text-text-tertiary">{team.role === "owner" ? "Owner" : "Member"} · {plural(team.members, "person")}</span>
+            <span className="rounded bg-surface-subtle px-1.5 py-0.5 text-[12px] text-text-tertiary">{team.role === "owner" ? "Owner" : "Member"} · {plural(team.members, "person")}</span>
             <button className="flex items-center gap-1 rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary" aria-label={`Manage ${title}`} onClick={() => setManaging(true)}>
               <Settings2 size={12} />
             </button>
@@ -229,19 +229,19 @@ export default function Dashboard() {
       <main className="px-6 pt-8 pb-16">
         {invites.length > 0 && (
           <section className="mb-8 flex flex-col gap-2" aria-label="Invitations for you">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Invitations for you</p>
+            <p className="text-[14px] font-semibold uppercase tracking-wider text-text-tertiary">Invitations for you</p>
             {invites.map((i) => (
               <div key={i.id} className="flex items-center gap-3 rounded-lg border border-accent/40 bg-surface-raised px-4 py-3" data-invitation={i.teamName}>
-                <p className="min-w-0 flex-1 text-[12px] text-text-primary">{i.invitedBy ?? "Someone"} invited you to the team <span className="font-semibold">{i.teamName}</span>.</p>
+                <p className="min-w-0 flex-1 text-[14px] text-text-primary">{i.invitedBy ?? "Someone"} invited you to the team <span className="font-semibold">{i.teamName}</span>.</p>
                 <button
-                  className="h-7 rounded-md bg-blaze px-3 text-[12px] font-medium text-on-blaze hover:bg-blaze/90"
+                  className="h-7 rounded-md bg-blaze px-3 text-[14px] font-medium text-on-blaze hover:bg-blaze/90"
                   onClick={async () => { setInviteError(null); const r = await accept({ inviteId: i.id }); if (r.error) setInviteError(r.error); else void useSync.getState().sync(); }}
                 >
                   Join
                 </button>
               </div>
             ))}
-            {inviteError && <p className="text-[12px] text-danger" role="alert">{inviteError}</p>}
+            {inviteError && <p className="text-[14px] text-danger" role="alert">{inviteError}</p>}
           </section>
         )}
         {sorted.length === 0 && teams.length === 0 ? (
@@ -250,14 +250,14 @@ export default function Dashboard() {
               <Pattern className="max-w-full" />
               <div>
                 <p className="font-display text-[30px] font-bold leading-tight tracking-[-0.01em] text-text-primary mb-1">Design it. Push it.</p>
-                <p className="text-[15px] font-medium text-text-primary mb-1">Connect your design system</p>
-                <p className="max-w-sm text-[12px] leading-relaxed text-text-secondary">
+                <p className="text-[16px] font-medium text-text-primary mb-1">Connect your design system</p>
+                <p className="max-w-sm text-[14px] leading-relaxed text-text-secondary">
                   Motif works on the React components and tokens in a GitHub repository. Connect one to preview, edit and document them, with every change sent back as a pull request.
                 </p>
               </div>
               <NewProjectDialog
                 trigger={
-                  <button className="bg-blaze hover:bg-blaze/90 text-on-blaze text-[13px] font-medium px-5 py-2 rounded-lg transition-colors">
+                  <button className="bg-blaze hover:bg-blaze/90 text-on-blaze text-[14px] font-medium px-5 py-2 rounded-lg transition-colors">
                     Connect a repository
                   </button>
                 }
@@ -280,7 +280,7 @@ export default function Dashboard() {
               return (
                 <Section key={team.id} title={team.name} team={{ id: team.id, role: team.role, members: team.members.length }}>
                   {shared.length === 0 ? (
-                    <p className="text-[12px] text-text-tertiary">No design systems yet. Make a new one in this team, or move one of yours here.</p>
+                    <p className="text-[14px] text-text-tertiary">No design systems yet. Make a new one in this team, or move one of yours here.</p>
                   ) : (
                     <div className={GRID}>
                       {shared.map((project) => (

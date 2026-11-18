@@ -14,8 +14,8 @@ import { useNavRequest } from "@/store/nav";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { errorMessage, useGitHost } from "./hooks";
 
-const btnPrimary = "h-8 px-3 bg-blaze hover:bg-blaze/90 disabled:opacity-50 text-on-blaze text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
-const btnSecondary = "h-8 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
+const btnPrimary = "h-11 px-3 bg-blaze hover:bg-blaze/90 disabled:opacity-50 text-on-blaze text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
+const btnSecondary = "h-11 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 
 function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSync: () => void }) {
   const host = useGitHost(connection);

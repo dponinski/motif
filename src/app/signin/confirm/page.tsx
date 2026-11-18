@@ -56,7 +56,7 @@ function Confirm() {
               <p className="text-sm font-medium">Sign in to Motif</p>
               <p className="mt-1 text-xs leading-relaxed text-text-secondary">as <span className="text-text-primary" data-confirm-email>{email}</span></p>
             </div>
-            <button onClick={confirm} disabled={busy} className="flex h-9 items-center justify-center gap-2 rounded-md bg-blaze text-sm font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-60">
+            <button onClick={confirm} disabled={busy} className="flex h-11 items-center justify-center gap-2 rounded-md bg-blaze text-sm font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-60">
               {busy && <Loader2 size={14} className="animate-spin" />} Sign in
             </button>
             <p className="text-2xs leading-relaxed text-text-tertiary">Only continue if you asked for this link. Anyone who sends you one can&apos;t sign in as you, but they could sign you in as them.</p>

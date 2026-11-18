@@ -31,8 +31,8 @@ import { discardChanges, editScope, useTokenChanges, useWorkActions } from "@/co
 // Everything between the project and its repository, in one place, the way an editor's source control is: pull what the repository has,
 // see what is waiting, push it as one pull request.
 
-const primary = "flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
-const secondary = "flex h-7 items-center justify-center gap-1.5 rounded-md border border-line px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
+const primary = "flex h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
+const secondary = "flex h-11 items-center justify-center gap-1.5 rounded-md border border-line px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
 
 // A new file is all additions: there is no empty line before it to show as taken away.
 function diffOf(f: ChangedFile) {
@@ -420,8 +420,8 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
         <div role="alertdialog" aria-label="Discard all changes" className="flex flex-col gap-2 rounded-md border border-danger/30 bg-danger/10 p-2">
           <p className="text-xs text-text-primary">Give up all {files.length} changed file{files.length === 1 ? "" : "s"}? The next push puts back the originals in the pull request.</p>
           <div className="flex gap-2">
-            <button className="h-6 rounded bg-danger px-2 text-xs font-medium text-text-inverse" onClick={() => { discardChanges(files.map((f) => f.path)); setConfirming(false); }}>Discard all</button>
-            <button className="h-6 rounded border border-line px-2 text-xs text-text-secondary" onClick={() => setConfirming(false)}>Keep</button>
+            <button className="h-11 rounded bg-danger px-2 text-xs font-medium text-text-inverse" onClick={() => { discardChanges(files.map((f) => f.path)); setConfirming(false); }}>Discard all</button>
+            <button className="h-11 rounded border border-line px-2 text-xs text-text-secondary" onClick={() => setConfirming(false)}>Keep</button>
           </div>
         </div>
       )}

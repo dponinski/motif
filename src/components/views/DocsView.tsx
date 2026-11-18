@@ -105,7 +105,7 @@ function AddBlockMenu({ onAdd, children }: { onAdd: (type: BlockType) => void; c
   );
 }
 
-const pickerClass = "h-6 max-w-[140px] rounded border border-neutral-200 bg-white px-1 text-[11px] text-neutral-700 outline-none";
+const pickerClass = "h-6 max-w-[140px] rounded border border-neutral-200 bg-white px-1 text-[14px] text-neutral-700 outline-none";
 
 // ── Blocks ────────────────────────────────────────────────────────────────────
 

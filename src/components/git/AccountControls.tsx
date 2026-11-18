@@ -49,13 +49,13 @@ export function AccountMenu() {
   return (
     <Menu.Root>
       <Menu.Trigger asChild>
-        <button className="flex h-7 items-center gap-1.5 rounded-md border border-line px-2 text-[12px] text-text-secondary transition-colors hover:text-text-primary" aria-label="GitHub account">
+        <button className="flex h-11 items-center gap-1.5 rounded-md border border-line px-2 text-[14px] text-text-secondary transition-colors hover:text-text-primary" aria-label="GitHub account">
           {avatar ? <img src={avatar} alt="" className="h-4 w-4 rounded-full" /> : <Github size={12} />}
           <span>{login ?? "Signed in"}</span>
         </button>
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Content align="end" sideOffset={6} className="z-50 min-w-[200px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-[12px] text-text-secondary shadow-lg">
+        <Menu.Content align="end" sideOffset={6} className="z-50 min-w-[200px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-[14px] text-text-secondary shadow-lg">
           {login && (
             <Menu.Item asChild>
               <a href={`https://github.com/${login}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-1.5 outline-none hover:bg-surface-subtle hover:text-text-primary data-[highlighted]:bg-surface-subtle"><ExternalLink size={12} /> Your GitHub profile</a>

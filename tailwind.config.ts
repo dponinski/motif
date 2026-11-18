@@ -14,7 +14,7 @@ const config: Config = {
   theme: {
     extend: {
       // The height of every bar along the top of the editor (the logo, the view bars, the panel headers), so their lines meet.
-      height: { bar: "40px" },
+      height: { bar: "56px" },
       colors: {
         // Surface tokens — resolved via CSS variables for theme support
         surface: {
@@ -56,13 +56,14 @@ const config: Config = {
         sans: ['"Figtree Variable"', "Figtree", "system-ui", "-apple-system", '"Segoe UI"', "sans-serif"],
         mono: ['"DM Mono"', "ui-monospace", '"SF Mono"', "Menlo", "monospace"],
       },
+      // The brand's type scale: caption 12, small and label 14, body 16, body-l 18 (the editor's own names for them).
       fontSize: {
-        "2xs": ["10px", "14px"],
-        xs: ["11px", "16px"],
-        sm: ["12px", "18px"],
-        base: ["13px", "20px"],
-        md: ["14px", "20px"],
-        lg: ["16px", "24px"],
+        "2xs": ["12px", "16px"],
+        xs: ["14px", "20px"],
+        sm: ["14px", "20px"],
+        base: ["16px", "24px"],
+        md: ["16px", "24px"],
+        lg: ["18px", "28px"],
       },
       spacing: {
         px: "1px",

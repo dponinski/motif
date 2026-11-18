@@ -234,7 +234,7 @@ function Swatch({ row, label, ctx }: { row: Row; label: string; ctx: ColorCtx })
             {row.changed && <span aria-label="Changed" title="Changed in Motif since the last sync" className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-sun" />}
             {row.readonly && <Lock size={8} aria-label="Read-only" className="flex-shrink-0 text-text-tertiary" />}
           </div>
-          {values.map((v, i) => <p key={i} className="truncate font-mono text-[10px] leading-tight text-text-tertiary" title={`${ctx.shown[i].name}: ${v}`}>{hexOf(v)}</p>)}
+          {values.map((v, i) => <p key={i} className="truncate font-mono text-[12px] leading-tight text-text-tertiary" title={`${ctx.shown[i].name}: ${v}`}>{hexOf(v)}</p>)}
         </div>
       </Popover.Anchor>
       <Popover.Portal>

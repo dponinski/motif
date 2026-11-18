@@ -206,7 +206,7 @@ export default function StageCanvas({
           {Math.round(view.zoom * 100)}%
         </button>
         <button onClick={() => zoomBy(1.25)} aria-label="Zoom in" title="Zoom in" className="flex h-6 w-6 items-center justify-center rounded text-sm text-text-secondary hover:bg-surface-subtle hover:text-text-primary">+</button>
-        <button onClick={() => { moved.current = false; fit(); }} aria-label="Fit to view" title="Fit to view" className="h-6 rounded px-1.5 text-2xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Fit</button>
+        <button onClick={() => { moved.current = false; fit(); }} aria-label="Fit to view" title="Fit to view" className="h-11 rounded px-1.5 text-2xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Fit</button>
       </div>
     </div>
   );
