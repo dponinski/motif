@@ -57,7 +57,7 @@ const extra = {
   check("the filters are not chips on the page: they open from Filter", (await page.locator("[data-token-groups]").getByRole("button", { name: "Changed" }).count()) === 0 && (await filtersOffered(page)).join() === "All,Changed,Not in repository,Read-only,Differ between themes,Same in every theme", (await filtersOffered(page)).join());
   check("there is no palette or list switch, and no theme bar", (await page.getByRole("button", { name: "Palette", exact: true }).count()) === 0 && (await page.getByRole("button", { name: "List", exact: true }).count()) === 0 && (await page.getByRole("toolbar", { name: "Themes" }).count()) === 0);
   const tableHead = page.locator("[data-table-head]");
-  check("the table head names the columns: Name, a column for each theme, and Type", /name/i.test(await tableHead.innerText()) && (await tableHead.locator("[data-theme-segment]").count()) === 2 && /type/i.test(await tableHead.innerText()));
+  check("the table head names the columns: Name and a column for each theme", /name/i.test(await tableHead.innerText()) && (await tableHead.locator("[data-theme-segment]").count()) === 2);
   check("a row's cells line up with the head's columns", await (async () => {
     const tableHeads = await tableHead.locator('[data-theme-segment]').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
     const cells = await page.locator('[data-token-id="primary-500"] input[aria-label*=" value of "]').evaluateAll((els) => els.map((e) => Math.round(e.closest("[role=cell]").getBoundingClientRect().left)));

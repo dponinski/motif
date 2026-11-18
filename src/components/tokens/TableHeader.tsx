@@ -15,9 +15,9 @@ import ConfirmDelete from "./ConfirmDelete";
 // or delete it), and a theme is added from the head, after the last of them.
 
 // One template for the head and every row, so the cells line up: a handle and a checkbox, the name, a value for each theme, the place a theme
-// is added from, what the token is, and its state with its actions.
+// is added from, and its state with its actions.
 export function tableColumns(themes: number): { template: string; minWidth: number } {
-  return { template: `16px 24px minmax(150px,1.3fr) repeat(${themes}, minmax(190px,1fr)) 44px minmax(190px,auto) minmax(150px,auto)`, minWidth: 16 + 24 + 150 + themes * 190 + 44 + 190 + 150 + 8 * (themes + 6) + 32 };
+  return { template: `16px 24px minmax(150px,1.3fr) repeat(${themes}, minmax(190px,1fr)) 44px minmax(150px,auto)`, minWidth: 16 + 24 + 150 + themes * 190 + 44 + 150 + 8 * (themes + 5) + 32 };
 }
 
 const item = "flex cursor-pointer items-center gap-2 px-3 py-1.5 outline-none data-[highlighted]:bg-surface-subtle data-[disabled]:cursor-default data-[disabled]:opacity-40";
@@ -111,7 +111,7 @@ export default function TableHeader({ set, columns, onRegroup, canRegroup }: { s
   const openTheme = set.activeThemeId ?? set.themes[0].id;
   const cellClass = "text-2xs font-semibold uppercase tracking-wider text-text-tertiary";
   return (
-    <div data-theme-bar data-table-head role="row" aria-label="Columns" style={{ gridTemplateColumns: columns.template }} className="grid flex-shrink-0 items-center gap-x-2 border-b border-surface-border bg-surface-raised px-4 py-1">
+    <div data-theme-bar data-table-head role="row" aria-label="Columns" style={{ gridTemplateColumns: columns.template }} className="grid flex-shrink-0 items-center gap-x-2 border-b border-ink/10 bg-surface-subtle px-4 py-0.5">
       <span />
       <span />
       <span className={cellClass} role="columnheader">Name</span>
@@ -130,7 +130,6 @@ export default function TableHeader({ set, columns, onRegroup, canRegroup }: { s
       <div className="flex justify-center">
         <AddTheme set={set} startFrom={openTheme} onAdd={(name, from, dark) => { editTokens(() => { const id = ds().addThemeToSet(set.id, name, { from, dark }); ds().setActiveTheme(set.id, id); return id; }); }} />
       </div>
-      <span className={cellClass} role="columnheader">Type</span>
       <div className="flex justify-end">
         <Menu.Root>
           <Menu.Trigger asChild>

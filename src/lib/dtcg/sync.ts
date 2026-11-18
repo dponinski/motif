@@ -9,8 +9,8 @@ import type { DtcgFiles } from "./types";
 
 // Syncing design tokens files is a three-way merge of JSON: `base` is the files as of the last sync, `mine` what Motif writes from its tokens
 // now, `theirs` what the repository has. Each token is a place in a file, so a token changed on one side is taken, and one changed on both
-// is a clash only when the two changes disagree. A token that was deleted in Motif is brought back (a sync never deletes a token from a
-// repository: its code may use the variable).
+// is a clash only when the two changes disagree. A token that was deleted in Motif is deleted from the files (in the pull request, where it is
+// listed as removed), unless the repository changed it too, which is a clash.
 
 type Obj = Record<string, unknown>;
 const isObject = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -85,8 +85,6 @@ export interface DtcgMerge {
   files: DtcgFiles;
   trees: Record<string, unknown>;
   conflicts: DtcgConflict[];
-  // Tokens deleted in Motif that are kept, because a sync never deletes a token from a repository.
-  restored: string[];
 }
 
 export const isTokenFile = (file: string) => file.endsWith(".json");
@@ -113,27 +111,19 @@ function nameOf(path: string[]): string {
   return (at === -1 ? path : path.slice(0, at)).join(".");
 }
 
-export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: DtcgFiles, options: { gone?: ReadonlySet<string> } = {}): DtcgMerge {
+export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: DtcgFiles): DtcgMerge {
   // The three sides in the same form, so a color written differently isn't a change.
   const [base, mine, theirs] = [canonicalFiles(rawBase), canonicalFiles(rawMine), canonicalFiles(rawTheirs)];
   const trees: Record<string, unknown> = {};
   const conflicts: DtcgConflict[] = [];
-  const restored: string[] = [];
   const names = [...new Set([...Object.keys(base), ...Object.keys(mine), ...Object.keys(theirs)])].filter(isTokenFile).sort();
 
   for (const file of names) {
     const [b, t] = [parse(base, file), parse(theirs, file)];
     let m = parse(mine, file);
-    // Deleted in Motif, still in the repository: kept.
-    if (file in base && !(file in mine) && file in theirs) m = t;
-    else {
-      const have = new Set(tokenPaths(m).map((p) => p.join(".")));
-      const was = new Set(tokenPaths(b).map((p) => p.join(".")));
-      for (const path of tokenPaths(t)) {
-        const key = path.join(".");
-        if (was.has(key) && !have.has(key) && !options.gone?.has(key)) { m = setAt(m, path, getAt(t, path)) as Obj; restored.push(key); }
-      }
-    }
+    // A theme's file that Motif doesn't have (the theme was deleted here) and the repository still does: kept, and the next pull brings the theme
+    // back. (A file of tokens that has none left in Motif is a file whose tokens were all deleted.)
+    if (file in base && !(file in mine) && file in theirs && themeOfFile(file) !== null) m = t;
     const { merged, conflicts: clashes } = mergeJson(freeze(b), freeze(m), freeze(t));
     trees[file] = thaw(merged);
     for (const c of clashes) {
@@ -143,7 +133,7 @@ export function mergeDtcg(rawBase: DtcgFiles, rawMine: DtcgFiles, rawTheirs: Dtc
     }
   }
 
-  return { files: filesOf(trees, [base, mine, theirs]), trees, conflicts, restored: [...new Set(restored)] };
+  return { files: filesOf(trees, [base, mine, theirs]), trees, conflicts };
 }
 
 // The files for the trees: a file that came out empty is left out unless some side had it.
@@ -251,9 +241,22 @@ export interface DtcgPlan {
 // The paths that were renamed away: not tokens deleted, so not brought back.
 export const goneOf = (link: Pick<DtcgLink, "renamed">): ReadonlySet<string> => new Set(Object.keys(link.renamed ?? {}));
 
+// The paths of the tokens that the files of the last sync have and Motif's tokens don't: deleted here (or renamed, which the paths
+// `goneOf` names are of). They are taken out of the repository's files in the pull request.
+export function removedHere(rawBase: DtcgFiles, rawMine: DtcgFiles): ReadonlySet<string> {
+  const [base, mine] = [canonicalFiles(rawBase), canonicalFiles(rawMine)];
+  const out = new Set<string>();
+  for (const file of Object.keys(base).filter(isTokenFile)) {
+    if (file.endsWith("tokens.config.json") || themeOfFile(file) !== null && !(file in mine)) continue;
+    const have = new Set(tokenPaths(parse(mine, file)).map((p) => p.join(".")));
+    for (const path of tokenPaths(parse(base, file))) if (!have.has(path.join("."))) out.add(path.join("."));
+  }
+  return out;
+}
+
 export function planDtcgSync(link: DtcgLink, model: StoredTokenData, theirs: DtcgFiles): DtcgPlan {
   const mine = writeDtcg(model, writeOptionsOf(link)).files;
-  const merge = mergeDtcg(link.base, mine, theirs, { gone: goneOf(link) });
+  const merge = mergeDtcg(link.base, mine, theirs);
   return { merge, toMotif: describeDtcgChanges(mine, merge.files), toRepo: describeDtcgChanges(theirs, merge.files) };
 }
 

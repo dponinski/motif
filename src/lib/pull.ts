@@ -89,7 +89,7 @@ async function pullDtcg(host: GitHost & RepoReader, connection: GitConnection, a
   const link: DtcgLink = { ...rest, dir: found.dir, files: found.config.files, output: found.config.output, tailwind: found.config.tailwind, ...(convert ? { convert } : {}) };
   const plan = planDtcgSync(link, toStored(snapshotTokens(useDesignSystemStore.getState())), found.files);
   if (plan.merge.conflicts.length > 0) return { notes: [], conflicts: { format: "dtcg", link, plan, theirs: found.files } };
-  if (plan.toMotif.length > 0 || plan.merge.restored.length > 0) {
+  if (plan.toMotif.length > 0) {
     applyDtcg(link, plan.merge.files, found.files);
     return { notes: [`${plural(plan.toMotif.length, "token change")} from the repository`], conflicts: null };
   }

@@ -11,6 +11,7 @@ import { useDesignSystemStore, type ColorToken, type TokenKind, type TokenSet } 
 import { targetKey } from "@/lib/tokens/alias-colors";
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
+import type { Composition } from "@/lib/tokens/model";
 import { AddRow, type AddField } from "./fields";
 import TableHeader, { tableColumns } from "./TableHeader";
 import AddTokensDialog from "./AddTokensDialog";
@@ -20,8 +21,6 @@ import RenameDialog from "./RenameDialog";
 import { ListBody, type ColorCtx } from "./ColorViews";
 import { OtherBody, type OtherCtx } from "./OtherViews";
 import { useRows, type Row } from "./rows";
-import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
-import { presetSlots, PRESETS } from "@/lib/tokens/compose";
 import { useSelection } from "./useSelection";
 import { useTokenDrag, type DropTarget } from "./drag";
 
@@ -49,13 +48,17 @@ export interface AddRequest { kind: TokenKind; n: number }
 // Every kind of token in one reading order: colors, then lengths, numbers, strings, text styles, shadows, compositions.
 export const KINDS: TokenKind[] = ["color", "spacing", "radius", "number", "string", "typography", "shadow", "composition"];
 
-const ADD_TYPES: { kind: TokenKind; label: string }[] = [{ kind: "color", label: "Color" }, { kind: "number", label: "Number" }, { kind: "string", label: "String" }, { kind: "composition", label: "Composition" }];
+export const ADD_TYPES: { kind: TokenKind; label: string }[] = [{ kind: "color", label: "Color" }, { kind: "spacing", label: "Spacing" }, { kind: "typography", label: "Typography" }, { kind: "radius", label: "Radius" }, { kind: "shadow", label: "Shadow" }];
 
 export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet; sets: TokenSet[]; request: AddRequest | null; toolbar: HTMLElement | null }) {
   const ds = () => useDesignSystemStore.getState();
+  // The kinds of token the screen edits: colors, spacing, typography, radius and shadow. (A set can also hold numbers, strings and compositions,
+  // for instance from the repository's files: they are kept as they are, and not shown.)
   const rows = [
-    ...useRows("color", set.id, set.themes), ...useRows("spacing", set.id, set.themes), ...useRows("radius", set.id, set.themes), ...useRows("number", set.id, set.themes),
-    ...useRows("string", set.id, set.themes), ...useRows("typography", set.id, set.themes), ...useRows("shadow", set.id, set.themes), ...useRows("composition", set.id, set.themes),
+    ...useRows("color", set.id, set.themes), ...useRows("spacing", set.id, set.themes), ...useRows("radius", set.id, set.themes),
+    ...useRows("typography", set.id, set.themes), ...useRows("shadow", set.id, set.themes),
+    // A text style or a shadow that is made of parts (some of them other tokens), as the repository's files can have it; one of parts of its own isn't shown.
+    ...useRows("composition", set.id, set.themes).filter((r) => (r.token as Composition).kind !== "custom"),
   ];
   // (A new array on every render: what depends on the rows depends on their ids.)
   const rowsKey = rows.map((r) => `${r.id}:${r.group}:${r.name}`).join("|");
@@ -137,7 +140,6 @@ export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet
         const s = ds();
         const base = set.themes[0]?.id;
         if (row.kind === "number") { if (themeId === base) { if (typeof value === "number") s.updateNumber(row.id, { value }); } else s.setNumberThemeValue(row.id, themeId, typeof value === "number" ? value : null); }
-        else if (row.kind === "string") { if (themeId === base) { if (typeof value === "string") s.updateString(row.id, { value }); } else s.setStringThemeValue(row.id, themeId, typeof value === "string" ? value : null); }
         else if (row.kind === "spacing" || row.kind === "radius") {
           if (themeId === base) { if (typeof value === "number") (row.kind === "spacing" ? s.updateSpacing : s.updateRadius)(row.id, { value }); }
           else s.setLengthThemeValue(row.kind, row.id, themeId, typeof value === "number" ? value : null);
@@ -149,8 +151,6 @@ export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet
         else if (row.kind === "radius") s.updateRadius(row.id, patch);
         else if (row.kind === "shadow") s.updateShadow(row.id, patch);
         else if (row.kind === "number") s.updateNumber(row.id, patch);
-        else if (row.kind === "string") s.updateString(row.id, patch);
-        else if (row.kind === "composition") s.updateComposition(row.id, patch);
         else s.updateTypography(row.id, patch);
       }),
     },
@@ -179,29 +179,15 @@ export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet
       case "spacing": return { focus: "value", fields: [{ key: "name", label: "New spacing name", placeholder: "name", width: "w-44" }, { key: "value", label: "New spacing value", placeholder: "px", width: "w-20", mono: true, validate: (v) => Number.isFinite(parseFloat(v)) }] };
       case "radius": return { focus: "value", fields: [{ key: "name", label: "New radius name", placeholder: "name", width: "w-44" }, { key: "value", label: "New radius value", placeholder: "px", width: "w-20", mono: true, validate: (v) => Number.isFinite(parseFloat(v)) }] };
       case "shadow": return { focus: "name", fields: [{ key: "name", label: "New shadow name", placeholder: "name", width: "w-44" }] };
-      case "number": return { focus: "value", fields: [
-        { key: "name", label: "New number name", placeholder: "name", width: "w-44" },
-        { key: "value", label: "New number value", placeholder: "value", width: "w-20", mono: true, validate: (v) => Number.isFinite(parseFloat(v)) },
-        { key: "unit", label: "New number unit", placeholder: "", width: "w-20", options: UNITS.map((u) => ({ value: u.value, label: u.label })) },
-        { key: "use", label: "New number used as", placeholder: "", width: "w-36", options: NUMBER_USES },
-      ] };
-      case "string": return { focus: "value", fields: [
-        { key: "name", label: "New string name", placeholder: "name", width: "w-44" },
-        { key: "value", label: "New string value", placeholder: "text", width: "w-64", validate: (v) => v.trim() !== "" },
-        { key: "use", label: "New string used as", placeholder: "", width: "w-36", options: STRING_USES },
-      ] };
-      case "composition": return { focus: "name", fields: [
-        { key: "name", label: "New composition name", placeholder: "name", width: "w-44" },
-        { key: "preset", label: "New composition made of", placeholder: "", width: "w-36", options: PRESETS.map((p) => ({ value: p.id, label: p.label })) },
-      ] };
       case "typography": return { focus: "name", fields: [{ key: "name", label: "New text style name", placeholder: "name", width: "w-44" }, { key: "size", label: "New text style size", placeholder: "size", width: "w-20", mono: true, validate: (v) => v === "" || Number.isFinite(parseFloat(v)) }] };
+      default: return { focus: "name", fields: [{ key: "name", label: "New token name", placeholder: "name", width: "w-44" }] };
     }
   };
   const addRow = (group: string, done: () => void) => {
     const { fields, focus } = fieldsFor();
     const kind = addKind;
     const names = () => (ds()[LIST[kind]] as { setId: string; name: string }[]).filter((t) => t.setId === set.id).map((t) => t.name);
-    const initial = () => ({ type: kind, name: suggest(kind, group, names()), value: "", size: "", unit: "px", use: "", preset: "typography" });
+    const initial = () => ({ type: kind, name: suggest(kind, group, names()), value: "", size: "" });
     return (
       <AddRow
         key={addKind}
@@ -220,9 +206,6 @@ export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet
             else if (kind === "spacing") s.addSpacing({ name: unique, value: parseFloat(v.value), group, setId: set.id });
             else if (kind === "radius") s.addRadius({ name: unique, value: parseFloat(v.value), group, setId: set.id });
             else if (kind === "shadow") s.addShadow({ name: unique, x: 0, y: 4, blur: 8, spread: 0, color: "rgba(0,0,0,0.1)", group, setId: set.id });
-            else if (kind === "number") s.addNumber({ name: unique, value: parseFloat(v.value), unit: isUnit(v.unit) ? v.unit : "px", ...(v.use ? { use: v.use } : {}), group, setId: set.id });
-            else if (kind === "composition") { const made = PRESETS.find((p) => p.id === v.preset)?.id ?? "typography"; s.addComposition({ name: unique, kind: made, slots: presetSlots(made), group, setId: set.id }); }
-            else if (kind === "string") s.addString({ name: unique, value: v.value.trim(), ...(v.use ? { use: v.use } : {}), group, setId: set.id });
             else s.addTypography({ name: unique, fontFamily: "Inter", fontSize: parseFloat(v.size) || 14, fontWeight: 400, lineHeight: Math.round((parseFloat(v.size) || 14) * 1.5), group, setId: set.id });
           });
           return initial();
@@ -308,6 +291,7 @@ export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet
 
       <RenameDialog row={renaming} kind={renaming?.kind ?? "color"} taken={taken(renaming?.kind ?? "color")} onClose={() => setRenaming(null)} />
       <AddTokensDialog open={addMany} onOpenChange={setAddMany} set={set} kind="color" />
+      <div className="mx-4 mb-4 mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-surface-border bg-surface-raised">
       <div className="flex min-h-0 flex-1 flex-col overflow-x-auto" data-table>
         <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: columns.minWidth }} role="table" aria-label={`Tokens of ${set.name}`}>
           <TableHeader set={set} columns={columns} canRegroup={hasColors} onRegroup={() => editTokens(() => ds().regroupColors(set.id))} />
@@ -333,6 +317,7 @@ export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet
         }}
       />
         </div>
+      </div>
       </div>
     </>
   );

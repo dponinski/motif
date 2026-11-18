@@ -1,4 +1,4 @@
-// The canvas loads the Google Fonts that Motif's tokens use, whether or not the tokens are shown on it: a String used as a font family is
+// The canvas loads the Google Fonts that Motif's tokens use, whether or not the tokens are shown on it: a text style with a Google font is
 // made on the Tokens screen, and the preview of a component has the stylesheet that asks Google for it.
 const { chromium } = require("playwright");
 const crypto = require("crypto");
@@ -158,25 +158,25 @@ const check = (name, ok, detail = "") => {
   await openCard();
   check("a component's preview asks for no font while no token uses one", (await until(overrides, (t) => t !== null)) !== null && !/googleapis/.test((await overrides()) ?? ""));
 
-  // A String used as a font family, made on the Tokens screen.
+  // A text style, made on the Tokens screen, with a Google font as its family.
   await page.locator('nav button[title="Tokens"]').click();
   await page.locator("[data-token-groups]").waitFor();
   await page.getByRole("button", { name: "New token" }).click();
-  await page.getByRole("menuitem", { name: /^String/ }).click();
+  await page.getByRole("menuitem", { name: /^Typography/ }).click();
   const addRow = page.locator("[data-add-row]");
-  await addRow.getByLabel("New string name").fill("font-display");
-  await addRow.getByLabel("New string value").fill("Georgia, serif");
-  await addRow.getByLabel("New string used as").selectOption("font-family");
-  await addRow.getByLabel("New string value").press("Enter");
+  await addRow.getByLabel("New text style name").fill("display");
+  await addRow.getByLabel("New text style size").fill("32");
+  await addRow.getByLabel("New text style size").press("Enter");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Browse fonts for Light value of font-display" }).click();
+  await page.getByRole("button", { name: "Edit display", exact: true }).click();
+  await page.getByRole("button", { name: "Browse fonts for Family of display" }).click();
   await page.getByLabel("Search fonts").fill("playfair");
   await page.getByRole("list", { name: "Google Fonts" }).locator('[data-font="Playfair Display"]').click();
 
   await page.locator('nav button[title="Components"]').click();
   await stage.locator("#root h2").getByText("Title", { exact: true }).waitFor({ timeout: 60000 });
   const text = await until(overrides, (t) => /Playfair/.test(t ?? ""));
-  check("once a token uses a Google font, the preview loads it", /^@import url\("https:\/\/fonts\.googleapis\.com\/css\?family=Playfair\+Display:[\d,]+&display=swap"\);/.test(text ?? ""), text);
+  check("once a text style uses a Google font, the preview loads it", /^@import url\("https:\/\/fonts\.googleapis\.com\/css\?family=Playfair\+Display:[\d,]+&display=swap"\);/.test(text ?? ""), text);
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

@@ -1,21 +1,20 @@
 "use client";
 
-import { useShallow } from "zustand/react/shallow";
 import { useEffect, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { X, Palette, Undo2, Redo2, Plus } from "lucide-react";
 import SetsSidebar from "@/components/tokens/SetsSidebar";
 import SetPane, { type AddRequest } from "@/components/tokens/SetPane";
-import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenKind } from "@/store/design-system";
 import { redoTokens, undoTokens, useTokenHistory } from "@/store/token-history";
 
 // What a new token can be.
 const NEW_TOKEN: { kind: TokenKind; label: string; hint: string }[] = [
   { kind: "color", label: "Color", hint: "a color, in each theme" },
-  { kind: "number", label: "Number", hint: "a size, a weight, a ratio, with its unit" },
-  { kind: "string", label: "String", hint: "text, such as a font family" },
-  { kind: "composition", label: "Composition", hint: "tokens that go together: a text style, a shadow" },
+  { kind: "spacing", label: "Spacing", hint: "a gap or a size, in pixels" },
+  { kind: "typography", label: "Typography", hint: "a text style: family, size, weight, line height" },
+  { kind: "radius", label: "Radius", hint: "how round a corner is" },
+  { kind: "shadow", label: "Shadow", hint: "a drop shadow or an inner one" },
 ];
 const menuItem = "flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-xs text-text-secondary outline-none data-[highlighted]:bg-surface-subtle data-[highlighted]:text-text-primary";
 
@@ -23,9 +22,7 @@ const headerButton = "flex items-center gap-1 px-2.5 min-h-11 py-1.5 rounded tex
 
 // The tokens of the project: the sets on the left, and for the open set one table: a row for each token, a column for each theme.
 export default function TokensView({ onClose }: { onClose?: () => void }) {
-  const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions } = useDesignSystemStore(useShallow((s) => ({
-    sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions,
-  })));
+  const sets = useDesignSystemStore((s) => s.sets);
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   // A kind chosen from New token opens with its add row ready.
   const [request, setRequest] = useState<AddRequest | null>(null);

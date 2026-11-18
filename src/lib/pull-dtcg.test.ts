@@ -126,12 +126,12 @@ describe("a later pull", () => {
     expect(link()!.base).toEqual(theirs);
   });
 
-  it("brings back what Motif deleted, since a sync never deletes from a repository", async () => {
+  it("leaves deleted what Motif deleted: it is the push that takes it out of the repository", async () => {
     await start();
     ds().deleteColor(color("overlay").id);
     const out = await pullRepository(host({ ...APP, ...written() }), connection);
-    expect(out.notes.join(" ")).toMatch(/1 token change/);
-    expect(color("overlay")).toBeDefined();
+    expect(out.notes).toEqual([]);
+    expect(color("overlay")).toBeUndefined();
   });
 
   it("says when the files are gone from the repository, and leaves the tokens", async () => {

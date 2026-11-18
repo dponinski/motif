@@ -109,6 +109,14 @@ const check = (name, ok, detail = "") => {
   check("a change in another theme goes in that theme's file, in the same pull request", await settle(async () => JSON.parse(gh.files(repo.prs[0].head).get("src/tokens/tokens.dark.json")).color.surface.$value.hex === "#0a0a0a" && repo.prs.length === 1), gh.files(repo.prs[0].head).get("src/tokens/tokens.dark.json"));
   check("and the stylesheet follows", gh.files(repo.prs[0].head).get("src/styles/tokens.css").includes("--color-surface: #0a0a0a;"));
 
+  // ── A token deleted in Motif is taken out of the files ────────────────────
+  await editMotif((t) => { t.tokens = t.tokens.filter((k) => !k.name.includes("500")); });
+  await page.locator('nav button[title="Source control"]').click();
+  check("deleting a token is counted as waiting, and doesn't ask for a pull first", await settle(async () => /waiting/.test(await status()) && !/Pull/.test(await status())), await status());
+  await page.getByRole("button", { name: "Push" }).click();
+  check("the token is removed from the file and the stylesheet, in the same pull request", await settle(async () => { const f = gh.files(repo.prs[0].head); return !JSON.stringify(JSON.parse(f.get("src/tokens/tokens.json")).color).includes("#3366ff") && !f.get("src/styles/tokens.css").includes("--color-brand-500") && repo.prs.length === 1; }), gh.files(repo.prs[0].head).get("src/styles/tokens.css"));
+  check("and the rest is as it was", gh.files(repo.prs[0].head).get("src/styles/tokens.css").includes("--color-surface: #0a0a0a;") && JSON.parse(gh.files(repo.prs[0].head).get("src/tokens/tokens.json")).spacing["2"] !== undefined);
+
   // ── Merged ────────────────────────────────────────────────────────────────
   gh.merge(1);
   await focus();

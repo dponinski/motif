@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fixture } from "./fixture";
-import { describeDtcgChanges, mergeDtcg, planDtcgSync, resolveDtcg, takeDtcg, themeOfFile, type DtcgLink } from "./sync";
+import { describeDtcgChanges, mergeDtcg, planDtcgSync, removedHere, resolveDtcg, takeDtcg, themeOfFile, type DtcgLink } from "./sync";
 import { writeDtcg } from "./write";
 import type { DtcgFiles } from "./types";
 
@@ -24,7 +24,6 @@ describe("merging design tokens files", () => {
     const base = written();
     const merge = mergeDtcg(base, base, base);
     expect(merge.conflicts).toEqual([]);
-    expect(merge.restored).toEqual([]);
     expect(JSON.parse(merge.files[PRIM])).toEqual(JSON.parse(base[PRIM]));
   });
 
@@ -75,12 +74,28 @@ describe("merging design tokens files", () => {
     expect(merged.radius.lg).toBeDefined();
   });
 
-  it("brings back a token that was deleted in Motif, since a sync deletes nothing from a repository", () => {
+  it("deletes a token that was deleted in Motif, which the repository has not changed", () => {
     const base = written();
     const mine = edit(base, PRIM, (t) => { delete t.color.overlay; });
     const merge = mergeDtcg(base, mine, base);
-    expect(merge.restored).toEqual(["color.overlay"]);
-    expect(JSON.parse(merge.files[PRIM]).color.overlay).toBeDefined();
+    expect(merge.conflicts).toEqual([]);
+    expect(JSON.parse(merge.files[PRIM]).color.overlay).toBeUndefined();
+    expect(describeDtcgChanges(base, merge.files).map((c) => [c.name, c.type])).toContainEqual(["color.overlay", "removed"]);
+  });
+
+  it("is a clash when a token deleted in Motif was changed in the repository", () => {
+    const base = written();
+    const mine = edit(base, PRIM, (t) => { delete t.color.overlay; });
+    const theirs = edit(base, PRIM, (t) => { t.color.overlay.$value = red; });
+    const merge = mergeDtcg(base, mine, theirs);
+    expect(merge.conflicts.map((c) => c.name)).toEqual(["color.overlay"]);
+  });
+
+  it("names the tokens that Motif no longer has", () => {
+    const base = written();
+    const mine = edit(base, PRIM, (t) => { delete t.color.overlay; });
+    expect([...removedHere(base, mine)]).toEqual(["color.overlay"]);
+    expect([...removedHere(base, base)]).toEqual([]);
   });
 
   it("takes a deletion the repository made", () => {
@@ -89,10 +104,10 @@ describe("merging design tokens files", () => {
     expect(JSON.parse(mergeDtcg(base, base, theirs).files[PRIM]).color.overlay).toBeUndefined();
   });
 
-  it("keeps a file Motif deleted that the repository still has", () => {
+  it("keeps a theme's file that Motif deleted and the repository still has", () => {
     const base = written();
-    const { [SEM]: _, ...mine } = base;
-    expect(mergeDtcg(base, mine, base).files[SEM]).toBeDefined();
+    const { [PRIM_DARK]: _, ...mine } = base;
+    expect(mergeDtcg(base, mine, base).files[PRIM_DARK]).toBeDefined();
   });
 
   it("takes a file the repository added", () => {

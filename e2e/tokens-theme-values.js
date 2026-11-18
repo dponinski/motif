@@ -1,4 +1,4 @@
-// A number or a string has a value for every theme, and may have one of its own in a theme: the row has a value for each theme that is shown
+// A spacing or a radius has a value for every theme, and may have one of its own in a theme: the row has a value for each theme that is shown
 // (a theme that has none shows the value it has as a hint), clearing it gives the theme the default again, a length in px with a value of its own
 // is a number, and the values go with a theme that is deleted and are saved by theme.
 const { chromium } = require("playwright");
@@ -37,14 +37,12 @@ const check = (name, ok, detail = "") => {
   const field = (theme, name) => page.getByLabel(`${theme} value of ${name}`, { exact: true });
 
   // ── One theme: as before ──────────────────────────────────────────────────
-  await newToken("Number");
-  await addRow.getByLabel("New number name").fill("text-xl");
-  await addRow.getByLabel("New number value").fill("1.5");
-  await addRow.getByLabel("New number unit").selectOption("rem");
-  await addRow.getByLabel("New number used as").selectOption("font-size");
-  await addRow.getByLabel("New number value").press("Enter");
+  await newToken("Spacing");
+  await addRow.getByLabel("New spacing name").fill("text-xl");
+  await addRow.getByLabel("New spacing value").fill("12");
+  await addRow.getByLabel("New spacing value").press("Enter");
   await page.keyboard.press("Escape");
-  check("with one theme a number has one value, as before", await settle(async () => (await page.getByLabel("Value of text-xl", { exact: true }).inputValue()) === "1.5"));
+  check("with one theme a spacing has one value, as before", await settle(async () => (await page.getByLabel("Value of text-xl", { exact: true }).inputValue()) === "12"));
 
   // ── A second theme: a value for each ──────────────────────────────────────
   await bar.getByRole("button", { name: "Add theme" }).click();
@@ -52,11 +50,11 @@ const check = (name, ok, detail = "") => {
   await page.getByLabel("New theme name").press("Enter");
   // (A theme that was just added is the one shown; all of them side by side is one press.)
   const first = (await saved()).sets[0].themes[0].name;
-  check("with two themes a number has a value for each, the second showing the first's as its hint", await settle(async () => (await field(first, "text-xl").inputValue()) === "1.5" && (await field("Dark", "text-xl").inputValue()) === "" && (await field("Dark", "text-xl").getAttribute("placeholder")) === "1.5"));
-  await field("Dark", "text-xl").fill("1.75");
+  check("with two themes a spacing has a value for each, the second showing the first's as its hint", await settle(async () => (await field(first, "text-xl").inputValue()) === "12" && (await field("Dark", "text-xl").inputValue()) === "" && (await field("Dark", "text-xl").getAttribute("placeholder")) === "12"));
+  await field("Dark", "text-xl").fill("18");
   await field("Dark", "text-xl").press("Enter");
   const dark = await themeId("Dark");
-  check("a value in a theme is saved by theme, next to the one every theme has", await settle(async () => { const t = await token("text-xl"); return t?.values["*"] === "1.5" && t.values[dark] === "1.75"; }), JSON.stringify((await token("text-xl"))?.values));
+  check("a value in a theme is saved by theme, next to the one every theme has", await settle(async () => { const t = await token("text-xl"); return t?.values["*"] === "12" && t.values[dark] === "18"; }), JSON.stringify((await token("text-xl"))?.values));
   await page.screenshot({ path: `${OUT}/tokens-theme-values.png` });
   await field("Dark", "text-xl").fill("");
   await field("Dark", "text-xl").press("Enter");
@@ -65,34 +63,23 @@ const check = (name, ok, detail = "") => {
   await field("Dark", "text-xl").press("Enter");
   check("what isn't a number isn't taken", (await field("Dark", "text-xl").evaluate((e) => e.title)) === "A number");
   await page.keyboard.press("Escape");
-  await field("Dark", "text-xl").fill("2");
+  await field("Dark", "text-xl").fill("20");
   await field("Dark", "text-xl").press("Enter");
-  check("the first theme's value changes the default", await (async () => { await field(first, "text-xl").fill("1.6"); await field(first, "text-xl").press("Enter"); return settle(async () => { const t = await token("text-xl"); return t.values["*"] === "1.6" && t.values[dark] === "2"; }); })());
-
-  // ── A string ──────────────────────────────────────────────────────────────
-  await newToken("String");
-  await addRow.getByLabel("New string name").fill("label");
-  await addRow.getByLabel("New string value").fill("Save");
-  await addRow.getByLabel("New string value").press("Enter");
-  await page.keyboard.press("Escape");
-  await field("Dark", "label").fill("Save changes");
-  await field("Dark", "label").press("Enter");
-  check("a string has a value in a theme too", await settle(async () => { const t = await token("label"); return t?.values["*"] === "Save" && t.values[dark] === "Save changes"; }), JSON.stringify((await token("label"))?.values));
+  check("the first theme's value changes the default", await (async () => { await field(first, "text-xl").fill("14"); await field(first, "text-xl").press("Enter"); return settle(async () => { const t = await token("text-xl"); return t.values["*"] === "14" && t.values[dark] === "20"; }); })());
 
   // ── Every theme is a column ───────────────────────────────────────────────
-  check("every theme has its own column of values, side by side", (await field(first, "text-xl").count()) === 1 && (await field("Dark", "text-xl").inputValue()) === "2");
+  check("every theme has its own column of values, side by side", (await field(first, "text-xl").count()) === 1 && (await field("Dark", "text-xl").inputValue()) === "20");
 
-  // ── A length in pixels ────────────────────────────────────────────────────
-  await newToken("Number");
-  await addRow.getByLabel("New number name").fill("gutter");
-  await addRow.getByLabel("New number value").fill("16");
-  await addRow.getByLabel("New number used as").selectOption("spacing");
-  await addRow.getByLabel("New number value").press("Enter");
+  // ── A radius in pixels ────────────────────────────────────────────────────
+  await newToken("Radius");
+  await addRow.getByLabel("New radius name").fill("gutter");
+  await addRow.getByLabel("New radius value").fill("16");
+  await addRow.getByLabel("New radius value").press("Enter");
   await page.keyboard.press("Escape");
-  check("a spacing in pixels is a spacing", await settle(async () => (await page.locator('[data-token-id][data-token-kind="spacing"]').count()) === 1));
+  check("a radius in pixels is a radius", await settle(async () => (await page.locator('[data-token-id][data-token-kind="radius"]').count()) === 1));
   await field("Dark", "gutter").fill("24");
   await field("Dark", "gutter").press("Enter");
-  check("with a value in a theme it is a number used as spacing, with the unit it had", await settle(async () => { const t = await token("gutter"); return t?.type === "number" && t.use === "spacing" && t.unit === "px" && t.values["*"] === "16" && t.values[dark] === "24"; }), JSON.stringify(await token("gutter")));
+  check("with a value in a theme it is a number used as a radius, with the unit it had", await settle(async () => { const t = await token("gutter"); return t?.type === "number" && t.use === "radius" && t.unit === "px" && t.values["*"] === "16" && t.values[dark] === "24"; }), JSON.stringify(await token("gutter")));
 
   // ── Undo, a copy of a theme, a theme that goes ────────────────────────────
   await undo();
@@ -101,17 +88,17 @@ const check = (name, ok, detail = "") => {
   await field("Dark", "gutter").press("Enter");
   await bar.getByLabel("Theme menu: Dark", { exact: true }).click();
   await page.getByRole("menuitem", { name: "Duplicate" }).click();
-  check("a copy of a theme has the values the theme had", await settle(async () => { const t = await token("text-xl"); const dark2 = (await saved()).sets[0].themes.find((x) => /copy/i.test(x.name)); return !!dark2 && t.values[dark2.id] === "2"; }));
+  check("a copy of a theme has the values the theme had", await settle(async () => { const t = await token("text-xl"); const dark2 = (await saved()).sets[0].themes.find((x) => /copy/i.test(x.name)); return !!dark2 && t.values[dark2.id] === "20"; }));
   await bar.getByLabel("Theme menu: Dark", { exact: true }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete theme" }).click();
   await page.getByRole("dialog").waitFor({ state: "detached" });
-  check("a deleted theme takes its values with it", await settle(async () => { const t = await token("text-xl"); const l = await token("label"); return !(dark in t.values) && !(dark in l.values); }));
+  check("a deleted theme takes its values with it", await settle(async () => { const t = await token("text-xl"); const g = await token("gutter"); return !(dark in t.values) && !(dark in g.values); }));
 
   await page.reload();
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  check("and what is left is there after a reload", await settle(async () => (await field(first, "text-xl").inputValue()) === "1.6"));
+  check("and what is left is there after a reload", await settle(async () => (await field(first, "text-xl").inputValue()) === "14"));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

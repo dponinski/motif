@@ -247,14 +247,14 @@ const check = (name, ok, detail = "") => {
   ds = await typed();
   check("choosing the repository's value puts it in Motif", tok(ds, "success").values[lightOf(ds)] !== "#00ff00");
 
-  // ── Deleting in Motif never deletes from the repository ───────────────────
+  // ── A token deleted in Motif stays deleted, and the repository keeps it until the push is merged ──
   await editMotif((state) => {
     const set = state.sets.find((s) => s.name === "acme/ds");
     state.tokens = state.tokens.filter((c) => !(c.type === "color" && c.setId === set.id && c.name === "ring"));
   });
   await pull();
-  await page.locator("[data-pull-notice]").getByText(/token changes? from the repository/).waitFor({ timeout: 30000 });
-  check("it is restored, and the repository still has it", !!tok(await typed(), "ring") && repos["acme/ds"].main.get("src/tokens/tokens.json").includes('"ring"'));
+  await upToDate();
+  check("a pull doesn't bring it back, and the repository still has it", !tok(await typed(), "ring") && repos["acme/ds"].main.get("src/tokens/tokens.json").includes('"ring"'));
 
   // ── A token without Pull requests access ──────────────────────────────────
   await project();
