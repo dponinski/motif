@@ -576,6 +576,15 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
 
       addNumber: (token) => {
         const id = nanoid(6);
+        // A length in pixels that is used as spacing or as a radius is the spacing or the radius that a repository reads and writes (lengths
+        // in rem and em stay numbers, which the repository's files carry as they are).
+        if (token.unit === "px" && (token.use === "spacing" || token.use === "radius")) {
+          set((s) => {
+            const made = { id, name: token.name, value: token.value, ...(token.group !== undefined ? { group: token.group } : {}), ...(token.repoName ? { repoName: token.repoName } : {}), setId: token.setId ?? s.sets[0]?.id ?? DEFAULT_SET_ID };
+            return token.use === "spacing" ? { spacing: [...s.spacing, made] } : { radii: [...s.radii, made] };
+          });
+          return id;
+        }
         set((s) => ({ numbers: [...s.numbers, { ...token, id, setId: token.setId ?? s.sets[0]?.id ?? DEFAULT_SET_ID }] }));
         return id;
       },

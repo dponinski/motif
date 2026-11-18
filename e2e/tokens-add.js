@@ -42,12 +42,13 @@ const CSS = `:root {
   await page.goto("http://localhost:3000/editor/tadd0001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const dialog = page.getByRole("dialog");
   const open = async () => { await page.getByRole("button", { name: /Add many/ }).click(); await dialog.waitFor(); };
-  const tabCount = async (name) => Number((await page.getByRole("tab", { name: new RegExp(name) }).innerText()).match(/\d+/)?.[0]);
+  // How many tokens of a kind the set shows (they are all in one list).
+  const tabCount = async (name) => page.locator(`[data-token-id][data-token-kind="${{ Colors: "color", Radii: "radius", Spacing: "spacing", Typography: "typography" }[name]}"]`).count();
   const groupNames = () => page.locator("[data-group]").evaluateAll((els) => els.map((e) => e.getAttribute("data-group")));
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
   const row = (name) => dialog.locator(`[data-plan-row="${name}"]`);
@@ -78,12 +79,9 @@ const CSS = `:root {
   check("adding closes the dialog and puts the tokens in", await settle(async () => (await tabCount("Colors")) === before + 2));
   check("a ramp lands in a group of its own", (await groupNames()).includes("primary") && (await page.locator('[data-group="primary"] [data-token-id]').count()) === 2);
   check("with the dark value from the .dark block", await (async () => { await page.locator('button[aria-label^="primary-600:"]').waitFor(); return (await page.locator('button[aria-label^="primary-600:"]').getAttribute("aria-label")).includes("#818cf8"); })());
-  await page.getByRole("tab", { name: /Radii/ }).click();
-  check("and the other kinds go to their own tabs", await settle(async () => (await tabCount("Radii")) === 1));
-  await page.getByRole("tab", { name: /Spacing/ }).click();
+  check("and the other kinds go in as the kind they are", await settle(async () => (await tabCount("Radii")) === 1));
   check("the one that was left out did not", (await tabCount("Spacing")) === 1);
   await undo();
-  await page.getByRole("tab", { name: /Colors/ }).click();
   check("the whole batch is one undo", await settle(async () => (await tabCount("Colors")) === before) && (await tabCount("Radii")) === 0);
 
   // ── Pasting again ────────────────────────────────────────────────────────
@@ -160,7 +158,6 @@ const CSS = `:root {
   check("a type scale grows by the ratio", (await row("text-base").innerText()).includes("16px") && (await row("text-lg").innerText()).includes("20px"));
   await addButton().click();
   await dialog.waitFor({ state: "hidden" });
-  await page.getByRole("tab", { name: /Typography/ }).click();
   check("and goes to the type tab", await settle(async () => (await tabCount("Typography")) === 8));
   await page.screenshot({ path: `${OUT}/tokens-add-type.png` });
 

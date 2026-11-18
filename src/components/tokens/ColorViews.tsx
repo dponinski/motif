@@ -8,7 +8,7 @@ import { contrastRatio, gradeOf, hexOf } from "@/lib/tokens/contrast";
 import { cssName } from "@/lib/token-sync/doc";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { dependentsOf, targetKey, targetOf, wouldLoop } from "@/lib/tokens/alias-colors";
-import type { ColorToken, TokenSet, TokenTheme } from "@/store/design-system";
+import type { ColorToken, TokenSet, TokenTheme , TokenKind } from "@/store/design-system";
 import { CommitInput, InlineName } from "./fields";
 import type { Row } from "./rows";
 import type { Selection } from "./useSelection";
@@ -33,7 +33,7 @@ export interface ColorCtx {
   selection: Selection;
   drag: Drag;
   act: ColorActions;
-  taken: string[];
+  taken: (kind: TokenKind) => string[];
   groups: string[];
   openId: string | null;
   setOpenId: (id: string | null) => void;
@@ -153,7 +153,7 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
   return (
     <div className="flex flex-col gap-2.5" data-color-editor>
       <div className="flex items-center gap-2">
-        <InlineName row={row} taken={ctx.taken} onRename={(n) => ctx.act.rename(row.id, n)} className="text-sm font-medium text-text-primary" />
+        <InlineName row={row} taken={ctx.taken(row.kind)} onRename={(n) => ctx.act.rename(row.id, n)} className="text-sm font-medium text-text-primary" />
         <div className="flex-1" />
         {row.changed && <span className="rounded bg-sun-soft px-1 text-2xs text-ink">changed</span>}
       </div>
@@ -217,7 +217,7 @@ function Swatch({ row, label, ctx }: { row: Row; label: string; ctx: ColorCtx })
   return (
     <Popover.Root open={ctx.openId === row.id} onOpenChange={(o) => ctx.setOpenId(o ? row.id : null)}>
       <Popover.Anchor asChild>
-        <div data-token-id={row.id} data-selected={picked || undefined} className={cn("group/card relative w-[88px] select-none", dragged && "opacity-40")} onPointerDown={(e) => ctx.drag.press(e, row.id)}>
+        <div data-token-id={row.id} data-token-kind={row.kind} data-axis="x" data-selected={picked || undefined} className={cn("group/card relative w-[88px] select-none", dragged && "opacity-40")} onPointerDown={(e) => ctx.drag.press(e, row.id)}>
           {over && <span aria-hidden className={cn("absolute -top-0.5 bottom-0 w-0.5 rounded bg-accent", over.after ? "-right-1.5" : "-left-1.5")} data-drop={over.after ? "after" : "before"} />}
           <button
             type="button"
@@ -264,6 +264,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
   return (
     <div
       data-token-id={row.id}
+      data-token-kind={row.kind}
       data-selected={picked || undefined}
       onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("input,button,select")) ctx.drag.press(e, row.id); }}
       onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) ctx.selection.click(row.id, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey }); }}
@@ -272,7 +273,7 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       {over && <span aria-hidden className={cn("absolute inset-x-0 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}
       <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 flex-shrink-0 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
       <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
-      <InlineName row={row} taken={ctx.taken} onRename={(n) => ctx.act.rename(row.id, n)} className="w-44 flex-shrink-0 text-xs text-text-primary" />
+      <InlineName row={row} taken={ctx.taken(row.kind)} onRename={(n) => ctx.act.rename(row.id, n)} className="w-44 flex-shrink-0 text-xs text-text-primary" />
       {ctx.shown.map((theme) => {
         const value = valueIn(token, theme.id);
         return (

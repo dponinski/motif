@@ -121,7 +121,6 @@ const check = (name, ok, detail = "") => {
   const nav = async (title) => { await page.locator(`nav button[title="${title}"]`).click(); await page.waitForLoadState("networkidle").catch(() => {}); await page.waitForTimeout(250); };
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("tab", { name: /Colors/ }).click();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   await page.getByLabel("Edit primary (Light)").click();

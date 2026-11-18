@@ -161,7 +161,6 @@ const check = (name, ok, detail = "") => {
 
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("tab", { name: /Colors/ }).click();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   const row = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
@@ -220,7 +219,7 @@ const check = (name, ok, detail = "") => {
   check("with the token declared under its new name in every theme", /--brand:/.test(built) && /\.dark \{[^}]*--brand:/.test(built) && !/(?<![\w-])--primary(?![\w-])/.test(css) && /--color-brand: var\(--brand\)/.test(css), css.split("\n").filter((l) => /brand|primary/.test(l)).slice(0, 6).join(" | "));
   check("the components use the class by its new name", /bg-brand/.test(tree.get("src/components/Button.tsx")) && ![...tree.entries()].some(([p, t]) => !p.endsWith(".md") && /(?<![\w-])(bg|text|ring|accent)-primary(?![\w-])/.test(t)));
   check("and every file that changed is one the rename plans", [...tree.entries()].every(([p, t]) => repos["acme/ds"].main.get(p) === t || !withoutConversion([p]).length || /(?<![\w-])(--)?(brand|primary)(?![\w-])|-brand/.test(t)));
-  check("the token is not flagged as changed, nor made twice", await (async () => { await nav("Tokens"); await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click(); await page.getByRole("tab", { name: /Colors/ }).click(); return (await row("brand").locator("text=changed").count()) === 0 && (await row("brand").count()) === 1; })());
+  check("the token is not flagged as changed, nor made twice", await (async () => { await nav("Tokens"); await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click(); return (await row("brand").locator("text=changed").count()) === 0 && (await row("brand").count()) === 1; })());
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

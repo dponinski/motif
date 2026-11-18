@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
-import type { NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TypographyToken } from "@/store/design-system";
+import type { NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TypographyToken , TokenKind } from "@/store/design-system";
 import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
 import { CommitInput, InlineName } from "./fields";
 import { Badges } from "./ColorViews";
@@ -30,7 +30,7 @@ export interface OtherCtx {
   selection: Selection;
   drag: Drag;
   act: OtherActions;
-  taken: string[];
+  taken: (kind: TokenKind) => string[];
   hasRepo: boolean;
   rename?: (row: Row) => void;
 }
@@ -140,7 +140,7 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
     ? `${(row.token as TypographyToken).fontSize}px · ${(row.token as TypographyToken).fontWeight} · ${(row.token as TypographyToken).lineHeight}`
     : row.kind === "shadow" ? row.text : row.kind === "composition" ? compositionSummary(row.token as Composition, data) : "";
   return (
-    <div data-token-id={row.id} data-selected={picked || undefined} className={cn("relative border-b border-transparent", dragged && "opacity-40")}>
+    <div data-token-id={row.id} data-token-kind={row.kind} data-selected={picked || undefined} className={cn("relative border-b border-transparent", dragged && "opacity-40")}>
       {over && <span aria-hidden className={cn("absolute inset-x-0 z-10 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}
       <div
         onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("input,button,select")) ctx.drag.press(e, row.id); }}
@@ -150,7 +150,7 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
         <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 flex-shrink-0 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
         <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
         <Visual row={row} />
-        <InlineName row={row} taken={ctx.taken} onRename={(n) => ctx.act.rename(row.id, n)} className="w-40 flex-shrink-0 text-xs text-text-primary" />
+        <InlineName row={row} taken={ctx.taken(row.kind)} onRename={(n) => ctx.act.rename(row.id, n)} className="w-40 flex-shrink-0 text-xs text-text-primary" />
         <Fields row={row} ctx={ctx} />
         {summary && <span className="min-w-0 truncate text-2xs text-text-tertiary">{summary}</span>}
         <div className="flex-1" />

@@ -23,18 +23,18 @@ const check = (name, ok, detail = "") => {
   await page.goto("http://localhost:3000/editor/typ00001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /^Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
-  const tabs = () => page.getByRole("tablist").getByRole("tab").evaluateAll((els) => els.map((e) => e.textContent.replace(/\d+$/, "").trim()));
-  const tabCount = (name) => page.getByRole("tab", { name: new RegExp(`^${name}`) }).evaluate((e) => Number(e.textContent.match(/(\d+)$/)?.[1]));
+  // How many tokens of a type the set shows (they are all in one list).
+  const tabCount = (name) => page.locator(`[data-token-id][data-token-kind="${{ Numbers: "number", Strings: "string", Spacing: "spacing" }[name]}"]`).count();
   const addRow = page.locator("[data-add-row]");
   const newToken = async (item) => { await page.getByRole("button", { name: "New token" }).click(); await page.getByRole("menuitem", { name: new RegExp(`^${item}`) }).click(); };
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
   const saved = async () => { await page.waitForTimeout(1500); return page.evaluate(() => JSON.parse(localStorage.getItem("motif-projects")).state.projects[0].tokens); };
 
   // ── What there is to make ─────────────────────────────────────────────────
-  check("the tabs are the three types, compositions, then the kinds that have their own", (await tabs()).join() === "Colors,Numbers,Strings,Compositions,Typography,Spacing,Radii,Shadows", (await tabs()).join());
+  check("there are no tabs: every type is in the one list", (await page.getByRole("tablist").count()) === 0);
   await page.getByRole("button", { name: "New token" }).click();
   const items = await page.getByRole("menuitem").allInnerTexts();
   check("New token asks what it is: Color, Number, String or Composition, and nothing else", items.map((t) => t.split("\n")[0].trim()).join() === "Color,Number,String,Composition", items.join("|"));
@@ -43,8 +43,7 @@ const check = (name, ok, detail = "") => {
   // ── A Number ──────────────────────────────────────────────────────────────
   await newToken("Number");
   await addRow.waitFor();
-  check("a Number opens the Numbers tab with its add row: name, value, unit and what it is used as", (await page.getByRole("tab", { name: /^Numbers/ }).getAttribute("aria-selected")) === "true"
-    && (await addRow.getByLabel("New number name").isVisible()) && (await addRow.getByLabel("New number value").isVisible()) && (await addRow.getByLabel("New number unit").isVisible()) && (await addRow.getByLabel("New number used as").isVisible()));
+  check("a Number opens its add row: name, value, unit and what it is used as", (await addRow.getByLabel("New number name").isVisible()) && (await addRow.getByLabel("New number value").isVisible()) && (await addRow.getByLabel("New number unit").isVisible()) && (await addRow.getByLabel("New number used as").isVisible()));
   check("the unit starts as px and the use as not said", (await addRow.getByLabel("New number unit").inputValue()) === "px" && (await addRow.getByLabel("New number used as").inputValue()) === "");
   await addRow.getByLabel("New number name").fill("text-lg");
   await addRow.getByLabel("New number value").fill("abc");
@@ -81,8 +80,7 @@ const check = (name, ok, detail = "") => {
   // ── A String ──────────────────────────────────────────────────────────────
   await newToken("String");
   await addRow.waitFor();
-  check("a String opens the Strings tab with its add row: name, value and what it is used as", (await page.getByRole("tab", { name: /^Strings/ }).getAttribute("aria-selected")) === "true"
-    && (await addRow.getByLabel("New string name").isVisible()) && (await addRow.getByLabel("New string value").isVisible()) && (await addRow.getByLabel("New string used as").isVisible()));
+  check("a String opens its add row: name, value and what it is used as", (await addRow.getByLabel("New string name").isVisible()) && (await addRow.getByLabel("New string value").isVisible()) && (await addRow.getByLabel("New string used as").isVisible()));
   await addRow.getByLabel("New string name").fill("font-sans");
   await addRow.getByLabel("New string value").fill("Inter, sans-serif");
   await addRow.getByLabel("New string used as").selectOption("font-family");
@@ -106,8 +104,7 @@ const check = (name, ok, detail = "") => {
   await page.reload();
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /^Numbers/ }).click();
-  check("and are there after a reload", (await tabCount("Numbers")) === 3 && (await tabCount("Strings")) === 1 && (await page.getByLabel("Unit of text-lg").inputValue()) === "em");
+  check("and are there after a reload", await settle(async () => (await tabCount("Numbers")) === 3 && (await tabCount("Strings")) === 1) && (await page.getByLabel("Unit of text-lg").inputValue()) === "em");
   await page.getByRole("button", { name: /^Select ratio$/ }).waitFor().catch(() => {});
   await page.getByLabel("Select ratio", { exact: true }).check();
   await page.getByLabel("Select text-lg", { exact: true }).check();
@@ -120,7 +117,7 @@ const check = (name, ok, detail = "") => {
   const row = (name) => dialog.locator(`[data-plan-row="${name}"]`);
   await page.getByRole("button", { name: /Add many/ }).click();
   await dialog.waitFor();
-  check("Add many on the Numbers tab opens on a scale of numbers", (await dialog.getByRole("tab", { name: "Scale" }).count()) === 1);
+  check("Add many offers a scale as well as pasting", (await dialog.getByRole("tab", { name: "Scale" }).count()) === 1);
   await dialog.getByRole("tab", { name: "Paste" }).click();
   await dialog.getByLabel("Paste tokens").fill("font-size-xl: 1.25rem\nfont-weight-bold: 700\nfont-mono: ui-monospace, monospace\nspace-9: 36px");
   await dialog.locator("[data-plan-row]").first().waitFor();
@@ -128,11 +125,12 @@ const check = (name, ok, detail = "") => {
   check("a weight is a bare number, a font family a string used as a font family, a length in pixels a spacing", (await row("font-weight-bold").innerText()).includes("700 · font-weight") && (await row("font-mono").innerText()).includes("ui-monospace, monospace · font-family") && (await row("space-9").innerText()).includes("36px"));
   await dialog.getByRole("button", { name: /^Add (\d+ tokens?|tokens)$/ }).click();
   await dialog.waitFor({ state: "hidden" });
-  check("they are added to the tabs of their type", await settle(async () => (await tabCount("Numbers")) === 5 && (await tabCount("Strings")) === 2 && (await tabCount("Spacing")) === 1), `${await tabCount("Numbers")} ${await tabCount("Strings")} ${await tabCount("Spacing")}`);
+  check("they are added with the type they were given", await settle(async () => (await tabCount("Numbers")) === 5 && (await tabCount("Strings")) === 2 && (await tabCount("Spacing")) === 1), `${await tabCount("Numbers")} ${await tabCount("Strings")} ${await tabCount("Spacing")}`);
 
   await page.getByRole("button", { name: /Add many/ }).click();
   await dialog.waitFor();
   await dialog.getByRole("tab", { name: "Scale" }).click();
+  await dialog.getByRole("button", { name: "Numbers", exact: true }).click();
   check("the scale is of numbers: a base, a unit, a ratio, a name and what it is used as", (await dialog.getByLabel("Number base").isVisible()) && (await dialog.getByLabel("Number unit").inputValue()) === "rem" && (await dialog.getByLabel("Name of the numbers").inputValue()) === "scale");
   check("it grows by the ratio from the base, smallest first", (await row("scale-3").innerText()).includes("1rem") && (await row("scale-4").innerText()).includes("1.25rem") && (await row("scale-1").innerText()).includes("0.64rem"), await row("scale-4").innerText());
   await dialog.getByLabel("Number used as").selectOption("font-size");

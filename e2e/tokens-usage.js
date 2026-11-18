@@ -161,7 +161,6 @@ const check = (name, ok, detail = "") => {
 
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("tab", { name: /Colors/ }).click();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   const row = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
@@ -192,7 +191,6 @@ const check = (name, ok, detail = "") => {
   await page.getByLabel("Clear the selection").click();
 
   // ── Other kinds ───────────────────────────────────────────────────────────
-  await page.getByRole("tab", { name: /Radii/ }).click();
   check("radii say it too", await settle(async () => /used \d+×/.test(await page.locator("[data-token-id]").filter({ hasText: "md" }).first().innerText())));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
