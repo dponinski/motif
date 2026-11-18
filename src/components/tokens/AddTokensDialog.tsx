@@ -22,8 +22,8 @@ type ScaleKind = "color" | "spacing" | "radius" | "typography" | "number";
 const field = "rounded border border-surface-border bg-surface-base px-2 py-1 text-xs text-text-primary outline-none focus:border-accent";
 const label = "flex flex-col gap-1 text-2xs text-text-tertiary";
 const STATUS: Record<PlanItem["status"], { text: string; className: string }> = {
-  new: { text: "New", className: "bg-emerald-500/15 text-emerald-500" },
-  update: { text: "Changes it", className: "bg-amber-500/15 text-amber-500" },
+  new: { text: "New", className: "bg-mint-soft text-success" },
+  update: { text: "Changes it", className: "bg-sun-soft text-ink" },
   same: { text: "Already there", className: "bg-surface-overlay text-text-tertiary" },
 };
 
@@ -81,7 +81,7 @@ function PlanPanel({ drafts, notes, set, onDone }: { drafts: Draft[]; notes: str
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       {notes.length > 0 && (
-        <details className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-2xs text-amber-500" data-notes>
+        <details className="rounded border border-sun/30 bg-sun-soft px-2.5 py-1.5 text-2xs text-ink" data-notes>
           <summary className="cursor-pointer select-none">{notes.length} left out</summary>
           <ul className="mt-1 list-disc space-y-0.5 pl-4 text-text-secondary">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
         </details>
@@ -92,7 +92,7 @@ function PlanPanel({ drafts, notes, set, onDone }: { drafts: Draft[]; notes: str
         <div className="min-h-0 flex-1 overflow-y-auto rounded border border-surface-border" data-plan>
           {plan.map((p) => (
             <label key={keyOf(p)} className="flex cursor-pointer items-center gap-2 border-b border-surface-border px-2.5 py-1.5 last:border-0 hover:bg-surface-subtle" data-plan-row={p.name}>
-              <input type="checkbox" checked={on(p)} onChange={(e) => setChanged((c) => ({ ...c, [keyOf(p)]: e.target.checked }))} aria-label={`Include ${p.name}`} className="h-3 w-3 flex-shrink-0 accent-[var(--accent,#6366f1)]" />
+              <input type="checkbox" checked={on(p)} onChange={(e) => setChanged((c) => ({ ...c, [keyOf(p)]: e.target.checked }))} aria-label={`Include ${p.name}`} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
               <span className="w-40 flex-shrink-0 truncate text-xs text-text-primary" title={p.name}>{p.name}</span>
               <span className="min-w-0 flex-1">{describe(p.draft, set.themes)}</span>
               <span className={cn("flex-shrink-0 rounded px-1.5 py-0.5 text-2xs", STATUS[p.status].className)}>{STATUS[p.status].text}</span>
@@ -105,7 +105,7 @@ function PlanPanel({ drafts, notes, set, onDone }: { drafts: Draft[]; notes: str
           {chosen.length === 0 ? "Nothing selected" : [added ? `${added} to add` : "", updated ? `${updated} to change` : ""].filter(Boolean).join(" · ")}
         </span>
         <button type="button" onClick={onDone} className="rounded px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary">Cancel</button>
-        <button type="button" onClick={add} disabled={chosen.length === 0} className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-40">
+        <button type="button" onClick={add} disabled={chosen.length === 0} className="rounded bg-blaze px-3 py-1.5 text-xs font-medium text-on-blaze hover:bg-blaze/90 disabled:opacity-40">
           {chosen.length === 0 ? "Add tokens" : `Add ${chosen.length} ${chosen.length === 1 ? "token" : "tokens"}`}
         </button>
       </div>
@@ -232,7 +232,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
             </label>
             {darkTheme && (
               <label className="mb-1.5 flex items-center gap-1.5 text-xs text-text-secondary">
-                <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} className="h-3 w-3 accent-[var(--accent,#6366f1)]" /> Turn it over for {darkTheme.name}
+                <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} className="h-3 w-3 accent-[var(--cobalt)]" /> Turn it over for {darkTheme.name}
               </label>
             )}
           </div>
@@ -285,7 +285,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
           </label>
         </div>
       )}
-      {problem && <p className="text-xs text-red-400" data-problem>{problem}</p>}
+      {problem && <p className="text-xs text-danger" data-problem>{problem}</p>}
       <PlanPanel drafts={drafts} notes={[]} set={set} onDone={onDone} />
     </div>
   );

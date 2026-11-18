@@ -8,13 +8,13 @@ import { useAuth } from "@/store/auth";
 import { useTeams, type Member, type TeamView } from "@/store/teams";
 
 const btn = "h-7 rounded-md border border-surface-border px-2.5 text-xs text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
-const btnPrimary = "flex h-7 items-center justify-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50";
+const btnPrimary = "flex h-7 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 
 function Avatar({ member }: { member: Pick<Member, "name" | "email" | "avatar"> }) {
   const label = member.name || member.email;
   return member.avatar
     ? <img src={member.avatar} alt="" className="h-6 w-6 flex-shrink-0 rounded-full" referrerPolicy="no-referrer" />
-    : <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-white">{label[0]?.toUpperCase()}</span>;
+    : <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-on-cobalt">{label[0]?.toUpperCase()}</span>;
 }
 
 function Invite({ team }: { team: TeamView }) {
@@ -49,7 +49,7 @@ function Invite({ team }: { team: TeamView }) {
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Mail size={12} />} Invite
         </button>
       </form>
-      {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
+      {error && <p className="text-xs text-danger" role="alert">{error}</p>}
       {sent && (
         <div className="flex flex-col gap-1.5 rounded-md border border-surface-border p-2.5" role="status" data-invite-sent>
           <p className="text-xs text-text-primary">{sent.mailed ? <>An invitation was emailed to <span className="font-medium">{sent.email}</span>.</> : <>Invited <span className="font-medium">{sent.email}</span>. No email was sent: pass them this link.</>}</p>
@@ -107,7 +107,7 @@ function Body({ teamId, onGone }: { teamId: string; onGone: () => void }) {
                     <option value="member">Member</option>
                   </select>
                 ) : <span className="text-2xs text-text-tertiary">{m.role === "owner" ? "Owner" : "Member"}</span>}
-                {owner && !self && <button className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-red-400" aria-label={`Remove ${m.email}`} onClick={() => void run(t.removeMember(team.id, m.userId))}><X size={12} /></button>}
+                {owner && !self && <button className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-danger" aria-label={`Remove ${m.email}`} onClick={() => void run(t.removeMember(team.id, m.userId))}><X size={12} /></button>}
               </li>
             );
           })}
@@ -124,7 +124,7 @@ function Body({ teamId, onGone }: { teamId: string; onGone: () => void }) {
                 <li key={i.id} className="flex items-center gap-2 px-2.5 py-1.5 text-xs" data-invite={i.email}>
                   <span className="min-w-0 flex-1 truncate text-text-secondary">{i.email}</span>
                   <span className="text-2xs text-text-tertiary">invited</span>
-                  <button className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-red-400" aria-label={`Cancel the invitation to ${i.email}`} onClick={() => void run(t.revoke(team.id, i.id))}><X size={12} /></button>
+                  <button className="rounded p-1 text-text-tertiary hover:bg-surface-subtle hover:text-danger" aria-label={`Cancel the invitation to ${i.email}`} onClick={() => void run(t.revoke(team.id, i.id))}><X size={12} /></button>
                 </li>
               ))}
             </ul>
@@ -132,25 +132,25 @@ function Body({ teamId, onGone }: { teamId: string; onGone: () => void }) {
         </section>
       )}
 
-      {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
+      {error && <p className="text-xs text-danger" role="alert">{error}</p>}
 
       <div className="flex flex-col gap-2 border-t border-surface-border pt-3">
         {confirming === "leave" ? (
           <div className="flex items-center gap-2 text-xs text-text-secondary" role="alertdialog" aria-label="Leave the team">
             <span className="flex-1">Leave {team.name}? Its design systems leave this browser unless you have changes of your own in them.</span>
             <button className={btn} onClick={() => setConfirming(null)}>Stay</button>
-            <button className="h-7 rounded-md bg-red-500 px-3 text-xs font-medium text-white hover:bg-red-500/90" onClick={async () => { if (me && (await run(t.removeMember(team.id, me.id)))) { onGone(); void import("@/store/sync").then((m) => m.useSync.getState().sync()); } }}>Leave</button>
+            <button className="h-7 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90" onClick={async () => { if (me && (await run(t.removeMember(team.id, me.id)))) { onGone(); void import("@/store/sync").then((m) => m.useSync.getState().sync()); } }}>Leave</button>
           </div>
         ) : confirming === "delete" ? (
           <div className="flex items-center gap-2 text-xs text-text-secondary" role="alertdialog" aria-label="Delete the team">
             <span className="flex-1">Delete {team.name}? A team can be deleted once it has no design systems.</span>
             <button className={btn} onClick={() => setConfirming(null)}>Keep</button>
-            <button className="h-7 rounded-md bg-red-500 px-3 text-xs font-medium text-white hover:bg-red-500/90" onClick={async () => { if (await run(t.remove(team.id))) onGone(); else setConfirming(null); }}>Delete team</button>
+            <button className="h-7 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90" onClick={async () => { if (await run(t.remove(team.id))) onGone(); else setConfirming(null); }}>Delete team</button>
           </div>
         ) : (
           <div className="flex gap-2">
             <button className={btn} onClick={() => setConfirming("leave")} disabled={owner && owners <= 1}>Leave team</button>
-            {owner && <button className={cn(btn, "hover:text-red-400")} onClick={() => setConfirming("delete")}>Delete team</button>}
+            {owner && <button className={cn(btn, "hover:text-danger")} onClick={() => setConfirming("delete")}>Delete team</button>}
             {owner && owners <= 1 && <span className="self-center text-2xs text-text-tertiary">Make someone else an owner before leaving.</span>}
           </div>
         )}

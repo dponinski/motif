@@ -1,5 +1,11 @@
 import type { Config } from "tailwindcss";
 
+// A brand color as its channels, so a class can take an opacity (`bg-accent/15`).
+const ch = (name: string) => `rgb(var(--${name}-rgb) / <alpha-value>)`;
+
+// The hairline (card outlines, dividers): ink at a low opacity, so it sits on every surface.
+const soft = "rgb(var(--ink-rgb) / var(--line-soft-alpha))";
+
 const config: Config = {
   content: [
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -12,31 +18,43 @@ const config: Config = {
       colors: {
         // Surface tokens — resolved via CSS variables for theme support
         surface: {
-          base: "var(--surface-base)",
-          raised: "var(--surface-raised)",
-          overlay: "var(--surface-overlay)",
-          subtle: "var(--surface-subtle)",
-          border: "var(--surface-border)",
-          "border-subtle": "var(--surface-border-subtle)",
+          base: ch("surface"),
+          raised: ch("surface-raised-brand"),
+          overlay: ch("surface-raised-brand"),
+          subtle: ch("surface-sunken"),
+          border: soft,
+          "border-subtle": soft,
         },
-        // Accent tokens
-        accent: {
-          DEFAULT: "#6366f1",
-          hover: "#818cf8",
-          muted: "rgba(99,102,241,0.12)",
-          border: "rgba(99,102,241,0.3)",
-        },
+        // The brand: cobalt is selection and info (what the app calls its accent), blaze is the one primary action of a view. The other
+        // colors are for tags, dots and small marks, each with its soft tint and the ink that goes on it.
+        accent: { DEFAULT: ch("cobalt"), hover: ch("cobalt"), muted: ch("cobalt-soft"), border: ch("cobalt") },
+        blaze: { DEFAULT: ch("blaze"), soft: ch("blaze-soft") },
+        cobalt: { DEFAULT: ch("cobalt"), soft: ch("cobalt-soft") },
+        sun: { DEFAULT: ch("sun"), soft: ch("sun-soft") },
+        mint: { DEFAULT: ch("mint"), soft: ch("mint-soft") },
+        bubblegum: { DEFAULT: ch("bubblegum"), soft: ch("bubblegum-soft") },
+        "on-blaze": ch("on-blaze"),
+        "on-cobalt": ch("on-cobalt"),
+        "on-sun": ch("on-sun"),
+        "on-mint": ch("on-mint"),
+        "on-bubblegum": ch("on-bubblegum"),
+        ink: { DEFAULT: ch("ink"), muted: ch("ink-muted") },
+        line: { DEFAULT: ch("line"), soft },
+        link: ch("link"),
+        success: ch("success"),
+        danger: ch("danger"),
         // Text tokens — resolved via CSS variables for theme support
         text: {
-          primary: "var(--text-primary)",
-          secondary: "var(--text-secondary)",
-          tertiary: "var(--text-tertiary)",
-          inverse: "var(--text-inverse)",
+          primary: ch("ink"),
+          secondary: ch("ink-muted"),
+          tertiary: ch("ink-muted"),
+          inverse: ch("surface"),
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        display: ['"Bricolage Grotesque Variable"', '"Bricolage Grotesque"', '"Arial Rounded MT Bold"', "system-ui", "sans-serif"],
+        sans: ['"Figtree Variable"', "Figtree", "system-ui", "-apple-system", '"Segoe UI"', "sans-serif"],
+        mono: ['"DM Mono"', "ui-monospace", '"SF Mono"', "Menlo", "monospace"],
       },
       fontSize: {
         "2xs": ["10px", "14px"],
@@ -61,12 +79,23 @@ const config: Config = {
         10: "40px",
         12: "48px",
       },
+      // The brand's radii: 6 for tags and chips, 10 for buttons and inputs, 16 for cards and panels; pills are `rounded-full`.
       borderRadius: {
-        sm: "3px",
-        DEFAULT: "5px",
-        md: "7px",
-        lg: "10px",
-        xl: "14px",
+        sm: "6px",
+        DEFAULT: "10px",
+        md: "10px",
+        lg: "16px",
+        xl: "16px",
+      },
+      // Flat: cards and buttons have no shadow; only what floats above the page has one.
+      boxShadow: {
+        none: "none",
+        sm: "none",
+        DEFAULT: "none",
+        md: "var(--shadow-card)",
+        lg: "var(--shadow-card)",
+        xl: "var(--shadow-raised)",
+        "2xl": "var(--shadow-raised)",
       },
     },
   },

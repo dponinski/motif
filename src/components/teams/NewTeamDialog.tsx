@@ -42,8 +42,8 @@ export default function NewTeamDialog({ onCreated }: { onCreated?: (teamId: stri
           <form onSubmit={submit} className="flex flex-col gap-3">
             <p className="text-xs leading-relaxed text-text-secondary">A team shares design systems. Everyone in it can edit them, and you choose who is in it.</p>
             <input className="input-sm" aria-label="Team name" placeholder="Design team" value={name} maxLength={80} autoFocus onChange={(e) => setName(e.target.value)} />
-            {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
-            <button type="submit" disabled={busy || !name.trim()} className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-accent text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-60">
+            {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+            <button type="submit" disabled={busy || !name.trim()} className="flex h-7 items-center justify-center gap-1.5 rounded-md bg-blaze text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-60">
               {busy && <Loader2 size={12} className="animate-spin" />} Create team
             </button>
           </form>

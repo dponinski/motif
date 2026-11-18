@@ -55,7 +55,7 @@ export default function GroupedTokens({
                 checked={all}
                 ref={(el) => { if (el) el.indeterminate = some && !all; }}
                 onChange={() => selection.setMany(ids, !all)}
-                className="h-3 w-3 flex-shrink-0 accent-[var(--accent,#6366f1)]"
+                className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]"
               />
               <button type="button" onClick={() => fold(group)} aria-expanded={!isFolded} aria-label={`${isFolded ? "Open" : "Fold"} ${group}`} className="text-text-tertiary hover:text-text-primary">
                 {isFolded ? <ChevronRight size={11} /> : <ChevronDown size={11} />}

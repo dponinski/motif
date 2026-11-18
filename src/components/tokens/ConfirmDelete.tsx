@@ -25,7 +25,7 @@ export default function ConfirmDelete({ title, children, confirm, onConfirm, onC
           <div id="confirm-delete-body" className="flex flex-col gap-2 text-xs text-text-secondary">{blocked ? <p>{blocked}</p> : children}</div>
           <div className="flex justify-end gap-2">
             <Dialog.Close className="h-7 rounded-md border border-surface-border px-3 text-xs text-text-secondary hover:bg-surface-subtle">{blocked ? "Close" : "Cancel"}</Dialog.Close>
-            {!blocked && <button type="button" onClick={onConfirm} autoFocus className="h-7 rounded-md bg-red-500 px-3 text-xs font-medium text-white hover:bg-red-500/90">{confirm}</button>}
+            {!blocked && <button type="button" onClick={onConfirm} autoFocus className="h-7 rounded-md bg-danger px-3 text-xs font-medium text-text-inverse hover:bg-danger/90">{confirm}</button>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

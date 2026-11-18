@@ -47,9 +47,9 @@ function NameField({ initial, label, taken, onDone, onCancel }: { initial: strin
           if (e.key === "Enter") { e.preventDefault(); if (!bad) finish(true); }
           else if (e.key === "Escape") { e.stopPropagation(); finish(false); }
         }}
-        className={cn("w-28 rounded border bg-surface-base px-1.5 py-0.5 text-xs text-text-primary outline-none", bad ? "border-red-400" : "border-accent")}
+        className={cn("w-28 rounded border bg-surface-base px-1.5 py-0.5 text-xs text-text-primary outline-none", bad ? "border-danger" : "border-accent")}
       />
-      {bad && <span role="alert" className="absolute mt-6 rounded bg-surface-raised px-1.5 py-0.5 text-2xs text-red-400 shadow">There is a theme called that</span>}
+      {bad && <span role="alert" className="absolute mt-6 rounded bg-surface-raised px-1.5 py-0.5 text-2xs text-danger shadow">There is a theme called that</span>}
     </span>
   );
 }
@@ -89,7 +89,7 @@ function Segment({ set, theme, on, onShow, onRename, onDuplicate, onDelete }: {
             <Menu.Item className={item} onSelect={onRename}><Pencil size={11} /> Rename</Menu.Item>
             <Menu.Item className={item} onSelect={onDuplicate}><Copy size={11} /> Duplicate</Menu.Item>
             <Menu.Separator className="my-1 h-px bg-surface-border" />
-            <Menu.Item className={cn(item, "text-red-400")} disabled={only} onSelect={onDelete} title={only ? "A set keeps at least one theme" : undefined}><Trash2 size={11} /> Delete{only ? " (the only theme)" : ""}</Menu.Item>
+            <Menu.Item className={cn(item, "text-danger")} disabled={only} onSelect={onDelete} title={only ? "A set keeps at least one theme" : undefined}><Trash2 size={11} /> Delete{only ? " (the only theme)" : ""}</Menu.Item>
           </Menu.Content>
         </Menu.Portal>
       </Menu.Root>
@@ -134,9 +134,9 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
                 value={name}
                 onChange={(e) => { setName(e.target.value); if (!touched.current) setDark(/dark|night/i.test(e.target.value)); }}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); create(); } }}
-                className={cn(field, bad ? "border-red-400" : "border-surface-border focus:border-accent")}
+                className={cn(field, bad ? "border-danger" : "border-surface-border focus:border-accent")}
               />
-              {bad && <span role="alert" className="text-2xs text-red-400">There is a theme called that</span>}
+              {bad && <span role="alert" className="text-2xs text-danger">There is a theme called that</span>}
             </label>
             <label className="flex flex-col gap-1 text-2xs text-text-tertiary">Start from
               <select aria-label="Start new theme from" value={from} onChange={(e) => setFrom(e.target.value)} className={cn(field, "border-surface-border focus:border-accent")}>
@@ -149,7 +149,7 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
                 <span className="block text-2xs leading-snug text-text-tertiary">Turns each color&apos;s lightness around and keeps its hue. A color that is another token stays that token.</span>
               </span>
             </label>
-            <button type="button" disabled={!trimmed || bad} onClick={create} className="rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Create theme</button>
+            <button type="button" disabled={!trimmed || bad} onClick={create} className="rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Create theme</button>
           </div>
         </Popover.Content>
       </Popover.Portal>

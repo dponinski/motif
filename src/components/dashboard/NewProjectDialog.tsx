@@ -122,7 +122,7 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
       <button
         type="submit"
         disabled={busy !== null}
-        className="h-7 bg-accent hover:bg-accent/90 disabled:opacity-60 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors"
+        className="h-7 bg-blaze hover:bg-blaze/90 disabled:opacity-60 text-on-blaze text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors"
       >
         {busy === "manual" && <Loader2 size={12} className="animate-spin" />}
         Create project
@@ -134,7 +134,7 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
     <Dialog.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setError(null); setBusy(null); setFilter(""); } }}>
       <Dialog.Trigger asChild>
         {trigger ?? (
-          <button className="flex items-center gap-1.5 h-7 bg-accent hover:bg-accent/90 text-white text-[12px] font-medium px-3 rounded-md transition-colors">
+          <button className="flex items-center gap-1.5 h-7 bg-blaze hover:bg-blaze/90 text-on-blaze text-[12px] font-medium px-3 rounded-md transition-colors">
             <Plus size={12} /> New project
           </button>
         )}
@@ -231,7 +231,7 @@ export default function NewProjectDialog({ trigger }: { trigger?: React.ReactNod
               )
             ) : form}
 
-            {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
+            {error && <p className="text-xs text-danger" role="alert">{error}</p>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

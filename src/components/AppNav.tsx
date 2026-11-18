@@ -1,5 +1,6 @@
 "use client";
 
+import { Mark } from "@/components/Logo";
 import { BookOpen, GitBranch, LayoutTemplate, Palette, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
@@ -37,7 +38,7 @@ export default function AppNav({
     work, refreshed: runtime.refreshed, syncing: runtime.syncing, error: runtime.error, tokens, tokenNote: runtime.tokenNote,
     stale: runtime.stale.filter((p) => !(work && p in work.pushed)).length,
   }), [history, index, bases, work, tokens, runtime.refreshed, runtime.syncing, runtime.error, runtime.tokenNote, runtime.stale]);
-  const dot = { none: "", waiting: "bg-amber-500", syncing: "bg-accent", synced: "bg-emerald-500", attention: "bg-red-400" }[status.kind];
+  const dot = { none: "", waiting: "bg-sun", syncing: "bg-accent", synced: "bg-mint", attention: "bg-danger" }[status.kind];
 
   const items: { id: NavItem; icon: React.ReactNode; label: string }[] = [
     { id: "components", icon: <LayoutTemplate size={16} />, label: "Components" },
@@ -58,9 +59,7 @@ export default function AppNav({
         data-bar
         className="w-10 h-bar flex items-center justify-center border-b border-surface-border hover:bg-surface-subtle transition-colors flex-shrink-0"
       >
-        <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center">
-          <span className="text-white text-xs font-bold leading-none">M</span>
-        </div>
+        <Mark size={22} />
       </Link>
 
       {/* Nav items */}

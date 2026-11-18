@@ -37,7 +37,7 @@ function Field({ label, children, onRemove, status }: { label: string; children:
     <div className="grid grid-cols-[84px_1fr_16px] items-center gap-1.5">
       <span className="flex min-w-0 items-center gap-1" title={status === "token" ? `${label}: a token of the repository` : status === "flag" ? `${label}: not a token` : label}>
         <span className="truncate text-xs text-text-secondary">{label}</span>
-        {status && <span data-token-status={status} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", status === "token" ? "bg-accent" : "bg-amber-500")} />}
+        {status && <span data-token-status={status} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", status === "token" ? "bg-accent" : "bg-sun")} />}
       </span>
       {children}
       {onRemove ? (
@@ -98,7 +98,7 @@ export default function ElementInspector({ component, source, connection, part =
         <p className="text-xs leading-relaxed text-text-tertiary">
           {selection ? "That element is no longer in the file." : "Click an element in the preview to change its layout, spacing, color and text. Changes are made to the component's source and sent as a pull request."}
         </p>
-        {error && <p className="mt-2 break-words text-xs text-red-400">{error}</p>}
+        {error && <p className="mt-2 break-words text-xs text-danger">{error}</p>}
       </div>
     );
   }
@@ -205,7 +205,7 @@ export default function ElementInspector({ component, source, connection, part =
           </div>
         </div>
 
-        {error && <p className="mx-3 mb-2 break-words rounded border border-red-400/30 bg-red-400/10 px-2 py-1.5 text-2xs text-red-400">{error}</p>}
+        {error && <p className="mx-3 mb-2 break-words rounded border border-danger/30 bg-danger/10 px-2 py-1.5 text-2xs text-danger">{error}</p>}
         {editable && (
           <div className="border-t border-surface-border px-3 py-2.5">
             <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Classes</p>
@@ -258,12 +258,12 @@ export default function ElementInspector({ component, source, connection, part =
         ))}
       </div>
 
-      {error && <p className="mx-3 mb-2 break-words rounded border border-red-400/30 bg-red-400/10 px-2 py-1.5 text-2xs text-red-400">{error}</p>}
+      {error && <p className="mx-3 mb-2 break-words rounded border border-danger/30 bg-danger/10 px-2 py-1.5 text-2xs text-danger">{error}</p>}
       {sheet && editable && (
         <p className="mx-3 mb-2 text-2xs leading-relaxed text-text-tertiary" data-styles-in>
           Styles in <span className="font-mono">{sheet.path.slice(sheet.path.lastIndexOf("/") + 1)}</span>
           {view?.cls ? <> as <span className="font-mono">.{view.cls}</span></> : " (this element gets a class of its own when you style it)"}
-          {view && view.sharedWith > 0 && <span className="text-amber-500"> · also used by {view.sharedWith} other element{view.sharedWith === 1 ? "" : "s"}, which change with it</span>}
+          {view && view.sharedWith > 0 && <span className="text-ink"> · also used by {view.sharedWith} other element{view.sharedWith === 1 ? "" : "s"}, which change with it</span>}
         </p>
       )}
 
@@ -287,7 +287,7 @@ export default function ElementInspector({ component, source, connection, part =
           {state?.hint && <p className="mt-1.5 text-2xs leading-relaxed text-text-tertiary">{state.hint}{BREAKPOINT_WIDTH[modifier] ? ` The frame is set to ${BREAKPOINT_WIDTH[modifier]} px so you can see it.` : ""}</p>}
           {modifier && <p className="mt-1 text-2xs leading-relaxed text-text-tertiary">A state and a screen size are edited one at a time.</p>}
           {flagged > 0 && (
-            <p className="mt-1.5 text-2xs leading-relaxed text-amber-500" role="status" data-flagged={flagged}>
+            <p className="mt-1.5 text-2xs leading-relaxed text-ink" role="status" data-flagged={flagged}>
               {flagged === 1 ? "1 value here is not a token." : `${flagged} values here are not tokens.`} They are marked below.
             </p>
           )}
@@ -316,7 +316,7 @@ export default function ElementInspector({ component, source, connection, part =
                       <div key={g.id} className="flex min-w-0 flex-col gap-0.5">
                         <span className="flex items-center gap-1 text-2xs text-text-tertiary" title={g.label}>
                           <span className="truncate">{SPACING_CAPTION[g.id] ?? g.label}</span>
-                          {fieldStatus(g, value, index) && <span data-token-status={fieldStatus(g, value, index)} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", fieldStatus(g, value, index) === "token" ? "bg-accent" : "bg-amber-500")} />}
+                          {fieldStatus(g, value, index) && <span data-token-status={fieldStatus(g, value, index)} className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", fieldStatus(g, value, index) === "token" ? "bg-accent" : "bg-sun")} />}
                           {value !== null && (
                             <button onClick={() => change(g, null)} aria-label={`Remove ${g.label}`} title="Remove" className="ml-auto rounded text-text-tertiary hover:text-text-primary"><X size={10} /></button>
                           )}

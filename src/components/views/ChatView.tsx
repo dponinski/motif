@@ -148,7 +148,7 @@ export default function ChatView() {
       {locked && (
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-md border border-surface-border bg-surface-subtle px-3 py-2 text-xs text-text-secondary" data-chat-locked>
           <span className="flex-1">Sign in to use the assistant.</span>
-          <button onClick={auth.openDialog} className="rounded bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent/90">Sign in</button>
+          <button onClick={auth.openDialog} className="rounded bg-blaze px-2.5 py-1 font-medium text-on-blaze hover:bg-blaze/90">Sign in</button>
         </div>
       )}
 
@@ -171,7 +171,7 @@ export default function ChatView() {
           className={cn(
             "w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0",
             inputValue.trim() && !isLoading && !locked
-              ? "bg-accent text-white hover:bg-accent/80"
+              ? "bg-blaze text-on-blaze hover:bg-blaze/80"
               : "bg-surface-subtle text-text-tertiary cursor-not-allowed"
           )}
         >

@@ -46,7 +46,7 @@ export default function ConflictDialog({ id, conflict, name, resolve }: { id: st
                   : `You and ${conflict.updatedBy ?? "another device"} both changed ${listOf(partsOf(conflict))}. Choose which version to keep for ${partsOf(conflict).length === 1 && (conflict.items?.length ?? 0) <= 1 ? "it" : "them"}; everything else, from both of you, is kept.`}
               </p>
               <div className="flex flex-col gap-2 sm:flex-row-reverse">
-                <button onClick={() => void resolve(id, "local")} data-keep="local" className="h-8 flex-1 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90">
+                <button onClick={() => void resolve(id, "local")} data-keep="local" className="h-8 flex-1 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze hover:bg-blaze/90">
                   {conflict.deleted ? "Keep this copy" : conflict.updatedBy ? "Keep my version" : "Keep this device's version"}
                 </button>
                 <button onClick={() => void resolve(id, "server")} data-keep="server" className="h-8 flex-1 rounded-md border border-surface-border px-3 text-xs font-medium text-text-secondary hover:bg-surface-subtle hover:text-text-primary">

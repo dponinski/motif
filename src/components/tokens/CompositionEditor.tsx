@@ -77,7 +77,7 @@ function SlotRow({ composition, slot, data, sets, onSlot, onRemove, onRename }: 
         </>
       )}
       {slot.ref && (
-        <span data-slot-token className={missing ? "rounded bg-red-400/10 px-1.5 py-0.5 text-2xs text-red-400" : "rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent"}>
+        <span data-slot-token className={missing ? "rounded bg-danger/10 px-1.5 py-0.5 text-2xs text-danger" : "rounded bg-accent/10 px-1.5 py-0.5 text-2xs text-accent"}>
           {linked ? `${linked.setId === composition.setId ? "" : `${sets.find((s) => s.id === linked.setId)?.name ?? "Another set"} / `}${linked.name}` : "A token that is gone"}
         </span>
       )}
@@ -95,7 +95,7 @@ function SlotRow({ composition, slot, data, sets, onSlot, onRemove, onRename }: 
         ))}
       </select>
       <span data-slot-text className="min-w-0 truncate text-2xs text-text-tertiary">{text ?? "—"}</span>
-      {onRemove && <button type="button" aria-label={`Remove ${label}`} onClick={onRemove} className="rounded p-1 text-text-tertiary hover:bg-red-400/10 hover:text-red-400"><X size={10} /></button>}
+      {onRemove && <button type="button" aria-label={`Remove ${label}`} onClick={onRemove} className="rounded p-1 text-text-tertiary hover:bg-danger/10 hover:text-danger"><X size={10} /></button>}
     </div>
   );
 }
@@ -116,7 +116,7 @@ export default function CompositionEditor({ composition, onChange }: { compositi
           <Sample composition={composition} />
           {composition.kind === "shadow" && (
             <label className="flex items-center gap-1.5 text-2xs text-text-tertiary">
-              <input type="checkbox" aria-label={`Inset ${composition.name}`} checked={!!composition.inset} onChange={(e) => onChange({ inset: e.target.checked })} className="h-3 w-3 accent-[var(--accent,#6366f1)]" /> Inset
+              <input type="checkbox" aria-label={`Inset ${composition.name}`} checked={!!composition.inset} onChange={(e) => onChange({ inset: e.target.checked })} className="h-3 w-3 accent-[var(--cobalt)]" /> Inset
             </label>
           )}
         </div>

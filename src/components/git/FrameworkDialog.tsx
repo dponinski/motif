@@ -14,7 +14,7 @@ import { useNavRequest } from "@/store/nav";
 import { repoSlug, useGitStore, type GitConnection } from "@/store/git";
 import { errorMessage, useGitHost } from "./hooks";
 
-const btnPrimary = "h-8 px-3 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
+const btnPrimary = "h-8 px-3 bg-blaze hover:bg-blaze/90 disabled:opacity-50 text-on-blaze text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 const btnSecondary = "h-8 px-3 border border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle disabled:opacity-50 text-xs font-medium rounded-md flex items-center justify-center gap-1.5 transition-colors";
 
 function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSync: () => void }) {
@@ -85,7 +85,7 @@ function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSyn
       </div>
 
       {loading && <p className="flex items-center gap-2 text-xs text-text-tertiary"><Loader2 size={12} className="animate-spin" /> Reading the repository…</p>}
-      {error && <p className="break-words text-xs text-red-400" role="alert">{error}</p>}
+      {error && <p className="break-words text-xs text-danger" role="alert">{error}</p>}
       {refusal && <p className="text-xs leading-relaxed text-text-secondary" role="status" data-refused>{refusal}</p>}
 
       {plan && !done && (
@@ -96,7 +96,7 @@ function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSyn
               <li key={s.path} className="text-xs text-text-secondary"><span className="font-mono text-text-primary">{s.path}</span>: {s.what}</li>
             ))}
           </ul>
-          {plan.notes.map((n) => <p key={n} className="text-2xs leading-relaxed text-amber-500">{n}</p>)}
+          {plan.notes.map((n) => <p key={n} className="text-2xs leading-relaxed text-ink">{n}</p>)}
           <button className={cn(btnPrimary, "self-start")} onClick={() => void create()} disabled={busy}>
             {busy && <Loader2 size={12} className="animate-spin" />} Add to pull request
           </button>
@@ -105,7 +105,7 @@ function Body({ connection, onOpenSync }: { connection: GitConnection; onOpenSyn
 
       {done && (
         <div className="flex flex-col gap-2 rounded-md border border-surface-border p-3" role="status" data-done>
-          <p className="flex items-center gap-1.5 text-xs text-text-primary"><Check size={12} className="text-emerald-500" /> Added to your pull request.</p>
+          <p className="flex items-center gap-1.5 text-xs text-text-primary"><Check size={12} className="text-success" /> Added to your pull request.</p>
           <p className="text-2xs leading-relaxed text-text-tertiary">Press Sync to send it with your other changes.</p>
           <button className={cn(btnSecondary, "self-start")} onClick={onOpenSync}>Open Sync</button>
         </div>

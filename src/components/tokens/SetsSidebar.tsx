@@ -115,7 +115,7 @@ export default function SetsSidebar({
                   {sets.length > 1 && (
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleting(s); }}
-                      className="p-0.5 rounded text-text-tertiary hover:text-red-400 hover:bg-red-400/10"
+                      className="p-0.5 rounded text-text-tertiary hover:text-danger hover:bg-danger/10"
                       title="Delete set"
                       aria-label={`Delete ${s.name}`}
                     >

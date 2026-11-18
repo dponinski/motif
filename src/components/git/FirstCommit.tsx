@@ -40,7 +40,7 @@ export default function FirstCommit({ connection, onDone }: { connection: GitCon
         README.md on <span className="font-mono">{connection.defaultBranch}</span>, nothing else. This is the only change Motif makes straight to that branch.
       </p>
       {canSend ? (
-        <button onClick={() => void create()} disabled={busy} className={cn("flex h-8 items-center justify-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-60", "mt-3")}>
+        <button onClick={() => void create()} disabled={busy} className={cn("flex h-8 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-60", "mt-3")}>
           {busy && <Loader2 size={12} className="animate-spin" />} Create README.md on {connection.defaultBranch}
         </button>
       ) : (
@@ -49,7 +49,7 @@ export default function FirstCommit({ connection, onDone }: { connection: GitCon
           <p className="text-2xs text-text-tertiary">Sign in with GitHub (or add an access token in Source control) to write to the repository.</p>
         </div>
       )}
-      {error && <p className="mt-2 text-xs text-red-400" role="alert">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger" role="alert">{error}</p>}
     </div>
   );
 }

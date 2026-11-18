@@ -197,7 +197,7 @@ export default function KindPane({ kind, set, sets, addOnOpen = false }: { kind:
       <p className="text-sm font-medium text-text-primary">No {NOUN[kind]} tokens in {set.name} yet</p>
       <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">{kind === "composition" ? "Put tokens together as one: a text style from a font family, a size and a weight, or a shadow. Each part is a value of its own or another token." : "Add the first one below, or bring them in from the repository with Repo sync."}</p>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={() => setAdding("base")} className="rounded bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90">Add a {NOUN[kind]}</button>
+        <button type="button" onClick={() => setAdding("base")} className="rounded bg-blaze px-3 py-1.5 text-xs font-medium text-on-blaze hover:bg-blaze/90">Add a {NOUN[kind]}</button>
         {kind !== "composition" && <button type="button" onClick={() => setAddMany(true)} className="rounded border border-surface-border px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>}
       </div>
     </div>

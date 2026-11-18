@@ -47,7 +47,7 @@ function AliasPopover({ alias, count, onDone, className }: { alias: AliasBulk; c
               </label>
             ))}
           </div>
-          <button type="button" disabled={!chosen} onClick={go} className="mt-3 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Apply</button>
+          <button type="button" disabled={!chosen} onClick={go} className="mt-3 w-full rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Apply</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -85,7 +85,7 @@ function CopyThemePopover({ copy, count, onDone, className }: { copy: CopyThemeB
               <select aria-label="Copy into theme" value={to} onChange={(e) => setTo(e.target.value)} className={select}>{copy.themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
             </label>
           </div>
-          <button type="button" disabled={from === to} onClick={go} className="mt-3 w-full rounded bg-accent px-2 py-1 text-xs font-medium text-white disabled:opacity-40">Copy</button>
+          <button type="button" disabled={from === to} onClick={go} className="mt-3 w-full rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze disabled:opacity-40">Copy</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -183,7 +183,7 @@ export default function BulkBar({
         type="button"
         onClick={() => (confirm ? onDelete() : setConfirm(true))}
         title={linked > 0 ? `${linked} of these ${linked === 1 ? "is" : "are"} in the repository and will come back at the next sync${used > 0 ? `; ${used} used in its code` : ""}` : undefined}
-        className={cn(button, confirm ? "bg-red-500/15 text-red-400 hover:bg-red-500/25 hover:text-red-400" : "hover:text-red-400")}
+        className={cn(button, confirm ? "bg-danger/10 text-danger hover:bg-danger/10 hover:text-danger" : "hover:text-danger")}
       >
         <Trash2 size={12} /> {confirm ? `Delete ${picked.length}?` : "Delete"}
       </button>

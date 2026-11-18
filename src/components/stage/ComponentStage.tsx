@@ -396,7 +396,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
             onClick={() => useNavRequest.getState().ask("git")}
             aria-label="Sync"
             title={waiting > 0 ? `${waiting} file${waiting === 1 ? "" : "s"} waiting. Open Source control.` : "Everything is in the pull request. Open Source control."}
-            className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors", waiting > 0 ? "bg-accent text-white hover:bg-accent/90" : "bg-surface-subtle text-text-secondary hover:bg-surface-border")}
+            className={cn("flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors", waiting > 0 ? "bg-blaze text-on-blaze hover:bg-blaze/90" : "bg-surface-subtle text-text-secondary hover:bg-surface-border")}
           >
             <GitPullRequest size={11} /> {waiting > 0 ? `Sync (${waiting})` : "Synced"}
           </button>
@@ -421,14 +421,14 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
       </div>
 
       {stale.length > 0 && (
-        <div role="alert" className="flex flex-shrink-0 items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-500">
+        <div role="alert" className="flex flex-shrink-0 items-center gap-2 border-b border-sun/30 bg-sun-soft px-3 py-1.5 text-xs text-ink">
           <AlertTriangle size={12} className="flex-shrink-0" />
           <span className="min-w-0 flex-1 truncate" title={stale.join(", ")}>
             {stale.length === 1 ? `${stale[0]} has changed in the repository since you edited it.` : `${stale.length} edited files have changed in the repository since you edited them.`} They aren&apos;t sent until you give up those edits.
           </span>
           <button
             onClick={() => { useEditStore.getState().discard(stale); useLibraryStore.getState().dropDrafts(stale); }}
-            className="flex-shrink-0 rounded border border-amber-500/40 px-2 py-0.5 hover:bg-amber-500/15"
+            className="flex-shrink-0 rounded border border-sun/40 px-2 py-0.5 hover:bg-sun-soft"
             aria-label="Discard edits to changed files"
           >
             Discard those edits
@@ -438,12 +438,12 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
 
       <div className="relative min-h-0 flex-1">
         {unsupported.length > 0 ? (
-          <Notice icon={<AlertTriangle size={20} className="text-amber-500" />} title="This component can't be previewed yet">
+          <Notice icon={<AlertTriangle size={20} className="text-ink" />} title="This component can't be previewed yet">
             <ul className="list-disc text-left">{unsupported.map((r) => <li key={r}>{r}</li>)}</ul>
             <p className="mt-2 text-text-tertiary">Previews work for React with Tailwind v4, plain CSS or CSS-in-JS.</p>
           </Notice>
         ) : error ? (
-          <Notice icon={<AlertTriangle size={20} className="text-red-400" />} title="The preview couldn't be built">
+          <Notice icon={<AlertTriangle size={20} className="text-danger" />} title="The preview couldn't be built">
             <p className="break-words font-mono text-2xs">{error}</p>
           </Notice>
         ) : (
@@ -467,8 +467,8 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
                   </p>
                 )}
                 <div className="pointer-events-none absolute inset-x-3 top-14 flex flex-col gap-2">
-                  {editError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">The edit can&apos;t run: {editError}</p>}
-                  {runtimeError && <p className="pointer-events-auto break-words rounded border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-2xs text-red-400">{runtimeError}</p>}
+                  {editError && <p className="pointer-events-auto break-words rounded border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-2xs text-danger">The edit can&apos;t run: {editError}</p>}
+                  {runtimeError && <p className="pointer-events-auto break-words rounded border border-danger/30 bg-danger/10 px-3 py-2 font-mono text-2xs text-danger">{runtimeError}</p>}
                 </div>
                 {mode === "examples" && examples.list.some((e) => e.notes.length > 0) && (
                   <ul className="absolute inset-x-3 bottom-3 ml-24 flex max-h-24 flex-col gap-1 overflow-y-auto rounded bg-surface-raised/90 p-2 text-2xs text-text-tertiary">
@@ -520,7 +520,7 @@ function Stage({ component, source, connection }: { component: LibraryComponent;
           </StageCanvas>
         )}
       </div>
-      {ghost && <div className="pointer-events-none fixed z-[80] rounded bg-accent px-2 py-1 text-xs font-medium text-white shadow-lg" style={{ left: ghost.x + 12, top: ghost.y + 12 }}>{ghost.label}</div>}
+      {ghost && <div className="pointer-events-none fixed z-[80] rounded bg-accent px-2 py-1 text-xs font-medium text-on-cobalt shadow-lg" style={{ left: ghost.x + 12, top: ghost.y + 12 }}>{ghost.label}</div>}
       {tour.open && mode === "edit" && rendered && <Tour onClose={tour.close} />}
       {menu && <ElementMenu point={menu} info={edit.info} canPaste={actions.canPaste()} actions={actions.act} onClose={() => setMenu(null)} />}
     </div>
@@ -535,7 +535,7 @@ export default function ComponentStage() {
   if (!component || !source) return null;
   if (!connection || repoSlug(connection) !== source.repo) {
     return (
-      <Notice icon={<AlertTriangle size={20} className="text-amber-500" />} title={`Connect ${source.repo} to preview`}>
+      <Notice icon={<AlertTriangle size={20} className="text-ink" />} title={`Connect ${source.repo} to preview`}>
         Previews are read from the repository when you open them. Connect it in Source control.
       </Notice>
     );

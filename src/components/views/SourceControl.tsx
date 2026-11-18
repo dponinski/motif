@@ -31,7 +31,7 @@ import { discardChanges, editScope, useTokenChanges, useWorkActions } from "@/co
 // Everything between the project and its repository, in one place, the way an editor's source control is: pull what the repository has,
 // see what is waiting, push it as one pull request.
 
-const primary = "flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50";
+const primary = "flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-blaze px-3 text-xs font-medium text-on-blaze transition-colors hover:bg-blaze/90 disabled:opacity-50";
 const secondary = "flex h-7 items-center justify-center gap-1.5 rounded-md border border-surface-border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-subtle hover:text-text-primary disabled:opacity-50";
 
 // A new file is all additions: there is no empty line before it to show as taken away.
@@ -50,8 +50,8 @@ function FileRow({ file, stale, onDiscard }: { file: ChangedFile; stale: boolean
         <button className="flex min-w-0 flex-1 items-center gap-1 text-left" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={`Changes to ${file.path}`}>
           {open ? <ChevronDown size={11} className="flex-shrink-0 text-text-tertiary" /> : <ChevronRight size={11} className="flex-shrink-0 text-text-tertiary" />}
           <span className="truncate font-mono text-2xs text-text-secondary" title={file.path}>{file.path}</span>
-          {file.isNew && <span className="rounded bg-emerald-500/15 px-1 text-2xs text-emerald-500">new</span>}
-          {stale && <span className="rounded bg-amber-500/15 px-1 text-2xs text-amber-500">changed in repo</span>}
+          {file.isNew && <span className="rounded bg-mint-soft px-1 text-2xs text-success">new</span>}
+          {stale && <span className="rounded bg-sun-soft px-1 text-2xs text-ink">changed in repo</span>}
         </button>
         <button className="rounded p-1 text-text-tertiary hover:bg-surface-raised hover:text-text-primary" onClick={onDiscard} title="Give up these changes" aria-label={`Discard changes to ${file.path}`}>
           <Undo2 size={11} />
@@ -62,7 +62,7 @@ function FileRow({ file, stale, onDiscard }: { file: ChangedFile; stale: boolean
           {diff.hunks.map((hunk, i) => (
             <div key={i} className={cn(i > 0 && "mt-1 border-t border-dashed border-surface-border pt-1")}>
               {hunk.map((l, j) => (
-                <div key={j} className={cn("whitespace-pre px-2", l.type === "+" && "bg-emerald-500/10 text-emerald-500", l.type === "-" && "bg-red-400/10 text-red-400", l.type === " " && "text-text-tertiary")}>
+                <div key={j} className={cn("whitespace-pre px-2", l.type === "+" && "bg-mint-soft text-success", l.type === "-" && "bg-danger/10 text-danger", l.type === " " && "text-text-tertiary")}>
                   {l.type === " " ? "  " : `${l.type} `}{l.text}
                 </div>
               ))}
@@ -74,7 +74,7 @@ function FileRow({ file, stale, onDiscard }: { file: ChangedFile; stale: boolean
   );
 }
 
-const DOT: Record<string, string> = { none: "bg-surface-border", waiting: "bg-amber-500", syncing: "bg-accent", synced: "bg-emerald-500", attention: "bg-red-400" };
+const DOT: Record<string, string> = { none: "bg-surface-border", waiting: "bg-sun", syncing: "bg-accent", synced: "bg-mint", attention: "bg-danger" };
 
 // ── Not able to send yet ──────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ function AddToken({ connection }: { connection: GitConnection }) {
           {status === "signed-out" ? "Or use an access token. " : ""}Pushing (token changes and component edits) needs an access token with Contents and Pull requests read and write. It is stored in this browser only.
         </p>
         <input className="input-sm font-mono" type="password" placeholder="github_pat_…" aria-label="Access token" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-danger">{error}</p>}
         <button type="submit" className={secondary} disabled={busy || !token.trim()}>
           {busy && <Loader2 size={12} className="animate-spin" />}
           Add token
@@ -160,8 +160,8 @@ function ExportTokens({ connection, onDone }: { connection: GitConnection; onDon
   return (
     <section className="flex flex-col gap-1.5 rounded-md border border-surface-border p-2.5" aria-label="Tokens file" data-tokens-file>
       <p className="text-xs leading-relaxed text-text-secondary">This repository has no design tokens yet. The set “{set?.name}” goes in as a stylesheet of CSS variables when you push, or now, so a framework added next is planned on top of it.</p>
-      {wrongBranch && <p className="text-xs text-amber-500">Changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent.</p>}
-      {error && <p role="alert" className="break-words text-xs text-red-400">{error}</p>}
+      {wrongBranch && <p className="text-xs text-ink">Changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent.</p>}
+      {error && <p role="alert" className="break-words text-xs text-danger">{error}</p>}
       <button className={cn(secondary, "self-start")} onClick={create} disabled={busy || !set || wrongBranch}>
         {busy && <Loader2 size={12} className="animate-spin" />}
         Add to pull request
@@ -196,8 +196,8 @@ function ExportTokenFiles({ connection, onDone }: { connection: GitConnection; o
   return (
     <section className="flex flex-col gap-1.5 rounded-md border border-surface-border p-2.5" aria-label="Tokens file" data-tokens-file data-dtcg>
       <p className="text-xs leading-relaxed text-text-secondary">{link?.convert ? "This repository's tokens are variables in its stylesheets. They move into design tokens files, with the stylesheet they generate and what builds it, when you push, or now. The pull request shows a check that every value comes out the same." : "This repository has no design tokens yet. Every set goes in as design tokens files, with the stylesheet they come to and what builds it, when you push, or now."}</p>
-      {wrongBranch && <p className="text-xs text-amber-500">Changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent.</p>}
-      {error && <p role="alert" className="break-words text-xs text-red-400">{error}</p>}
+      {wrongBranch && <p className="text-xs text-ink">Changes go to a pull request from {connection.defaultBranch}, so these tokens aren&apos;t sent.</p>}
+      {error && <p role="alert" className="break-words text-xs text-danger">{error}</p>}
       <button className={cn(secondary, "self-start")} onClick={create} disabled={busy || !link || wrongBranch}>
         {busy && <Loader2 size={12} className="animate-spin" />}
         Add to pull request
@@ -245,7 +245,7 @@ function Details({ connection, onOpenReport }: { connection: GitConnection; onOp
             <p className="text-xs text-text-secondary">{stylingLine(result.stack)}</p>
             <p className="text-xs text-text-secondary">{result.tokens.length} tokens · {result.components.length} components</p>
             {result.components.length > 0 && <p className="text-2xs text-text-tertiary">{counts.editable} editable · {counts.partial} partly editable · {counts["view-only"]} view only</p>}
-            <p className="text-2xs text-text-tertiary">Scanned {result.ref}{result.warnings.length > 0 && <span className="text-amber-500"> · {result.warnings.length} warning{result.warnings.length === 1 ? "" : "s"}</span>}</p>
+            <p className="text-2xs text-text-tertiary">Scanned {result.ref}{result.warnings.length > 0 && <span className="text-ink"> · {result.warnings.length} warning{result.warnings.length === 1 ? "" : "s"}</span>}</p>
             <button className={cn(secondary, "mt-1 self-start")} onClick={onOpenReport}>Open report</button>
           </div>
         ) : <p className="text-xs text-text-tertiary">Not read yet: Pull reads it.</p>}
@@ -258,7 +258,7 @@ function Details({ connection, onOpenReport }: { connection: GitConnection; onOp
             {result ? "Rescan" : "Scan"}
           </button>
         </div>
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-danger">{error}</p>}
       </div>
     </details>
   );
@@ -342,7 +342,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
         </button>
       </div>
       {behind && !pulling && <p className="-mt-1.5 text-2xs text-text-tertiary" data-behind-note>The repository has changed since it was read: Pull takes it in.</p>}
-      {notice && <p className={cn("-mt-1.5 text-2xs leading-relaxed", notice.ok ? "text-text-tertiary" : "text-red-400")} role="status" data-pull-notice>{notice.text}</p>}
+      {notice && <p className={cn("-mt-1.5 text-2xs leading-relaxed", notice.ok ? "text-text-tertiary" : "text-danger")} role="status" data-pull-notice>{notice.text}</p>}
 
       {!canSend && <AddToken connection={connection} />}
       {!connection.token && account === "signed-in" && canSend && <p className="text-2xs leading-relaxed text-text-tertiary" data-signed-in>Signed in with GitHub{login ? ` as ${login}` : ""}: pull requests are opened as you, through the Motif GitHub App.</p>}
@@ -352,9 +352,9 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
         <p className="text-xs leading-relaxed text-text-primary">{status.text}</p>
       </div>
 
-      {unsaved && <p role="alert" className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-500">{unsaved}</p>}
-      {runtime.notice && <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-500">{runtime.notice}</p>}
-      {tokensNote && <p role="status" className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-500">{tokensNote}</p>}
+      {unsaved && <p role="alert" className="rounded-md border border-sun/30 bg-sun-soft px-2 py-1.5 text-xs text-ink">{unsaved}</p>}
+      {runtime.notice && <p role="status" className="rounded-md border border-mint/30 bg-mint-soft px-2 py-1.5 text-xs text-success">{runtime.notice}</p>}
+      {tokensNote && <p role="status" className="rounded-md border border-mint/30 bg-mint-soft px-2 py-1.5 text-xs text-success">{tokensNote}</p>}
 
       {work?.pr && (
         <a href={work.pr.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-accent hover:underline">
@@ -406,7 +406,7 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
 
       {empty && <FirstCommit connection={connection} onDone={() => setEmpty(false)} />}
 
-      {runtime.error && <p role="alert" className="break-words text-xs text-red-400">{runtime.error}</p>}
+      {runtime.error && <p role="alert" className="break-words text-xs text-danger">{runtime.error}</p>}
 
       <div className="flex flex-wrap gap-2">
         {mustUpdate && (
@@ -417,10 +417,10 @@ export default function SourceControl({ onOpenReport }: { onOpenReport: () => vo
         {files.length > 0 && !confirming && <button className={secondary} onClick={() => setConfirming(true)}>Discard changes</button>}
       </div>
       {confirming && (
-        <div role="alertdialog" aria-label="Discard all changes" className="flex flex-col gap-2 rounded-md border border-red-400/30 bg-red-400/10 p-2">
+        <div role="alertdialog" aria-label="Discard all changes" className="flex flex-col gap-2 rounded-md border border-danger/30 bg-danger/10 p-2">
           <p className="text-xs text-text-primary">Give up all {files.length} changed file{files.length === 1 ? "" : "s"}? The next push puts back the originals in the pull request.</p>
           <div className="flex gap-2">
-            <button className="h-6 rounded bg-red-400 px-2 text-xs font-medium text-white" onClick={() => { discardChanges(files.map((f) => f.path)); setConfirming(false); }}>Discard all</button>
+            <button className="h-6 rounded bg-danger px-2 text-xs font-medium text-text-inverse" onClick={() => { discardChanges(files.map((f) => f.path)); setConfirming(false); }}>Discard all</button>
             <button className="h-6 rounded border border-surface-border px-2 text-xs text-text-secondary" onClick={() => setConfirming(false)}>Keep</button>
           </div>
         </div>

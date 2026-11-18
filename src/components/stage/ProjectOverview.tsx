@@ -16,7 +16,7 @@ import { useReadStatus } from "@/store/read-status";
 import NewComponentDialog from "./NewComponentDialog";
 import { useReadRepository } from "./useReadRepository";
 
-const DOT: Record<Support, string> = { editable: "bg-emerald-500", partial: "bg-amber-500", "view-only": "bg-text-tertiary" };
+const DOT: Record<Support, string> = { editable: "bg-mint", partial: "bg-sun", "view-only": "bg-text-tertiary" };
 const button = "flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors disabled:opacity-60";
 
 // What the centre shows before a component is opened: the design system's components to open one from, or, in a
@@ -58,7 +58,7 @@ export default function ProjectOverview() {
           {error ? (
             <>
               <h1 className="text-lg font-semibold text-text-primary">The repository couldn&apos;t be read</h1>
-              <p className="mt-1 break-words text-xs leading-relaxed text-red-400" role="alert">{error}</p>
+              <p className="mt-1 break-words text-xs leading-relaxed text-danger" role="alert">{error}</p>
               <div className="mt-4 flex items-center gap-2">
                 <button onClick={() => void read()} className={cn(button, "border border-surface-border text-text-secondary hover:bg-surface-subtle hover:text-text-primary")}>Try again</button>
                 <SignInButton />

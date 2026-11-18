@@ -46,7 +46,7 @@ function EmailForm() {
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
       <input className="input-sm" type="email" required placeholder="you@example.com" aria-label="Email address" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-      {error && <p className="text-xs text-red-400" role="alert">{error}</p>}
+      {error && <p className="text-xs text-danger" role="alert">{error}</p>}
       <button type="submit" disabled={state === "sending" || !email.trim()} className={`${providerButton} disabled:opacity-60`}>
         {state === "sending" ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />} Email me a sign-in link
       </button>
@@ -75,7 +75,7 @@ export default function AuthDialog() {
           <div className="flex flex-col gap-2.5">
             <p className="text-xs leading-relaxed text-text-secondary">Signing in saves your projects to your account, lets you share them with a team, and lets you use the assistant. Only people on the list of who may sign in, or invited to a team, can.</p>
             {nobodyAllowed && (
-              <p className="rounded-md border border-amber-500/40 px-3 py-2 text-xs leading-relaxed text-amber-500" role="alert">
+              <p className="rounded-md border border-sun/40 px-3 py-2 text-xs leading-relaxed text-ink" role="alert">
                 Nobody is allowed to sign in yet: whoever runs this site needs to set <span className="font-mono">ALLOWED_EMAILS</span>.
               </p>
             )}

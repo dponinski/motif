@@ -47,7 +47,7 @@ export function InlineName({ row, taken, onRename, className }: { row: Row; take
         if (e.key === "Escape") { e.stopPropagation(); setEditing(false); }
       }}
       title={bad ? "There is a token with this name already" : undefined}
-      className={cn("min-w-0 rounded border bg-surface-base px-1 outline-none", bad ? "border-red-400" : "border-accent", className)}
+      className={cn("min-w-0 rounded border bg-surface-base px-1 outline-none", bad ? "border-danger" : "border-accent", className)}
     />
   );
 }
@@ -80,7 +80,7 @@ export function CommitInput({ value, onCommit, label, className, mono, frame, in
       }}
       title={bad ? invalidHint : undefined}
       spellCheck={false}
-      className={cn("min-w-0 rounded border bg-transparent px-1.5 py-0.5 text-xs text-text-primary outline-none transition-colors hover:border-surface-border focus:border-accent", frame ? "border-surface-border" : "border-transparent", mono && "font-mono", className, bad && "border-red-400 hover:border-red-400 focus:border-red-400")}
+      className={cn("min-w-0 rounded border bg-transparent px-1.5 py-0.5 text-xs text-text-primary outline-none transition-colors hover:border-surface-border focus:border-accent", frame ? "border-surface-border" : "border-transparent", mono && "font-mono", className, bad && "border-danger hover:border-danger focus:border-danger")}
     />
   );
 }
@@ -144,10 +144,10 @@ export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
             if (e.key === "Enter") { e.preventDefault(); submit(); }
             if (e.key === "Escape") { e.stopPropagation(); onClose(); }
           }}
-          className={cn("rounded border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent", f.width ?? "w-40", f.mono && "font-mono", bad === f.key ? "border-red-400" : "border-surface-border")}
+          className={cn("rounded border bg-surface-base px-1.5 py-1 text-xs text-text-primary outline-none focus:border-accent", f.width ?? "w-40", f.mono && "font-mono", bad === f.key ? "border-danger" : "border-surface-border")}
         />
       ))}
-      <button type="button" onClick={submit} className="rounded bg-accent px-2 py-1 text-xs font-medium text-white hover:bg-accent/90">Add</button>
+      <button type="button" onClick={submit} className="rounded bg-blaze px-2 py-1 text-xs font-medium text-on-blaze hover:bg-blaze/90">Add</button>
       <button type="button" onClick={onClose} className="rounded px-2 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary">Done</button>
       <span className="text-2xs text-text-tertiary">Enter adds it and stays for the next</span>
     </div>

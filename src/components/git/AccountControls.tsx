@@ -84,7 +84,7 @@ export function AccountNotices() {
   if (!notice && ended !== "expired") return null;
   return (
     <div className="pointer-events-none fixed inset-x-0 top-2 z-[60] flex justify-center px-4">
-      <div role="alert" className="pointer-events-auto flex max-w-lg items-center gap-3 rounded-md border border-amber-500/40 bg-surface-raised px-3 py-2 text-xs text-text-primary shadow-lg">
+      <div role="alert" className="pointer-events-auto flex max-w-lg items-center gap-3 rounded-md border border-sun/40 bg-surface-raised px-3 py-2 text-xs text-text-primary shadow-lg">
         <span className="min-w-0">{notice ?? "Your GitHub sign-in has expired."}</span>
         {(ended === "expired" || notice) && (
           <button

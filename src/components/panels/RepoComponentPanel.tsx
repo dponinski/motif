@@ -18,8 +18,8 @@ import PropsEditor from "./PropsEditor";
 const ElementInspector = dynamic(() => import("./ElementInspector"), { loading: () => null });
 
 const SUPPORT_STYLE: Record<Support, string> = {
-  editable: "bg-emerald-500/15 text-emerald-500",
-  partial: "bg-amber-500/15 text-amber-500",
+  editable: "bg-mint-soft text-success",
+  partial: "bg-sun-soft text-ink",
   "view-only": "bg-surface-subtle text-text-tertiary",
 };
 const SUPPORT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
@@ -29,7 +29,7 @@ export function Row({ control, value, onChange }: { control: PropControl; value:
   const kind = control.control;
   const label = (
     <label className="flex flex-col" title={description ?? undefined}>
-      <span className="truncate font-mono text-xs text-text-secondary">{name}{required && <span className="text-red-400"> *</span>}</span>
+      <span className="truncate font-mono text-xs text-text-secondary">{name}{required && <span className="text-danger"> *</span>}</span>
       {defaultValue !== null && <span className="text-2xs text-text-tertiary">default {defaultValue}</span>}
     </label>
   );
@@ -126,7 +126,7 @@ function PropsContent({ component }: { component: LibraryComponent }) {
           {component.hooks.length > 0 && (
             <p className="mb-1.5 text-2xs text-text-tertiary">Uses <span className="font-mono text-text-secondary">{component.hooks.join(", ")}</span></p>
           )}
-          {component.notes.length > 0 && <ul className="list-disc pl-4 text-2xs leading-relaxed text-amber-500">{component.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
+          {component.notes.length > 0 && <ul className="list-disc pl-4 text-2xs leading-relaxed text-ink">{component.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
         </div>
       )}
     </>

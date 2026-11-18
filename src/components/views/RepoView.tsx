@@ -16,8 +16,8 @@ import { errorMessage, useGitHost } from "@/components/git/hooks";
 type Tab = "setup" | "tokens" | "components" | "warnings";
 
 const SUPPORT_STYLE: Record<Support, string> = {
-  editable: "bg-emerald-500/15 text-emerald-500",
-  partial: "bg-amber-500/15 text-amber-500",
+  editable: "bg-mint-soft text-success",
+  partial: "bg-sun-soft text-ink",
   "view-only": "bg-surface-subtle text-text-tertiary",
 };
 const SUPPORT_LABEL: Record<Support, string> = { editable: "Editable", partial: "Partly editable", "view-only": "View only" };
@@ -60,7 +60,7 @@ function Setup({ a }: { a: RepoAnalysis }) {
   return (
     <dl className="mx-auto max-w-3xl px-6 py-4">
       <Row label="Repository">{a.repo} <span className="text-text-tertiary">· {a.ref}</span></Row>
-      <Row label="Stack">{stackLine(stack)}{!stack.supported && <span className="ml-2 text-amber-500">Not supported yet</span>}</Row>
+      <Row label="Stack">{stackLine(stack)}{!stack.supported && <span className="ml-2 text-ink">Not supported yet</span>}</Row>
       <Row label="Styling">
         <p>{stylingLine(stack)}</p>
         {stack.styling.evidence.length > 0 && (
@@ -195,7 +195,7 @@ function ComponentCard({ c }: { c: RepoComponent }) {
                 <tbody>
                   {c.props.map((p) => (
                     <tr key={p.name} className="border-t border-surface-border-subtle align-top">
-                      <td className="py-1.5 pr-3 font-mono text-text-primary">{p.name}{p.required && <span className="text-red-400" title="Required"> *</span>}</td>
+                      <td className="py-1.5 pr-3 font-mono text-text-primary">{p.name}{p.required && <span className="text-danger" title="Required"> *</span>}</td>
                       <td className="py-1.5 pr-3 font-mono text-2xs text-text-secondary">{p.type}</td>
                       <td className="py-1.5 pr-3 font-mono text-2xs text-text-secondary">{p.default ?? "—"}</td>
                       <td className="py-1.5 text-text-secondary">{p.description ?? ""}</td>
@@ -213,7 +213,7 @@ function ComponentCard({ c }: { c: RepoComponent }) {
             {c.root && <span>Renders <span className="font-mono text-text-secondary">&lt;{c.root}&gt;</span></span>}
             {c.hooks.length > 0 && <span>· uses {c.hooks.map((h) => <span key={h} className={cn(chip, "mr-1 bg-surface-subtle font-mono text-text-secondary")}>{h}</span>)}</span>}
           </div>
-          {c.notes.length > 0 && <ul className="list-disc pl-4 text-amber-500">{c.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
+          {c.notes.length > 0 && <ul className="list-disc pl-4 text-ink">{c.notes.map((n) => <li key={n}>{n}</li>)}</ul>}
         </div>
       )}
     </div>
@@ -285,7 +285,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
         <span className="text-sm font-semibold text-text-primary">Repository</span>
         <span className="truncate text-xs text-text-tertiary">{analysis.repo} · {analysis.ref}</span>
         <div className="flex-1" />
-        {error && <span className="text-xs text-red-400">{error}</span>}
+        {error && <span className="text-xs text-danger">{error}</span>}
         {importCount > 0 && (
           <button
             onClick={() => setImported(useLibraryStore.getState().importComponents(analysis))}
@@ -324,7 +324,7 @@ function Report({ analysis, connection, onClose }: { analysis: RepoAnalysis; con
         {tab === "tokens" && <Tokens a={analysis} />}
         {tab === "components" && <Components a={analysis} />}
         {tab === "warnings" && (
-          <ul className="mx-auto max-w-3xl list-disc px-10 py-4 text-xs text-amber-500">
+          <ul className="mx-auto max-w-3xl list-disc px-10 py-4 text-xs text-ink">
             {analysis.warnings.map((w) => <li key={w} className="py-1">{w}</li>)}
           </ul>
         )}

@@ -19,13 +19,13 @@ const primary = `${button} bg-accent/15 hover:bg-accent/25 text-accent border-ac
 const quiet = `${button} border-surface-border text-text-secondary hover:text-text-primary hover:bg-surface-subtle`;
 
 function Outcome({ text }: { text: string }) {
-  return <p className="flex items-start gap-1.5 text-2xs leading-relaxed text-text-secondary" role="status" data-outcome><Check size={11} className="mt-0.5 flex-shrink-0 text-emerald-500" /> <span>{text}</span></p>;
+  return <p className="flex items-start gap-1.5 text-2xs leading-relaxed text-text-secondary" role="status" data-outcome><Check size={11} className="mt-0.5 flex-shrink-0 text-success" /> <span>{text}</span></p>;
 }
 
 function Notes({ items }: { items: string[] }) {
   if (items.length === 0) return null;
   return (
-    <ul className="list-disc pl-4 text-2xs leading-relaxed text-amber-500">
+    <ul className="list-disc pl-4 text-2xs leading-relaxed text-ink">
       {items.slice(0, 6).map((n, i) => <li key={i}>{n}</li>)}
       {items.length > 6 && <li>and {items.length - 6} more</li>}
     </ul>
@@ -112,13 +112,13 @@ export function EditProposal({ message }: { message: AIMessage }) {
                 <span className="font-mono text-2xs text-text-tertiary">&lt;{row.tag}&gt;</span>
                 <span>{row.label}</span>
                 <span className="font-mono text-2xs">{row.before ?? "none"} <span className="text-text-tertiary">→</span> <span className="text-text-primary">{row.after ?? "none"}</span></span>
-                {raw && <span className="text-2xs text-amber-500">not a token</span>}
+                {raw && <span className="text-2xs text-ink">not a token</span>}
               </li>
             );
           })}
         </ul>
       ) : !problem && <p className="flex items-center gap-1.5 text-2xs text-text-tertiary"><Loader2 size={10} className="animate-spin" /> Reading the component…</p>}
-      {problem && <p className="text-2xs leading-relaxed text-amber-500" role="alert">{problem}</p>}
+      {problem && <p className="text-2xs leading-relaxed text-ink" role="alert">{problem}</p>}
       <Notes items={parsed.rejected} />
       <div className="flex gap-1.5">
         <button onClick={apply} disabled={busy || !rows} className={primary}>
@@ -184,7 +184,7 @@ export function TokenProposal({ message }: { message: AIMessage }) {
         })}
       </ul>
       <Notes items={parsed.rejected} />
-      {!target && <p className="text-2xs text-amber-500" role="alert">There is no token set to add them to.</p>}
+      {!target && <p className="text-2xs text-ink" role="alert">There is no token set to add them to.</p>}
       <div className="flex gap-1.5">
         <button onClick={apply} disabled={!preview || preview.added === 0} className={primary}><Wand2 size={11} /> Add {preview?.added ?? lines.length} token{(preview?.added ?? lines.length) === 1 ? "" : "s"}</button>
         <button onClick={() => setOutcome(message.id, "Dismissed.")} className={quiet}>Dismiss</button>

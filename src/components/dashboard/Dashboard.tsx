@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { useShallow } from "zustand/react/shallow";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -115,7 +116,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
                 </button>
               ))}
               {canDelete && (
-                <button className="w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-400/10" onClick={() => { setConfirming(true); setMenu(false); }}>
+                <button className="w-full px-3 py-1.5 text-left text-danger hover:bg-danger/10" onClick={() => { setConfirming(true); setMenu(false); }}>
                   Delete
                 </button>
               )}
@@ -130,7 +131,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
           : "Not scanned yet"}
       </p>
       <p className="text-[11px] text-text-tertiary" data-updated>Updated {formatDate(project.updatedAt)}{project.teamId && project.updatedBy ? ` · by ${project.updatedBy}` : ""}</p>
-      {moveError && <p className="text-[11px] text-red-400" role="alert">{moveError}</p>}
+      {moveError && <p className="text-[11px] text-danger" role="alert">{moveError}</p>}
 
       {confirming && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-surface-raised/95 p-4 text-center" onClick={(e) => e.stopPropagation()}>
@@ -138,7 +139,7 @@ function ProjectCard({ project, onOpen }: { project: Project; onOpen: () => void
           <p className="text-[11px] text-text-tertiary">{project.teamId ? "Every member loses it. The repository is not touched." : saved ? "It is removed from all your devices. The repository is not touched." : "The repository is not touched. Unsent edits to it are kept."}</p>
           <div className="flex gap-2">
             <button className="h-7 rounded-md border border-surface-border px-3 text-[12px] text-text-secondary hover:bg-surface-subtle" onClick={() => setConfirming(false)}>Cancel</button>
-            <button className="h-7 rounded-md bg-red-500 px-3 text-[12px] font-medium text-white hover:bg-red-500/90" onClick={() => remove(project.id)}>Delete</button>
+            <button className="h-7 rounded-md bg-danger px-3 text-[12px] font-medium text-text-inverse hover:bg-danger/90" onClick={() => remove(project.id)}>Delete</button>
           </div>
         </div>
       )}
@@ -202,12 +203,7 @@ export default function Dashboard() {
       <AccountNotices />
       <AuthDialog />
       <header data-bar className="flex items-center justify-between h-bar px-6 border-b border-surface-border-subtle">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-accent flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-[11px] font-bold leading-none">M</span>
-          </div>
-          <span className="text-[14px] font-semibold tracking-tight text-text-primary">Motif</span>
-        </div>
+        <Logo size={26} />
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 bg-surface-subtle rounded p-0.5">
             {themeOptions.map(({ mode, icon, label }) => (
@@ -238,14 +234,14 @@ export default function Dashboard() {
               <div key={i.id} className="flex items-center gap-3 rounded-lg border border-accent/40 bg-surface-raised px-4 py-3" data-invitation={i.teamName}>
                 <p className="min-w-0 flex-1 text-[12px] text-text-primary">{i.invitedBy ?? "Someone"} invited you to the team <span className="font-semibold">{i.teamName}</span>.</p>
                 <button
-                  className="h-7 rounded-md bg-accent px-3 text-[12px] font-medium text-white hover:bg-accent/90"
+                  className="h-7 rounded-md bg-blaze px-3 text-[12px] font-medium text-on-blaze hover:bg-blaze/90"
                   onClick={async () => { setInviteError(null); const r = await accept({ inviteId: i.id }); if (r.error) setInviteError(r.error); else void useSync.getState().sync(); }}
                 >
                   Join
                 </button>
               </div>
             ))}
-            {inviteError && <p className="text-[12px] text-red-400" role="alert">{inviteError}</p>}
+            {inviteError && <p className="text-[12px] text-danger" role="alert">{inviteError}</p>}
           </section>
         )}
         {sorted.length === 0 && teams.length === 0 ? (
@@ -259,7 +255,7 @@ export default function Dashboard() {
               </div>
               <NewProjectDialog
                 trigger={
-                  <button className="bg-accent hover:bg-accent/90 text-white text-[13px] font-medium px-5 py-2 rounded-lg transition-colors">
+                  <button className="bg-blaze hover:bg-blaze/90 text-on-blaze text-[13px] font-medium px-5 py-2 rounded-lg transition-colors">
                     Connect a repository
                   </button>
                 }

@@ -269,7 +269,7 @@ function Sidebar({
                 <span className="hidden flex-shrink-0 items-center pr-1 group-hover:flex">
                   <button title="Move up" disabled={i === 0} onClick={() => movePage(page.id, -1)} className="rounded p-0.5 hover:bg-surface-overlay disabled:opacity-30"><ArrowUp size={10} /></button>
                   <button title="Move down" disabled={i === section.pages.length - 1} onClick={() => movePage(page.id, 1)} className="rounded p-0.5 hover:bg-surface-overlay disabled:opacity-30"><ArrowDown size={10} /></button>
-                  <button title="Delete page" onClick={() => deletePage(page.id)} className="rounded p-0.5 hover:bg-surface-overlay hover:text-red-400"><Trash2 size={10} /></button>
+                  <button title="Delete page" onClick={() => deletePage(page.id)} className="rounded p-0.5 hover:bg-surface-overlay hover:text-danger"><Trash2 size={10} /></button>
                 </span>
               )}
             </div>
