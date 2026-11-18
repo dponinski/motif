@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
-import { Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDesignSystemStore, type TokenSet, type TokenTheme } from "@/store/design-system";
 import { stylesheetLink, useGitStore } from "@/store/git";
@@ -11,10 +11,14 @@ import { editTokens } from "@/store/token-history";
 import { targetOf } from "@/lib/tokens/alias-colors";
 import ConfirmDelete from "./ConfirmDelete";
 
-// The themes of the open set, over its colors (the only tokens that differ by theme): which one is shown (or all of them side by side),
-// and making, renaming, copying and deleting them. Each of those is a step of the Tokens screen's undo.
+// The head of the table of tokens: what each column is. The themes of the set are columns (each with a menu to rename, copy, use in the editor
+// or delete it), and a theme is added from the head, after the last of them.
 
-export type ThemeShown = "all" | string;
+// One template for the head and every row, so the cells line up: a handle and a checkbox, the name, a value for each theme, the place a theme
+// is added from, what the token is, and its state with its actions.
+export function tableColumns(themes: number): { template: string; minWidth: number } {
+  return { template: `16px 24px minmax(150px,1.3fr) repeat(${themes}, minmax(190px,1fr)) 44px minmax(190px,auto) minmax(150px,auto)`, minWidth: 16 + 24 + 150 + themes * 190 + 44 + 190 + 150 + 8 * (themes + 6) + 32 };
+}
 
 const item = "flex cursor-pointer items-center gap-2 px-3 py-1.5 outline-none data-[highlighted]:bg-surface-subtle data-[disabled]:cursor-default data-[disabled]:opacity-40";
 
@@ -62,38 +66,92 @@ function useRepoTheme(set: TokenSet, theme: TokenTheme): { key: string | null } 
   return synced ? { key } : null;
 }
 
-function Segment({ set, theme, on, onShow, onRename, onDuplicate, onDelete }: {
-  set: TokenSet; theme: TokenTheme; on: boolean; onShow: () => void; onRename: () => void; onDuplicate: () => void; onDelete: () => void;
-}) {
+function ThemeCell({ set, theme, onRename, onDuplicate, onDelete }: { set: TokenSet; theme: TokenTheme; onRename: () => void; onDuplicate: () => void; onDelete: () => void }) {
+  const ds = () => useDesignSystemStore.getState();
   const [open, setOpen] = useState(false);
   const only = set.themes.length === 1;
   const repo = useRepoTheme(set, theme);
+  const active = (set.activeThemeId ?? set.themes[0].id) === theme.id;
   return (
-    <span className={cn("group/theme flex items-center rounded", on ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")} data-theme-segment={theme.id} onContextMenu={(e) => { e.preventDefault(); setOpen(true); }}>
-      <button type="button" aria-pressed={on} onClick={onShow} onDoubleClick={onRename} className="rounded-l px-2 min-h-11 py-1 text-xs" title={`Show ${theme.name}. Double-click to rename`}>{theme.name}</button>
+    <div className="group/theme flex min-w-0 items-center gap-1" role="columnheader" data-theme-segment={theme.id} data-theme-open={active || undefined} onContextMenu={(e) => { e.preventDefault(); setOpen(true); }}>
+      <button type="button" onDoubleClick={onRename} className="min-w-0 truncate rounded px-1 text-left text-xs font-semibold text-text-primary" title={`${theme.name}${active ? " (the theme the editor shows)" : ""}. Double-click to rename`}>{theme.name}</button>
+      {active && set.themes.length > 1 && <span aria-label="Shown in the editor" title="The editor shows this theme" className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent" />}
       {repo && (
         <span
           data-theme-repo={repo.key ?? "motif-only"}
           title={repo.key ? `In the repository this theme is "${repo.key}"` : "Only in Motif: it goes into the repository at the next Push"}
-          className={cn("-ml-0.5 mr-0.5 rounded px-1 text-2xs leading-4", repo.key ? "bg-surface-subtle text-text-tertiary" : "border border-dashed border-surface-border text-text-tertiary")}
+          className={cn("flex-shrink-0 rounded px-1 text-2xs font-normal leading-4", repo.key ? "bg-surface-subtle text-text-tertiary" : "border border-dashed border-surface-border text-text-tertiary")}
         >{repo.key ?? "Motif only"}</span>
       )}
       <Menu.Root open={open} onOpenChange={setOpen}>
         <Menu.Trigger asChild>
-          <button type="button" aria-label={`Theme menu: ${theme.name}`} className={cn("rounded-r px-1 min-h-11 py-1 text-text-tertiary hover:text-text-primary focus-visible:opacity-100", on || open ? "opacity-100" : "opacity-0 group-hover/theme:opacity-100")}>
-            <MoreHorizontal size={11} />
+          <button type="button" aria-label={`Theme menu: ${theme.name}`} className={cn("rounded px-1 min-h-11 py-1 text-text-tertiary hover:text-text-primary focus-visible:opacity-100", open ? "opacity-100" : "opacity-60 group-hover/theme:opacity-100")}>
+            <MoreHorizontal size={12} />
           </button>
         </Menu.Trigger>
         <Menu.Portal>
-          <Menu.Content align="start" sideOffset={4} className="z-50 min-w-[170px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-xs text-text-secondary shadow-lg">
+          <Menu.Content align="start" sideOffset={4} className="z-50 min-w-[190px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-xs text-text-secondary shadow-lg">
             <Menu.Item className={item} onSelect={onRename}><Pencil size={11} /> Rename</Menu.Item>
             <Menu.Item className={item} onSelect={onDuplicate}><Copy size={11} /> Duplicate</Menu.Item>
+            <Menu.Item className={item} disabled={active} onSelect={() => ds().setActiveTheme(set.id, theme.id)}><Check size={11} /> {active ? "Shown in the editor" : "Show in the editor"}</Menu.Item>
             <Menu.Separator className="my-1 h-px bg-surface-border" />
             <Menu.Item className={cn(item, "text-danger")} disabled={only} onSelect={onDelete} title={only ? "A set keeps at least one theme" : undefined}><Trash2 size={11} /> Delete{only ? " (the only theme)" : ""}</Menu.Item>
           </Menu.Content>
         </Menu.Portal>
       </Menu.Root>
-    </span>
+    </div>
+  );
+}
+
+export default function TableHeader({ set, columns, onRegroup, canRegroup }: { set: TokenSet; columns: ReturnType<typeof tableColumns>; onRegroup: () => void; canRegroup: boolean }) {
+  const ds = () => useDesignSystemStore.getState();
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<TokenTheme | null>(null);
+  const taken = (except?: string) => (name: string) => nameTaken(set.themes, name, except);
+  const openTheme = set.activeThemeId ?? set.themes[0].id;
+  const cellClass = "text-2xs font-semibold uppercase tracking-wider text-text-tertiary";
+  return (
+    <div data-theme-bar data-table-head role="row" aria-label="Columns" style={{ gridTemplateColumns: columns.template }} className="grid flex-shrink-0 items-center gap-x-2 border-b border-surface-border bg-surface-raised px-4 py-1">
+      <span />
+      <span />
+      <span className={cellClass} role="columnheader">Name</span>
+      {set.themes.map((t) => renaming === t.id ? (
+        <NameField key={t.id} initial={t.name} label={`Name of ${t.name}`} taken={taken(t.id)} onCancel={() => setRenaming(null)} onDone={(name) => { editTokens(() => ds().renameTheme(set.id, t.id, name)); setRenaming(null); }} />
+      ) : (
+        <ThemeCell
+          key={t.id}
+          set={set}
+          theme={t}
+          onRename={() => setRenaming(t.id)}
+          onDuplicate={() => { editTokens(() => { const id = ds().duplicateTheme(set.id, t.id); ds().setActiveTheme(set.id, id); return id; }); }}
+          onDelete={() => setDeleting(t)}
+        />
+      ))}
+      <div className="flex justify-center">
+        <AddTheme set={set} startFrom={openTheme} onAdd={(name, from, dark) => { editTokens(() => { const id = ds().addThemeToSet(set.id, name, { from, dark }); ds().setActiveTheme(set.id, id); return id; }); }} />
+      </div>
+      <span className={cellClass} role="columnheader">Type</span>
+      <div className="flex justify-end">
+        <Menu.Root>
+          <Menu.Trigger asChild>
+            <button type="button" aria-label="More table actions" className="rounded px-1.5 min-h-11 py-1 text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><MoreHorizontal size={14} /></button>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Content align="end" sideOffset={4} className="z-50 min-w-[200px] overflow-hidden rounded-md border border-surface-border bg-surface-raised py-1 text-xs text-text-secondary shadow-lg">
+              <Menu.Item className={item} disabled={!canRegroup} onSelect={onRegroup} title="Put each color in the group its name says: a ramp like gray-50 … gray-900 is one group, a pair like primary and primary-foreground another">Regroup colors by name</Menu.Item>
+            </Menu.Content>
+          </Menu.Portal>
+        </Menu.Root>
+      </div>
+      {deleting && (
+        <DeleteTheme
+          set={set}
+          theme={deleting}
+          onClose={() => setDeleting(null)}
+          onDelete={() => { const gone = deleting; setDeleting(null); editTokens(() => ds().deleteThemeFromSet(set.id, gone.id)); }}
+        />
+      )}
+    </div>
   );
 }
 
@@ -120,7 +178,7 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
   return (
     <Popover.Root open={open} onOpenChange={reset}>
       <Popover.Trigger asChild>
-        <button type="button" aria-label="Add theme" title="Add a theme: it starts as a copy of one you choose, or a dark version of it" className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><Plus size={11} /> Add</button>
+        <button type="button" aria-label="Add theme" title="Add a theme: it starts as a copy of one you choose, or a dark version of it" className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-xs text-text-tertiary hover:bg-surface-subtle hover:text-text-primary"><Plus size={14} /></button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content align="start" sideOffset={6} aria-label="New theme" className="z-50 w-72 rounded-lg border border-surface-border bg-surface-raised p-3 shadow-xl">
@@ -154,51 +212,6 @@ function AddTheme({ set, startFrom, onAdd }: { set: TokenSet; startFrom: string;
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
-  );
-}
-
-export default function ThemeBar({ set, shown, onShow }: { set: TokenSet; shown: ThemeShown; onShow: (id: ThemeShown) => void }) {
-  const ds = () => useDesignSystemStore.getState();
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<TokenTheme | null>(null);
-  const taken = (except?: string) => (name: string) => nameTaken(set.themes, name, except);
-
-  return (
-    <div data-theme-bar role="toolbar" aria-label="Themes" className="flex flex-shrink-0 items-center gap-2 border-b border-surface-border px-4 py-1.5">
-      <span className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">Themes</span>
-      <div role="group" aria-label="Theme shown" className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5">
-        {set.themes.length > 1 && (
-          <button type="button" aria-label="All themes" aria-pressed={shown === "all"} onClick={() => onShow("all")} title="Show every theme side by side" className={cn("rounded px-2 min-h-11 py-1 text-xs", shown === "all" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}>All</button>
-        )}
-        {set.themes.map((t) => renaming === t.id ? (
-          <NameField key={t.id} initial={t.name} label={`Name of ${t.name}`} taken={taken(t.id)} onCancel={() => setRenaming(null)} onDone={(name) => { editTokens(() => ds().renameTheme(set.id, t.id, name)); setRenaming(null); }} />
-        ) : (
-          <Segment
-            key={t.id}
-            set={set}
-            theme={t}
-            on={shown === t.id || (set.themes.length === 1)}
-            onShow={() => onShow(t.id)}
-            onRename={() => setRenaming(t.id)}
-            onDuplicate={() => { const id = editTokens(() => ds().duplicateTheme(set.id, t.id)); onShow(id); }}
-            onDelete={() => setDeleting(t)}
-          />
-        ))}
-      </div>
-      <AddTheme
-        set={set}
-        startFrom={shown !== "all" ? shown : set.activeThemeId ?? set.themes[0].id}
-        onAdd={(name, from, dark) => { const id = editTokens(() => ds().addThemeToSet(set.id, name, { from, dark })); onShow(id); }}
-      />
-      {deleting && (
-        <DeleteTheme
-          set={set}
-          theme={deleting}
-          onClose={() => setDeleting(null)}
-          onDelete={() => { const gone = deleting; setDeleting(null); editTokens(() => ds().deleteThemeFromSet(set.id, gone.id)); if (shown === gone.id) onShow("all"); }}
-        />
-      )}
-    </div>
   );
 }
 

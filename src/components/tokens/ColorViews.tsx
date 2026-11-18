@@ -8,13 +8,14 @@ import { contrastRatio, gradeOf, hexOf } from "@/lib/tokens/contrast";
 import { cssName } from "@/lib/token-sync/doc";
 import { normalizeColor } from "@/lib/token-sync/color";
 import { dependentsOf, targetKey, targetOf, wouldLoop } from "@/lib/tokens/alias-colors";
-import type { ColorToken, TokenSet, TokenTheme , TokenKind } from "@/store/design-system";
+import type { ColorToken, TokenSet, TokenTheme, TokenKind } from "@/store/design-system";
 import { CommitInput, InlineName } from "./fields";
 import type { Row } from "./rows";
 import type { Selection } from "./useSelection";
 import type { Drag } from "./drag";
+import type { tableColumns } from "./TableHeader";
 
-// Colors, as a palette (each group a ramp of swatches with their hex) or as a list (one row each, the values editable in place).
+// Colors: one row each, a value for each theme editable in place, and a color editor (alias, contrast, group) that opens from the swatch.
 
 export interface ColorActions {
   rename: (id: string, name: string) => void;
@@ -28,8 +29,8 @@ export interface ColorActions {
 
 export interface ColorCtx {
   themes: TokenTheme[];
-  // The themes the view shows: all of them, or the one chosen.
-  shown: TokenTheme[];
+  // The grid the head and the rows share.
+  columns: ReturnType<typeof tableColumns>;
   selection: Selection;
   drag: Drag;
   act: ColorActions;
@@ -56,10 +57,6 @@ function aliasLabel(c: ColorToken, target: string, ctx: Pick<ColorCtx, "every" |
 }
 
 const valueIn = (c: ColorToken, themeId: string) => c.themeValues[themeId] ?? c.value;
-// "Light: gray-50 · Dark: gray-900" for the themes in which a color is another token.
-function aliasTitle(c: ColorToken, ctx: Pick<ColorCtx, "themes" | "every" | "sets">): string {
-  return ctx.themes.filter((t) => c.themeAlias?.[t.id]).map((t) => `${t.name}: ${aliasLabel(c, c.themeAlias![t.id], ctx)}`).join(" · ");
-}
 const copy = (text: string) => { void navigator.clipboard?.writeText(text).catch(() => undefined); };
 
 // "Button, Card and 2 more", for what uses a token.
@@ -178,7 +175,7 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
         </select>
       </div>
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => copy(hexOf(valueIn(token, ctx.shown[0]?.id ?? ctx.themes[0].id)))} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> Hex</button>
+        <button type="button" onClick={() => copy(hexOf(valueIn(token, ctx.themes[0].id)))} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> Hex</button>
         <button type="button" onClick={() => copy(`var(--${row.linked ? row.name : cssName(row.name)})`)} className="flex items-center gap-1 rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /> var()</button>
         <button type="button" onClick={() => { ctx.act.duplicate([row.id]); ctx.setOpenId(null); }} className="rounded px-1.5 min-h-11 py-1 text-2xs text-text-secondary hover:bg-surface-overlay hover:text-text-primary">Duplicate</button>
         <div className="flex-1" />
@@ -206,54 +203,6 @@ export function ColorEditor({ row, ctx }: { row: Row; ctx: ColorCtx }) {
   );
 }
 
-// ── Palette ───────────────────────────────────────────────────────────────────
-
-function Swatch({ row, label, ctx }: { row: Row; label: string; ctx: ColorCtx }) {
-  const token = row.token as ColorToken;
-  const picked = ctx.selection.selected.has(row.id);
-  const dragged = ctx.drag.moving?.includes(row.id);
-  const over = ctx.drag.over?.type === "token" && ctx.drag.over.id === row.id ? ctx.drag.over : null;
-  const values = ctx.shown.map((t) => valueIn(token, t.id));
-  return (
-    <Popover.Root open={ctx.openId === row.id} onOpenChange={(o) => ctx.setOpenId(o ? row.id : null)}>
-      <Popover.Anchor asChild>
-        <div data-token-id={row.id} data-token-kind={row.kind} data-axis="x" data-selected={picked || undefined} className={cn("group/card relative w-[88px] select-none", dragged && "opacity-40")} onPointerDown={(e) => ctx.drag.press(e, row.id)}>
-          {over && <span aria-hidden className={cn("absolute -top-0.5 bottom-0 w-0.5 rounded bg-accent", over.after ? "-right-1.5" : "-left-1.5")} data-drop={over.after ? "after" : "before"} />}
-          <button
-            type="button"
-            aria-label={`${row.name}: ${values.map(hexOf).join(", ")}`}
-            aria-pressed={picked}
-            onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) ctx.selection.click(row.id, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey }); else ctx.setOpenId(ctx.openId === row.id ? null : row.id); }}
-            className={cn("flex h-14 w-full flex-col overflow-hidden rounded-md border border-black/10 shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-accent", picked && "ring-2 ring-accent ring-offset-1 ring-offset-surface-base")}
-          >
-            {values.map((v, i) => <span key={i} className="block flex-1" style={{ backgroundColor: v }} />)}
-          </button>
-          <div className="mt-1 flex items-center gap-1">
-            <span className="truncate text-2xs font-medium text-text-secondary" title={row.name}>{label}</span>
-            {token.themeAlias && <span title={aliasTitle(token, ctx)} data-alias-mark className="flex-shrink-0 text-accent"><CornerDownRight size={9} aria-label={`${row.name} is another token`} /></span>}
-            {row.changed && <span aria-label="Changed" title="Changed in Motif since the last sync" className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-sun" />}
-            {row.readonly && <Lock size={8} aria-label="Read-only" className="flex-shrink-0 text-text-tertiary" />}
-          </div>
-          {values.map((v, i) => <p key={i} className="truncate font-mono text-[12px] leading-tight text-text-tertiary" title={`${ctx.shown[i].name}: ${v}`}>{hexOf(v)}</p>)}
-        </div>
-      </Popover.Anchor>
-      <Popover.Portal>
-        <Popover.Content align="start" sideOffset={6} aria-label={`Edit ${row.name}`} onOpenAutoFocus={(e) => e.preventDefault()} className="z-50 w-72 rounded-lg border border-surface-border bg-surface-raised p-3 shadow-2xl">
-          <ColorEditor row={row} ctx={ctx} />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
-export function PaletteBody({ rows, group, ctx }: { rows: Row[]; group: string; ctx: ColorCtx }) {
-  return (
-    <div className="flex flex-wrap gap-3 px-4 pb-3 pt-1" data-palette-group={group}>
-      {rows.map((r) => <Swatch key={r.id} row={r} label={r.name.startsWith(`${group}-`) ? r.name.slice(group.length + 1) : r.name} ctx={ctx} />)}
-    </div>
-  );
-}
-
 // ── List ──────────────────────────────────────────────────────────────────────
 
 function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
@@ -266,18 +215,21 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
       data-token-id={row.id}
       data-token-kind={row.kind}
       data-selected={picked || undefined}
+      role="row"
+      style={{ gridTemplateColumns: ctx.columns.template }}
       onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("input,button,select")) ctx.drag.press(e, row.id); }}
       onClick={(e) => { if (e.shiftKey || e.metaKey || e.ctrlKey) ctx.selection.click(row.id, { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey }); }}
-      className={cn("group/row relative flex items-center gap-2 px-4 py-1 transition-colors", picked ? "bg-accent/10" : "hover:bg-surface-subtle", dragged && "opacity-40")}
+      className={cn("group/row relative grid items-center gap-x-2 border-b border-surface-border/60 px-4 min-h-[3.25rem] py-1 transition-colors", picked ? "bg-accent/10" : "hover:bg-surface-subtle", dragged && "opacity-40")}
     >
       {over && <span aria-hidden className={cn("absolute inset-x-0 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}
-      <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 flex-shrink-0 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
-      <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
-      <InlineName row={row} taken={ctx.taken(row.kind)} onRename={(n) => ctx.act.rename(row.id, n)} className="w-44 flex-shrink-0 text-xs text-text-primary" />
-      {ctx.shown.map((theme) => {
+      <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
+      <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 accent-[var(--cobalt)]" />
+      <InlineName row={row} taken={ctx.taken(row.kind)} onRename={(n) => ctx.act.rename(row.id, n)} className="text-xs text-text-primary" />
+      {ctx.themes.map((theme) => {
         const value = valueIn(token, theme.id);
+        const alias = token.themeAlias?.[theme.id];
         return (
-          <div key={theme.id} className="flex w-44 flex-shrink-0 items-center gap-1.5">
+          <div key={theme.id} role="cell" className="flex min-w-0 items-center gap-1.5">
             <Popover.Root open={ctx.openId === `${row.id}:${theme.id}`} onOpenChange={(o) => ctx.setOpenId(o ? `${row.id}:${theme.id}` : null)}>
               <Popover.Anchor asChild>
                 <button type="button" aria-label={`Edit ${row.name} (${theme.name})`} onClick={() => ctx.setOpenId(ctx.openId === `${row.id}:${theme.id}` ? null : `${row.id}:${theme.id}`)} className="h-5 w-5 flex-shrink-0 rounded border border-black/15" style={{ backgroundColor: value }} />
@@ -288,16 +240,19 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
                 </Popover.Content>
               </Popover.Portal>
             </Popover.Root>
-            <CommitInput value={value} label={`${theme.name} value of ${row.name}`} mono className="w-full" onCommit={(t) => ctx.act.setColor(row.id, theme.id, t)} invalidHint="Not a color Motif can read" />
-            {token.themeAlias?.[theme.id] && <span data-alias-chip title={`${theme.name} is the token ${aliasLabel(token, token.themeAlias[theme.id], ctx)}`} className="flex flex-shrink-0 items-center gap-0.5 text-2xs text-accent"><CornerDownRight size={10} aria-hidden />{aliasLabel(token, token.themeAlias[theme.id], ctx)}</span>}
+            <CommitInput value={value} label={`${theme.name} value of ${row.name}`} mono className="min-w-0 flex-1" onCommit={(t) => ctx.act.setColor(row.id, theme.id, t)} invalidHint="Not a color Motif can read" />
+            {alias && <span data-alias-chip title={`${theme.name} is the token ${aliasLabel(token, alias, ctx)}`} className="flex max-w-[7rem] flex-shrink-0 items-center gap-0.5 text-2xs text-accent"><CornerDownRight size={10} aria-hidden className="flex-shrink-0" /><span className="truncate">{aliasLabel(token, alias, ctx)}</span></span>}
           </div>
         );
       })}
-      <div className="flex-1" />
-      <Badges row={row} hasRepo={ctx.hasRepo} />
-      <div className="flex w-12 flex-shrink-0 items-center justify-end gap-0.5 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
-        <button type="button" aria-label={`Duplicate ${row.name}`} onClick={() => ctx.act.duplicate([row.id])} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /></button>
-        <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /></button>
+      <span />
+      <span role="cell" className="text-2xs text-text-tertiary">Color</span>
+      <div role="cell" className="flex items-center justify-end gap-1.5">
+        <Badges row={row} hasRepo={ctx.hasRepo} />
+        <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 focus-within:opacity-100 group-hover/row:opacity-100">
+          <button type="button" aria-label={`Duplicate ${row.name}`} onClick={() => ctx.act.duplicate([row.id])} className="rounded p-1 text-text-tertiary hover:bg-surface-overlay hover:text-text-primary"><Copy size={10} /></button>
+          <button type="button" aria-label={`Delete ${row.name}`} onClick={() => ctx.act.remove([row.id])} className="rounded p-1 text-text-tertiary hover:bg-danger/10 hover:text-danger"><Trash2 size={10} /></button>
+        </div>
       </div>
     </div>
   );
@@ -305,18 +260,8 @@ function ListRow({ row, ctx }: { row: Row; ctx: ColorCtx }) {
 
 export function ListBody({ rows, ctx }: { rows: Row[]; ctx: ColorCtx }) {
   return (
-    <div className="pb-2" data-list-group>
+    <div className="pb-2" data-list-group role="rowgroup">
       {rows.map((r) => <ListRow key={r.id} row={r} ctx={ctx} />)}
-    </div>
-  );
-}
-
-export function ListHead({ ctx }: { ctx: ColorCtx }) {
-  return (
-    <div className="flex flex-shrink-0 items-center gap-2 border-b border-surface-border px-4 py-1 text-2xs text-text-tertiary">
-      <span className="w-3" />
-      <span className="w-44">Name</span>
-      {ctx.shown.map((t) => <span key={t.id} className="w-44 pl-[1.625rem]">{t.name}</span>)}
     </div>
   );
 }

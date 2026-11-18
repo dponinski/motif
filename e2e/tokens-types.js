@@ -115,9 +115,9 @@ const check = (name, ok, detail = "") => {
   await page.keyboard.press("Escape");
   const dialog = page.getByRole("dialog");
   const row = (name) => dialog.locator(`[data-plan-row="${name}"]`);
-  await page.getByRole("button", { name: /Add many/ }).click();
+  await page.getByRole("button", { name: /Bulk Add/ }).click();
   await dialog.waitFor();
-  check("Add many offers a scale as well as pasting", (await dialog.getByRole("tab", { name: "Scale" }).count()) === 1);
+  check("Bulk Add offers a scale as well as pasting", (await dialog.getByRole("tab", { name: "Scale" }).count()) === 1);
   await dialog.getByRole("tab", { name: "Paste" }).click();
   await dialog.getByLabel("Paste tokens").fill("font-size-xl: 1.25rem\nfont-weight-bold: 700\nfont-mono: ui-monospace, monospace\nspace-9: 36px");
   await dialog.locator("[data-plan-row]").first().waitFor();
@@ -127,7 +127,7 @@ const check = (name, ok, detail = "") => {
   await dialog.waitFor({ state: "hidden" });
   check("they are added with the type they were given", await settle(async () => (await tabCount("Numbers")) === 5 && (await tabCount("Strings")) === 2 && (await tabCount("Spacing")) === 1), `${await tabCount("Numbers")} ${await tabCount("Strings")} ${await tabCount("Spacing")}`);
 
-  await page.getByRole("button", { name: /Add many/ }).click();
+  await page.getByRole("button", { name: /Bulk Add/ }).click();
   await dialog.waitFor();
   await dialog.getByRole("tab", { name: "Scale" }).click();
   await dialog.getByRole("button", { name: "Numbers", exact: true }).click();

@@ -3,6 +3,7 @@
 const { chromium } = require("playwright");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { setFilter, regroup, rowOf, swatchOf, labelOf } = require("./support/tokens-ui");
 const { componentsReady, openSourceControl } = require("./support/git-panel");
 const { createFake } = require("./support/fake-github");
 const { OUT } = require("./support/env");
@@ -71,7 +72,7 @@ const check = (name, ok, detail = "") => {
 
   await page.locator('nav button[title="Tokens"]').click();
   await page.locator("[data-token-groups]").waitFor();
-  check("the Tokens screen shows them", (await page.locator('button[aria-label^="primary:"]').count()) === 1 && (await page.locator('[data-token-id][data-token-kind="composition"]').count()) === 1);
+  check("the Tokens screen shows them", (await swatchOf(page, "primary").count()) === 1 && (await page.locator('[data-token-id][data-token-kind="composition"]').count()) === 1);
   await page.screenshot({ path: `${OUT}/tokens-dtcg-pull.png` });
 
   // ── The repository changes ────────────────────────────────────────────────

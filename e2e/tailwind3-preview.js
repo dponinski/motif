@@ -199,7 +199,6 @@ const check = (name, ok, detail = "") => {
   await tokensLinked(page);
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Light value of danger", { exact: true }).waitFor();
   await page.getByLabel("Light value of danger", { exact: true }).fill("#00aa00");
   await page.getByLabel("Light value of danger", { exact: true }).press("Enter");

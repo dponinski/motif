@@ -31,13 +31,12 @@ const extra = {
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
   await page.locator("[data-token-groups]").waitFor();
-  await page.getByRole("button", { name: "List", exact: true }).click();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const bar = page.locator("[data-theme-bar]");
   const segments = () => bar.locator("[data-theme-segment]").evaluateAll((els) => els.map((e) => e.textContent.trim()));
-  const pressed = () => bar.locator('[role="group"] button[aria-pressed="true"]').evaluateAll((els) => els.map((e) => e.textContent.trim()));
-  const columns = () => page.locator("[data-list-head], div").filter({ hasText: /^Name/ }).first().innerText();
+  // The theme the editor shows.
+  const pressed = () => bar.locator("[data-theme-open]").evaluateAll((els) => els.map((e) => e.textContent.trim()));
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
   const redo = () => page.getByRole("button", { name: "Redo", exact: true }).click();
   const menu = async (theme, item) => { await bar.getByLabel(`Theme menu: ${theme}`).click(); await page.getByRole("menuitem", { name: item }).click(); };
@@ -46,18 +45,15 @@ const extra = {
   const value = (theme) => page.getByLabel(`${theme} value of background`, { exact: true }).inputValue();
 
   // ── Where the themes are ──────────────────────────────────────────────────
-  check("the themes are in a bar over the colors, with all of them shown", (await segments()).join() === "Light,Dark" && (await pressed()).join() === "All", `${await segments()} | ${await pressed()}`);
-  check("and no longer as chips in the sidebar", (await page.getByRole("button", { name: "Add theme" }).count()) === 1 && (await page.locator("div.w-\\[220px\\]").getByText("Themes", { exact: true }).count()) === 0);
-  check("with all shown, both themes are columns of the list", (await value("Light")) === "#ffffff" && (await value("Dark")) === "#0b0b0f");
+  check("the themes are the columns of the table, with the one the editor shows marked", (await segments()).join() === "Light,Dark" && (await pressed()).join() === "Light", `${await segments()} | ${await pressed()}`);
+  check("and no longer chips in the sidebar or a bar over the table", (await page.getByRole("button", { name: "Add theme" }).count()) === 1 && (await page.locator("div.w-\\[220px\\]").getByText("Themes", { exact: true }).count()) === 0 && (await page.getByRole("button", { name: "All themes" }).count()) === 0);
+  check("every theme is shown, a value for each", (await value("Light")) === "#ffffff" && (await value("Dark")) === "#0b0b0f");
 
-  // ── Showing one ───────────────────────────────────────────────────────────
-  await bar.getByRole("button", { name: "Dark", exact: true }).click();
-  check("a theme shown alone leaves only its column", await settle(async () => (await page.getByLabel("Light value of background", { exact: true }).count()) === 0 && (await value("Dark")) === "#0b0b0f"));
-  check("and is the one pressed", (await pressed()).join() === "Dark");
-  await bar.getByRole("button", { name: "All themes", exact: true }).click();
-  check("All shows both again", await settle(async () => (await page.getByLabel("Light value of background", { exact: true }).count()) === 1));
+  // ── The theme the editor shows ────────────────────────────────────────────
+  await menu("Dark", "Show in the editor");
+  check("a theme is shown in the editor from its menu", await settle(async () => (await pressed()).join() === "Dark"));
   const history = () => page.getByRole("button", { name: "Undo", exact: true }).isDisabled();
-  check("switching themes is not an edit to undo", await history());
+  check("which is not an edit to undo", await history());
 
   // ── Adding ────────────────────────────────────────────────────────────────
   await bar.getByRole("button", { name: "Add theme" }).click();
@@ -66,7 +62,7 @@ const extra = {
   check("a name a theme already has isn't taken", (await page.getByRole("dialog", { name: "New theme" }).locator('[role="alert"]').count()) === 1 && (await segments()).join() === "Light,Dark");
   await page.getByLabel("New theme name").fill("Sepia");
   await page.getByLabel("New theme name").press("Enter");
-  check("a new theme is added, starts as a copy of the theme that was open (Dark) and is shown", await settle(async () => (await segments()).join() === "Light,Dark,Sepia" && (await pressed()).join() === "Sepia" && (await value("Sepia")) === "#0b0b0f"), `${await segments()} | ${await pressed()}`);
+  check("a new theme is added, starts as a copy of the theme the editor showed (Dark) and is the one it shows", await settle(async () => (await segments()).join() === "Light,Dark,Sepia" && (await pressed()).join() === "Sepia" && (await value("Sepia")) === "#0b0b0f"), `${await segments()} | ${await pressed()}`);
   check("adding is a step of undo", !(await history()));
   await undo();
   check("which takes it back", await settle(async () => (await segments()).join() === "Light,Dark"));
@@ -87,8 +83,7 @@ const extra = {
 
   // ── Duplicating ───────────────────────────────────────────────────────────
   await menu("Dark", "Duplicate");
-  check("a theme is duplicated next to the original, and the copy is shown", await settle(async () => (await segments()).join() === "Light,Dark,Dark copy,Sepia" && (await pressed()).join() === "Dark copy" && (await value("Dark copy")) === "#0b0b0f"), `${await segments()}`);
-  await bar.getByRole("button", { name: "All themes", exact: true }).click();
+  check("a theme is duplicated next to the original, and the copy is the one the editor shows", await settle(async () => (await segments()).join() === "Light,Dark,Dark copy,Sepia" && (await pressed()).join() === "Dark copy" && (await value("Dark copy")) === "#0b0b0f"), `${await segments()}`);
 
   // ── Deleting ──────────────────────────────────────────────────────────────
   await menu("Dark copy", "Delete");

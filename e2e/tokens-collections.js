@@ -3,6 +3,7 @@
 // set it was a color of is deleted.
 const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
+const { setFilter, regroup, rowOf, swatchOf, labelOf } = require("./support/tokens-ui");
 const { OUT } = require("./support/env");
 
 const checks = [];
@@ -46,8 +47,8 @@ const extra = {
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const sidebar = page.locator("div.w-\\[220px\\]");
   const openSet = async (name) => { await sidebar.getByText(name, { exact: true }).click(); await page.waitForTimeout(250); };
-  const swatch = (name) => page.locator(`button[aria-label^="${name}:"]`);
-  const label = async (name) => (await swatch(name).getAttribute("aria-label")) ?? "";
+  const swatch = (name) => swatchOf(page, name);
+  const label = (name) => labelOf(page, name);
   const editor = page.locator("[data-color-editor]");
   const openEditor = async (name) => { await page.keyboard.press("Escape"); await swatch(name).click(); await editor.waitFor(); };
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -84,11 +85,9 @@ const extra = {
   // ── Moving ────────────────────────────────────────────────────────────────
   await openSet("Primitives");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select gray-50", { exact: true }).check();
   await page.locator("[data-bulk-bar]").getByRole("button", { name: /Move to set/ }).click();
   await page.getByRole("button", { name: "Semantic", exact: true }).last().click();
-  await page.getByRole("button", { name: "Palette", exact: true }).click();
   await openSet("Semantic");
   check("a color that is moved to another set is still the color the colors that were it are", await settle(async () => (await swatch("gray-50").count()) === 1 && (await label("surface")).includes("#f9fafb")));
   await openEditor("surface");

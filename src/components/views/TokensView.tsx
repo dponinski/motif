@@ -21,7 +21,7 @@ const menuItem = "flex cursor-pointer flex-col gap-0.5 px-3 py-1.5 text-xs text-
 
 const headerButton = "flex items-center gap-1 px-2.5 min-h-11 py-1.5 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-surface-subtle transition-colors disabled:opacity-30 disabled:hover:bg-transparent";
 
-// The tokens of the project: sets and themes on the left, and for the open set a tab for each kind of token.
+// The tokens of the project: the sets on the left, and for the open set one table: a row for each token, a column for each theme.
 export default function TokensView({ onClose }: { onClose?: () => void }) {
   const { sets, colors, typography, spacing, radii, shadows, numbers, strings, compositions } = useDesignSystemStore(useShallow((s) => ({
     sets: s.sets, colors: s.colors, typography: s.typography, spacing: s.spacing, radii: s.radii, shadows: s.shadows, numbers: s.numbers, strings: s.strings, compositions: s.compositions,
@@ -29,6 +29,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]?.id ?? "");
   // A kind chosen from New token opens with its add row ready.
   const [request, setRequest] = useState<AddRequest | null>(null);
+  const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
   const canUndo = useTokenHistory((h) => h.past.length > 0);
   const canRedo = useTokenHistory((h) => h.future.length > 0);
 
@@ -57,6 +58,8 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
           <button onClick={() => undoTokens()} disabled={!canUndo} aria-label="Undo" title="Undo (Cmd/Ctrl+Z)" className={headerButton}><Undo2 size={12} /></button>
           <button onClick={() => redoTokens()} disabled={!canRedo} aria-label="Redo" title="Redo (Shift+Cmd/Ctrl+Z)" className={headerButton}><Redo2 size={12} /></button>
           <div className="mx-1 h-5 w-px bg-surface-border" />
+          {/* Search, Filter and Bulk Add of the open set are drawn here by its pane. */}
+          <div ref={setToolbar} data-toolbar className="flex items-center gap-2" />
           {activeSet && (
             <Menu.Root>
               <Menu.Trigger asChild>
@@ -95,7 +98,7 @@ export default function TokensView({ onClose }: { onClose?: () => void }) {
                 <span className="text-base font-semibold text-text-primary flex-1">{activeSet.name}</span>
               </div>
               <div className="flex-1 overflow-hidden flex flex-col">
-                <SetPane key={activeSet.id} set={activeSet} sets={sets} request={request} />
+                <SetPane key={activeSet.id} set={activeSet} sets={sets} request={request} toolbar={toolbar} />
               </div>
             </>
           ) : (

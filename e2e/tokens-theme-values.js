@@ -51,7 +51,6 @@ const check = (name, ok, detail = "") => {
   await page.getByLabel("New theme name").fill("Dark");
   await page.getByLabel("New theme name").press("Enter");
   // (A theme that was just added is the one shown; all of them side by side is one press.)
-  await bar.getByRole("button", { name: "All themes", exact: true }).click();
   const first = (await saved()).sets[0].themes[0].name;
   check("with two themes a number has a value for each, the second showing the first's as its hint", await settle(async () => (await field(first, "text-xl").inputValue()) === "1.5" && (await field("Dark", "text-xl").inputValue()) === "" && (await field("Dark", "text-xl").getAttribute("placeholder")) === "1.5"));
   await field("Dark", "text-xl").fill("1.75");
@@ -80,10 +79,8 @@ const check = (name, ok, detail = "") => {
   await field("Dark", "label").press("Enter");
   check("a string has a value in a theme too", await settle(async () => { const t = await token("label"); return t?.values["*"] === "Save" && t.values[dark] === "Save changes"; }), JSON.stringify((await token("label"))?.values));
 
-  // ── Showing one theme ─────────────────────────────────────────────────────
-  await bar.getByRole("button", { name: "Dark", exact: true }).click();
-  check("a theme shown alone leaves only its value", await settle(async () => (await field(first, "text-xl").count()) === 0 && (await field("Dark", "text-xl").inputValue()) === "2"));
-  await bar.getByRole("button", { name: "All themes", exact: true }).click();
+  // ── Every theme is a column ───────────────────────────────────────────────
+  check("every theme has its own column of values, side by side", (await field(first, "text-xl").count()) === 1 && (await field("Dark", "text-xl").inputValue()) === "2");
 
   // ── A length in pixels ────────────────────────────────────────────────────
   await newToken("Number");

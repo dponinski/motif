@@ -1,6 +1,7 @@
 // Comparing themes: which colors differ between them and which don't, and giving colors in one theme the colors they have in another.
 const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
+const { setFilter, filtersOffered } = require("./support/tokens-ui");
 const { OUT } = require("./support/env");
 
 const checks = [];
@@ -40,7 +41,6 @@ const extra = {
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
   await page.locator("[data-token-groups]").waitFor();
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.locator("div.w-\\[220px\\]").getByText("Global", { exact: true }).click();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
@@ -49,13 +49,13 @@ const extra = {
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
 
   // ── Which differ ──────────────────────────────────────────────────────────
-  check("a set with two themes can be filtered by whether its colors differ between them", (await page.getByRole("button", { name: "Differ between themes", exact: true }).count()) === 1 && (await page.getByRole("button", { name: "Same in every theme", exact: true }).count()) === 1);
-  await page.getByRole("button", { name: "Differ between themes", exact: true }).click();
+  check("a set with two themes can be filtered by whether its colors differ between them", (await filtersOffered(page)).includes("Differ between themes") && (await filtersOffered(page)).includes("Same in every theme"));
+  await setFilter(page, "Differ between themes");
   check("Differ leaves the colors that are not the same in every theme", await settle(async () => (await names()).sort().join() === "accent,background,foreground"), (await names()).join());
-  await page.getByRole("button", { name: "Same in every theme", exact: true }).click();
+  await setFilter(page, "Same in every theme");
   check("Same leaves the others: a color that only differs in letter case is the same", await settle(async () => (await names()).sort().join() === "brand,line"), (await names()).join());
   await page.screenshot({ path: `${OUT}/tokens-compare.png` });
-  await page.getByRole("button", { name: "All", exact: true }).click();
+  await setFilter(page, "All");
 
   // ── Copy between themes ───────────────────────────────────────────────────
   await page.getByLabel("Select background").check();
@@ -71,9 +71,9 @@ const extra = {
   check("the colors take the other theme's colors", await settle(async () => (await value("Dark", "background")) === "#ffffff" && (await value("Dark", "accent")) === "#f59e0b"), `${await value("Dark", "background")} ${await value("Dark", "accent")}`);
   check("and only the picked ones", (await value("Dark", "foreground")) === "#f9fafb" && (await value("Light", "background")) === "#ffffff");
   check("and says what it did", (await bar.getByRole("status").innerText()).includes("Dark now has Light's 2 colors"));
-  await page.getByRole("button", { name: "Differ between themes", exact: true }).click();
+  await setFilter(page, "Differ between themes");
   check("so they no longer differ", await settle(async () => (await names()).join() === "foreground"), (await names()).join());
-  await page.getByRole("button", { name: "All", exact: true }).click();
+  await setFilter(page, "All");
 
   // ── Undo ──────────────────────────────────────────────────────────────────
   await undo();
@@ -98,7 +98,6 @@ const extra = {
   check("and the theme it started from is as it was", (await value("Light", "background").catch(() => "#ffffff")) === "#ffffff");
   await undo();
   check("adding it is one step of undo", await settle(async () => (await segments()).join() === "Light,Dark"));
-  await themeBar.getByRole("button", { name: "All themes", exact: true }).click();
   await themeBar.getByRole("button", { name: "Add theme" }).click();
   await add.getByLabel("New theme name").fill("Dim");
   await add.getByLabel("Start new theme from").selectOption(D);
@@ -112,7 +111,7 @@ const extra = {
   // ── One theme: nothing to compare ─────────────────────────────────────────
   await page.locator("div.w-\\[220px\\]").getByText("One theme", { exact: true }).click();
   await page.getByLabel("Select solo").check();
-  check("a set with one theme has no comparison and no copy between themes", (await page.getByRole("button", { name: "Differ between themes", exact: true }).count()) === 0 && (await page.locator("[data-bulk-bar]").getByRole("button", { name: /Copy between themes/ }).count()) === 0);
+  check("a set with one theme has no comparison and no copy between themes", !(await filtersOffered(page)).includes("Differ between themes") && (await page.locator("[data-bulk-bar]").getByRole("button", { name: /Copy between themes/ }).count()) === 0);
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

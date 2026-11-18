@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const { serve } = require("./support/fake-cdn");
 const { seed } = require("./support/seed");
+const { setFilter, filtersOffered } = require("./support/tokens-ui");
 const { componentsReady } = require("./support/git-panel");
 const { tokensLinked } = require("./support/git-panel");
 const { gitData } = require("./support/git-data");
@@ -161,7 +162,6 @@ const check = (name, ok, detail = "") => {
 
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   const row = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
 
@@ -170,9 +170,9 @@ const check = (name, ok, detail = "") => {
   check("one nothing uses says so", (await row("success-foreground").locator("[data-unused]").count()) === 1 && (await row("primary").locator("[data-unused]").count()) === 0);
   await page.screenshot({ path: `${OUT}/tokens-usage.png` });
 
-  await page.getByRole("button", { name: "Unused", exact: true }).click();
+  await setFilter(page, "Unused");
   check("a filter leaves only the unused ones", await settle(async () => (await page.locator("[data-token-id]").count()) === 1 && (await row("success-foreground").count()) === 1));
-  await page.getByRole("button", { name: "All", exact: true }).click();
+  await setFilter(page, "All");
 
   // ── In the editor ─────────────────────────────────────────────────────────
   await page.getByLabel("Edit primary (Light)").click();
