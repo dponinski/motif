@@ -186,7 +186,7 @@ const check = (name, ok, detail = "") => {
   // ── Editing values, and adding a token ────────────────────────────────────
   await page.getByLabel("Light value of primary", { exact: true }).fill("#ff0000");
   await page.getByLabel("Light value of primary", { exact: true }).press("Enter");
-  const radiusInput = page.getByLabel("Value of radius-md", { exact: true });
+  const radiusInput = page.getByLabel("Light value of radius-md", { exact: true });
   await radiusInput.waitFor();
   await radiusInput.fill("10");
   await radiusInput.press("Enter");

@@ -84,3 +84,15 @@ describe("the files Motif writes", () => {
     for (const name of ["gray-50", "gray-900", "brand", "overlay", "surface", "text", "accent"]) expect(css).toContain(`--color-${name}:`);
   });
 });
+
+describe("numbers and strings that differ by theme", () => {
+  it("are in their theme's block of the stylesheet, and only there", async () => {
+    const { fixture } = await import("./fixture");
+    const { writeDtcg } = await import("./write");
+    const css = generateCss(writeDtcg(fixture(), { files: "single" }).files);
+    expect(css).toMatch(/--text-xl:\s*1\.5rem/);
+    expect(css).toMatch(/\.dark\s*\{[^}]*--text-xl:\s*1\.75rem/);
+    expect(css).toMatch(/\.dark\s*\{[^}]*--label:\s*Save changes/);
+    expect(css).not.toMatch(/--text-ratio[^;]*1\.75/);
+  });
+});

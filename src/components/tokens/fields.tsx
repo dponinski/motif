@@ -53,7 +53,7 @@ export function InlineName({ row, taken, onRename, className }: { row: Row; take
 }
 
 // A text field that keeps what is typed until Enter or leaving, and then gives it to `onCommit`, which says whether it was taken.
-export function CommitInput({ value, onCommit, label, className, mono, frame, invalidHint }: { value: string; onCommit: (text: string) => boolean; label: string; className?: string; mono?: boolean; frame?: boolean; invalidHint?: string }) {
+export function CommitInput({ value, onCommit, label, className, mono, frame, invalidHint, placeholder }: { value: string; placeholder?: string; onCommit: (text: string) => boolean; label: string; className?: string; mono?: boolean; frame?: boolean; invalidHint?: string }) {
   const [text, setText] = useState(value);
   const [bad, setBad] = useState(false);
   // When the value changes from outside (another edit, an undo), what is shown follows it.
@@ -71,6 +71,7 @@ export function CommitInput({ value, onCommit, label, className, mono, frame, in
     <input
       aria-label={label}
       value={text}
+      placeholder={placeholder}
       onChange={(e) => { setText(e.target.value); setBad(false); }}
       onBlur={() => { if (leaving.current) { leaving.current = false; return; } commit(); }}
       onKeyDown={(e) => {

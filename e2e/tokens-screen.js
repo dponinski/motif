@@ -192,13 +192,13 @@ const extra = {
 
   // ── Other kinds ──────────────────────────────────────────────────────────
   await page.getByLabel("Select space-1").waitFor();
-  check("spacing has the same arrangement, in the same list", (await page.locator('[data-token-id][data-token-kind="spacing"]').count()) === 3 && (await page.getByLabel("Value of space-4").inputValue()) === "16");
-  await page.getByLabel("Value of space-4").fill("20");
-  await page.getByLabel("Value of space-4").press("Enter");
-  check("a value is changed where it stands", await settle(async () => (await page.getByLabel("Value of space-4").inputValue()) === "20"));
+  check("spacing has the same arrangement, in the same list", (await page.locator('[data-token-id][data-token-kind="spacing"]').count()) === 3 && (await page.getByLabel("Light value of space-4", { exact: true }).inputValue()) === "16");
+  await page.getByLabel("Light value of space-4", { exact: true }).fill("20");
+  await page.getByLabel("Light value of space-4", { exact: true }).press("Enter");
+  check("a value is changed where it stands", await settle(async () => (await page.getByLabel("Light value of space-4", { exact: true }).inputValue()) === "20"));
   await page.screenshot({ path: `${OUT}/tokens-spacing-screen.png` });
   await undo();
-  check("and undone", await settle(async () => (await page.getByLabel("Value of space-4").inputValue()) === "16"));
+  check("and undone", await settle(async () => (await page.getByLabel("Light value of space-4", { exact: true }).inputValue()) === "16"));
 
   const real = errors.filter((e) => !/hydrat/i.test(e));
   check("no page errors", real.length === 0, real.join(" | "));

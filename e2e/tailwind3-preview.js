@@ -203,7 +203,7 @@ const check = (name, ok, detail = "") => {
   await page.getByLabel("Light value of danger", { exact: true }).waitFor();
   await page.getByLabel("Light value of danger", { exact: true }).fill("#00aa00");
   await page.getByLabel("Light value of danger", { exact: true }).press("Enter");
-  const radiusInput = page.getByLabel("Value of radius-md", { exact: true });
+  const radiusInput = page.getByLabel("Light value of radius-md", { exact: true });
   await radiusInput.waitFor();
   await radiusInput.fill("20");
   await radiusInput.press("Enter");

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeColor } from "@/lib/token-sync/color";
-import type { NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TypographyToken , TokenKind } from "@/store/design-system";
+import type { NumberToken, RadiusToken, ShadowToken, SpacingToken, StringToken, TokenTheme, TypographyToken, TokenKind } from "@/store/design-system";
 import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
 import { CommitInput, InlineName } from "./fields";
 import { Badges } from "./ColorViews";
@@ -24,6 +24,8 @@ export interface OtherActions {
   update: (row: Row, patch: Record<string, unknown>) => void;
   duplicate: (ids: string[]) => void;
   remove: (ids: string[]) => void;
+  // The value of a number, a string or a length in a theme: null takes a theme's own value away.
+  setThemeValue: (row: Row, themeId: string, value: number | string | null) => void;
 }
 
 export interface OtherCtx {
@@ -33,6 +35,9 @@ export interface OtherCtx {
   taken: (kind: TokenKind) => string[];
   hasRepo: boolean;
   rename?: (row: Row) => void;
+  // The themes of the open set, and the ones the bar shows: a number or a string has a value for each.
+  themes: TokenTheme[];
+  shown: TokenTheme[];
 }
 
 const number = (text: string) => { const n = parseFloat(text); return Number.isFinite(n) ? n : null; };
@@ -53,8 +58,46 @@ function Visual({ row }: { row: Row }) {
 
 const selectClass = "rounded border border-surface-border bg-surface-base px-1 min-h-11 py-0.5 text-2xs text-text-secondary outline-none focus:border-accent";
 
+// A value in each theme that is shown, for a set that has more than one: the first theme's is the value every theme has, and another theme
+// either has one of its own or has that one (left empty, with the value it has as the hint).
+function ThemedValues({ row, ctx }: { row: Row; ctx: OtherCtx }) {
+  const token = row.token as { value: number | string; themeValues?: Record<string, number | string> };
+  const baseId = ctx.themes[0].id;
+  const numeric = row.kind !== "string";
+  const own = (themeId: string) => (themeId === baseId ? String(token.value) : token.themeValues?.[themeId] !== undefined ? String(token.themeValues[themeId]) : "");
+  const unit = row.kind === "spacing" || row.kind === "radius" ? "px" : row.kind === "number" ? (row.token as NumberToken).unit : "";
+  return (
+    <>
+      {ctx.shown.map((theme) => (
+        <label key={theme.id} className="flex items-center gap-1 text-2xs text-text-tertiary">
+          <span className="w-10 truncate" title={theme.name}>{theme.name}</span>
+          <CommitInput
+            value={own(theme.id)}
+            placeholder={theme.id === baseId ? undefined : String(token.value)}
+            label={`${theme.name} value of ${row.name}`}
+            mono={numeric}
+            frame
+            className={numeric ? "w-16 text-right" : "w-36"}
+            invalidHint={numeric ? "A number" : "Can't be empty"}
+            onCommit={(text) => {
+              const t = text.trim();
+              if (t === "" && theme.id !== baseId) { ctx.act.setThemeValue(row, theme.id, null); return true; }
+              if (numeric) { const n = number(t); if (n === null) return false; ctx.act.setThemeValue(row, theme.id, n); return true; }
+              if (t === "") return false;
+              ctx.act.setThemeValue(row, theme.id, t);
+              return true;
+            }}
+          />
+          {unit && theme.id === ctx.shown[ctx.shown.length - 1].id ? unit : null}
+        </label>
+      ))}
+    </>
+  );
+}
+
 function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const set = (patch: Record<string, unknown>) => ctx.act.update(row, patch);
+  const themed = ctx.themes.length > 1 && ctx.shown.length > 0;
   // `exact` shows the number as it is (a Number has the digits its author gave it); pixels are shown to two places.
   const num = (key: string, value: number, label: string, unit?: string, exact = false) => (
     <label className="flex items-center gap-1 text-2xs text-text-tertiary">
@@ -63,13 +106,13 @@ function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
     </label>
   );
   switch (row.kind) {
-    case "spacing": { const v = (row.token as SpacingToken).value; return <>{num("value", v, "Value", "px")}<span className="w-14 text-2xs tabular-nums text-text-tertiary">{px(v / 16)}rem</span></>; }
-    case "radius": { const v = (row.token as RadiusToken).value; return <>{num("value", v, "Value", "px")}{v >= 9999 && <span className="text-2xs text-text-tertiary">full</span>}</>; }
+    case "spacing": { const v = (row.token as SpacingToken).value; if (themed) return <ThemedValues row={row} ctx={ctx} />; return <>{num("value", v, "Value", "px")}<span className="w-14 text-2xs tabular-nums text-text-tertiary">{px(v / 16)}rem</span></>; }
+    case "radius": { const v = (row.token as RadiusToken).value; if (themed) return <ThemedValues row={row} ctx={ctx} />; return <>{num("value", v, "Value", "px")}{v >= 9999 && <span className="text-2xs text-text-tertiary">full</span>}</>; }
     case "number": {
       const n = row.token as NumberToken;
       return (
         <>
-          {num("value", n.value, "Value", undefined, true)}
+          {themed ? <ThemedValues row={row} ctx={ctx} /> : num("value", n.value, "Value", undefined, true)}
           <select aria-label={`Unit of ${row.name}`} value={n.unit} onChange={(e) => { if (isUnit(e.target.value)) set({ unit: e.target.value }); }} className={selectClass}>
             {UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
           </select>
@@ -83,7 +126,7 @@ function Fields({ row, ctx }: { row: Row; ctx: OtherCtx }) {
       const x = row.token as StringToken;
       return (
         <>
-          <CommitInput value={x.value} label={`Value of ${row.name}`} frame className="w-56" invalidHint="Can't be empty" onCommit={(t) => { if (!t.trim()) return false; set({ value: t.trim() }); return true; }} />
+          {themed ? <ThemedValues row={row} ctx={ctx} /> : <CommitInput value={x.value} label={`Value of ${row.name}`} frame className="w-56" invalidHint="Can't be empty" onCommit={(t) => { if (!t.trim()) return false; set({ value: t.trim() }); return true; }} />}
           <select aria-label={`Used as of ${row.name}`} value={x.use ?? ""} onChange={(e) => set({ use: e.target.value || undefined })} className={selectClass}>
             {STRING_USES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
           </select>

@@ -39,13 +39,16 @@ const lengthToken = (t: SpacingToken | RadiusToken, use: "spacing" | "radius"): 
 
 const numberToken = (t: NumberToken): Token => ({
   id: t.id, name: t.name, setId: t.setId, ...(t.group !== undefined ? { group: t.group } : {}), type: "number", unit: t.unit, ...(t.use !== undefined ? { use: t.use } : {}),
-  values: { [ALL_THEMES]: num(t.value) }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+  values: { [ALL_THEMES]: num(t.value), ...Object.fromEntries(Object.entries(t.themeValues ?? {}).map(([theme, v]) => [theme, num(v)])) }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
 });
 
 const stringToken = (t: StringToken): Token => ({
   id: t.id, name: t.name, setId: t.setId, ...(t.group !== undefined ? { group: t.group } : {}), type: "string", ...(t.use !== undefined ? { use: t.use } : {}),
-  values: { [ALL_THEMES]: t.value }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
+  values: { [ALL_THEMES]: t.value, ...(t.themeValues ?? {}) }, ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
 });
+
+// The values a token has in themes of its own (everything but the default for every theme).
+const ofThemes = (t: Token): Record<string, string> => Object.fromEntries(Object.entries(t.values).filter(([k]) => k !== ALL_THEMES));
 
 const slot = (name: string, type: Slot["type"], value: string, unit?: Slot["unit"]): Slot => ({ name, type, value, ...(unit !== undefined ? { unit } : {}) });
 
@@ -107,7 +110,7 @@ export function fromStored(data: StoredTokenData): TokenData {
   });
 
   // A spacing or a radius in pixels is a token of its own kind (the repository's sync reads and writes those); any other number is a number.
-  const isLength = (t: Token, use: string) => t.type === "number" && t.use === use && t.unit === "px";
+  const isLength = (t: Token, use: string) => t.type === "number" && t.use === use && t.unit === "px" && Object.keys(ofThemes(t)).length === 0;
   const lengths = (use: string) => data.tokens.filter((t) => isLength(t, use)).map((t) => ({
     id: t.id, name: t.name, value: parseFloat(t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "0") || 0, setId: t.setId,
     ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
@@ -131,12 +134,13 @@ export function fromStored(data: StoredTokenData): TokenData {
     ...(c.repoName !== undefined ? { repoName: c.repoName } : {}), ...(c.inset !== undefined ? { inset: c.inset } : {}), ...(c.raw !== undefined ? { raw: c.raw } : {}),
   }));
 
+  const numberThemes = (t: Token) => { const o = Object.entries(ofThemes(t)).map(([k, v]) => [k, parseFloat(v)] as const).filter(([, v]) => Number.isFinite(v)); return o.length ? { themeValues: Object.fromEntries(o) } : {}; };
   const numbers: NumberToken[] = data.tokens.filter((t) => t.type === "number" && !isLength(t, "spacing") && !isLength(t, "radius")).map((t) => ({
-    id: t.id, name: t.name, value: parseFloat(t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "0") || 0, unit: t.unit ?? "", setId: t.setId,
+    id: t.id, name: t.name, value: parseFloat(t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "0") || 0, unit: t.unit ?? "", setId: t.setId, ...numberThemes(t),
     ...(t.use !== undefined ? { use: t.use } : {}), ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
   }));
   const strings: StringToken[] = data.tokens.filter((t) => t.type === "string").map((t) => ({
-    id: t.id, name: t.name, value: t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "", setId: t.setId,
+    id: t.id, name: t.name, value: t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "", setId: t.setId, ...(Object.keys(ofThemes(t)).length ? { themeValues: ofThemes(t) } : {}),
     ...(t.use !== undefined ? { use: t.use } : {}), ...(t.group !== undefined ? { group: t.group } : {}), ...(t.repoName !== undefined ? { repoName: t.repoName } : {}),
   }));
 
