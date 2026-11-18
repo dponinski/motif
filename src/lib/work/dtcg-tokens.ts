@@ -5,7 +5,7 @@ import { planDtcgExport } from "../dtcg/export";
 import { generateCss, HEADER } from "../dtcg/generate";
 import { applyRenames, patchFiles } from "../dtcg/patch";
 import { readRepoTokenFiles } from "../dtcg/repo";
-import { canonicalFiles, describeDtcgChanges, goneOf, mergeDtcg, planDtcgSync, writeOptionsOf, type DtcgChange, type DtcgLink } from "../dtcg/sync";
+import { canonicalFiles, describeDtcgChanges, goneOf, mergeDtcg, planDtcgSync, removedHere, writeOptionsOf, type DtcgChange, type DtcgLink } from "../dtcg/sync";
 import { writeDtcg } from "../dtcg/write";
 import type { StoredTokenData } from "../tokens/model";
 import { readRepoState } from "../token-sync/flow";
@@ -71,17 +71,18 @@ export async function stageDtcgTokens(input: {
   }
   // (Tokens that are still in the stylesheets: the repository has no files, so what it has is what the last pull found.)
   const plan = planDtcgSync(link, model, real?.files ?? (link.convert ? link.base : {}));
-  if (plan.merge.conflicts.length > 0 || plan.toMotif.length > 0 || plan.merge.restored.length > 0) {
+  if (plan.merge.conflicts.length > 0 || plan.toMotif.length > 0) {
     return { link, staged: 0, attention: "The repository has token changes that Motif hasn't taken yet. Pull to bring them in; the tokens are not in the pull request until then." };
   }
 
   const mine = writeDtcg(model, writeOptionsOf(link)).files;
-  const merge = mergeDtcg(link.base, mine, planned.files, { gone: goneOf(link) });
+  const merge = mergeDtcg(link.base, mine, planned.files);
   const toRepo = describeDtcgChanges(planned.files, merge.files);
   const done = (paths: string[]): DtcgLink => ({ ...link, staged: { files: merge.files, paths: [...new Set([...(link.staged?.paths ?? []), ...paths])] } });
   if (toRepo.length === 0) return { link: done([]), staged: 0, attention: null };
 
-  const files = patchFiles(planned.files, merge.files, { gone: goneOf(link) });
+  // What was renamed or deleted here is taken out of the files where it was.
+  const files = patchFiles(planned.files, merge.files, { gone: new Set([...goneOf(link), ...removedHere(link.base, mine)]) });
   const notes: string[] = [];
   let attention: string | null = null;
 

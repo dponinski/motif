@@ -136,7 +136,7 @@ describe("staging token changes when the tokens are design tokens files", () => 
   });
 });
 
-describe("renaming a token that is in the files", () => {
+describe("renaming or deleting a token that is in the files", () => {
   beforeEach(() => { useEditStore.setState({ scope: null }); useEditStore.getState().adopt(scope); });
   const renamed = (m: StoredTokenData): StoredTokenData => ({ ...m, tokens: m.tokens.map((t) => (t.id === "g50" ? { ...t, name: "gray-25" } : t)) });
 
@@ -151,12 +151,24 @@ describe("renaming a token that is in the files", () => {
     expect(r.attention).toBeNull();
   });
 
-  it("is held back when it wasn't said to be a rename (a token gone from Motif is brought back, not deleted from the repository)", async () => {
+  it("is a token deleted when it wasn't said to be a rename: it is taken out of the files, listed as removed, and nothing needs pulling first", async () => {
     const { repo, link, model } = linked();
     const r = await stage(repo, link, renamed(model));
-    expect(r.staged).toBe(0);
-    expect(r.attention).toMatch(/Pull/);
-    expect(edits()).toEqual({});
+    expect(r.attention).toBeNull();
+    expect(r.staged).toBeGreaterThan(0);
+    expect("gray-50" in JSON.parse(edits()[PRIM]).color).toBe(false);
+    expect(edits()[CSS]).not.toContain("--color-gray-50");
+  });
+
+  it("a token deleted in Motif is taken out of the files, and what else was deleted with it", async () => {
+    const { repo, link, model } = linked();
+    const without = { ...model, tokens: model.tokens.filter((t) => t.id !== "g50") };
+    const r = await stage(repo, link, without);
+    expect(r.attention).toBeNull();
+    expect(r.staged).toBeGreaterThan(0);
+    expect("gray-50" in JSON.parse(edits()[PRIM]).color).toBe(false);
+    expect(edits()[CSS]).not.toContain("--color-gray-50");
+    expect(waitingDtcgChanges(r.link, without)).toEqual([]);
   });
 
   it("is not waiting again once it is staged", async () => {
