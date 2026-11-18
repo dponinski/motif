@@ -8,6 +8,7 @@ import { choicesFor, newSlotName, previewStyle, slotIn, slotMissing, slotText, t
 import type { Composition, Slot, SlotValue, TokenType, Unit } from "@/lib/tokens/model";
 import { isUnit, UNITS } from "@/lib/tokens/uses";
 import { useDesignSystemStore } from "@/store/design-system";
+import { BrowseFonts } from "./FontField";
 import { CommitInput } from "./fields";
 
 // The parts of a composition: each is a value of its own or another token of its type (which it then follows), and what it comes to.
@@ -71,7 +72,10 @@ function SlotRow({ composition, slot, data, sets, themeId, themed, own: ownValue
         </>
       )}
       {!slot.ref && slot.type === "string" && (
-        <CommitInput value={slot.value ?? ""} label={label} frame className="w-56" invalidHint="Can't be empty" onCommit={(t) => { if (!t.trim()) return false; onSlot({ value: t.trim() }); return true; }} />
+        <>
+          <CommitInput value={slot.value ?? ""} label={label} frame className="w-56" invalidHint="Can't be empty" onCommit={(t) => { if (!t.trim()) return false; onSlot({ value: t.trim() }); return true; }} />
+          {slot.name === "font-family" && <BrowseFonts label={label} current={slot.value ?? ""} onPick={(v) => onSlot({ value: v })} />}
+        </>
       )}
       {!slot.ref && slot.type === "color" && (
         <>

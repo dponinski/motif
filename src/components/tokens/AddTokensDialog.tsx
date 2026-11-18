@@ -1,5 +1,6 @@
 "use client";
 
+import { BrowseFonts } from "./FontField";
 import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { CornerDownRight, X } from "lucide-react";
@@ -265,7 +266,7 @@ function ScaleTab({ set, initial, onDone }: { set: TokenSet; initial: ScaleKind;
               {RATIOS.map(([name, v]) => <option key={v} value={v}>{name}</option>)}
             </select>
           </label>
-          <label className={label}>Font<input aria-label="Font family" value={family} onChange={(e) => setFamily(e.target.value)} className={cn(field, "w-32")} /></label>
+          <span className="flex items-end gap-1"><label className={label}>Font<input aria-label="Font family" value={family} onChange={(e) => setFamily(e.target.value)} className={cn(field, "w-32")} /></label><BrowseFonts label="the text scale" current={family} onPick={setFamily} /></span>
         </div>
       )}
       {kind === "number" && (

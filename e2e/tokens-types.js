@@ -85,15 +85,15 @@ const check = (name, ok, detail = "") => {
   await addRow.getByLabel("New string value").fill("Inter, sans-serif");
   await addRow.getByLabel("New string used as").selectOption("font-family");
   await addRow.getByLabel("New string value").press("Enter");
-  check("a String is added", await settle(async () => (await tabCount("Strings")) === 1) && (await page.getByLabel("Value of font-sans").inputValue()) === "Inter, sans-serif" && (await page.getByLabel("Used as of font-sans").inputValue()) === "font-family");
+  check("a String is added", await settle(async () => (await tabCount("Strings")) === 1) && (await page.getByLabel("Value of font-sans", { exact: true }).inputValue()) === "Inter, sans-serif" && (await page.getByLabel("Used as of font-sans").inputValue()) === "font-family");
   await addRow.getByLabel("New string name").fill("empty");
   await addRow.getByLabel("New string value").fill("  ");
   await addRow.getByLabel("New string value").press("Enter");
   check("a string with nothing in it isn't taken", (await tabCount("Strings")) === 1);
   await page.getByRole("button", { name: "Done" }).click();
-  await page.getByLabel("Value of font-sans").fill("Inter, system-ui");
-  await page.getByLabel("Value of font-sans").press("Enter");
-  check("its value is changed in the row", await settle(async () => (await page.getByLabel("Value of font-sans").inputValue()) === "Inter, system-ui"));
+  await page.getByLabel("Value of font-sans", { exact: true }).fill("Inter, system-ui");
+  await page.getByLabel("Value of font-sans", { exact: true }).press("Enter");
+  check("its value is changed in the row", await settle(async () => (await page.getByLabel("Value of font-sans", { exact: true }).inputValue()) === "Inter, system-ui"));
   await page.screenshot({ path: `${OUT}/tokens-strings.png` });
 
   // ── Saved as typed tokens ─────────────────────────────────────────────────
