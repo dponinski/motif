@@ -47,7 +47,7 @@ export default function GroupedTokens({
           <section key={group} data-group={group} className="mb-1">
             <div
               data-group-drop={group}
-              className={cn("group/head flex items-center gap-2 px-4 py-1.5 transition-colors", target ? "bg-accent/15 outline outline-1 -outline-offset-1 outline-accent" : "hover:bg-surface-subtle")}
+              className={cn("group/head flex items-center gap-2 py-1.5 pl-10 pr-4 transition-colors", target ? "bg-accent/15 outline outline-1 -outline-offset-1 outline-accent" : "hover:bg-surface-subtle")}
             >
               <input
                 type="checkbox"

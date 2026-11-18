@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ListPlus, Palette as PaletteIcon, Rows3, Search, Wand2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import * as Popover from "@radix-ui/react-popover";
+import { ListFilter, ListPlus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { filterItems, groupItems, nextName, sortForReading, uniqueName, type Only } from "@/lib/tokens/organize";
 import { normalizeColor } from "@/lib/token-sync/color";
@@ -10,12 +12,12 @@ import { targetKey } from "@/lib/tokens/alias-colors";
 import { editTokens } from "@/store/token-history";
 import { useGitStore } from "@/store/git";
 import { AddRow, type AddField } from "./fields";
-import ThemeBar, { type ThemeShown } from "./ThemeBar";
+import TableHeader, { tableColumns } from "./TableHeader";
 import AddTokensDialog from "./AddTokensDialog";
 import GroupedTokens from "./GroupedTokens";
 import BulkBar from "./BulkBar";
 import RenameDialog from "./RenameDialog";
-import { ListBody, ListHead, PaletteBody, type ColorCtx } from "./ColorViews";
+import { ListBody, type ColorCtx } from "./ColorViews";
 import { OtherBody, type OtherCtx } from "./OtherViews";
 import { useRows, type Row } from "./rows";
 import { isUnit, NUMBER_USES, STRING_USES, UNITS } from "@/lib/tokens/uses";
@@ -30,15 +32,16 @@ const free = (prefix: string, names: string[]) => { for (let i = 1; ; i++) if (!
 const suggest = (kind: TokenKind, group: string, names: string[]) =>
   kind === "color" ? nextName(group, names) : kind === "spacing" ? free("space", names) : kind === "radius" ? free("radius", names) : kind === "shadow" ? free("shadow", names) : kind === "number" ? free("number", names) : kind === "string" ? free("string", names) : kind === "composition" ? free("composition", names) : free("text", names);
 
-// A choice kept in the browser (which view of colors was last used); the same on the server and the first paint, then what was kept.
-const listeners = new Set<() => void>();
-function useStored<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
-  const read = () => { try { return (localStorage.getItem(key) as T | null) ?? fallback; } catch { return fallback; } };
-  const value = useSyncExternalStore((cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; }, read, () => fallback);
-  return [value, (v) => { try { localStorage.setItem(key, v); } catch { /* not remembered */ } listeners.forEach((l) => l()); }];
-}
-
-const chip = (on: boolean) => cn("rounded-full border px-2 py-0.5 text-2xs transition-colors", on ? "border-accent/50 bg-accent/15 text-accent" : "border-surface-border text-text-tertiary hover:text-text-secondary");
+// The ways to narrow the list, with what each one finds. `needs` says what a set has to have for it to mean anything.
+const FILTERS: { id: Only; label: string; hint: string; needs?: "counted" | "themes" }[] = [
+  { id: "all", label: "All", hint: "Every token" },
+  { id: "changed", label: "Changed", hint: "Different from the repository: waiting for the next push" },
+  { id: "unsynced", label: "Not in repository", hint: "Made here, not in the repository yet" },
+  { id: "readonly", label: "Read-only", hint: "Defined where Motif can't edit it yet" },
+  { id: "unused", label: "Unused", hint: "Nothing in the repository's code uses it", needs: "counted" },
+  { id: "differs", label: "Differ between themes", hint: "Colors that are not the same in every theme", needs: "themes" },
+  { id: "same", label: "Same in every theme", hint: "Colors that are the same in every theme", needs: "themes" },
+];
 
 // What the person asked to add (New token), so the add row opens for that type: `n` makes a second request for the same type count.
 export interface AddRequest { kind: TokenKind; n: number }
@@ -48,7 +51,7 @@ export const KINDS: TokenKind[] = ["color", "spacing", "radius", "number", "stri
 
 const ADD_TYPES: { kind: TokenKind; label: string }[] = [{ kind: "color", label: "Color" }, { kind: "number", label: "Number" }, { kind: "string", label: "String" }, { kind: "composition", label: "Composition" }];
 
-export default function SetPane({ set, sets, request }: { set: TokenSet; sets: TokenSet[]; request: AddRequest | null }) {
+export default function SetPane({ set, sets, request, toolbar }: { set: TokenSet; sets: TokenSet[]; request: AddRequest | null; toolbar: HTMLElement | null }) {
   const ds = () => useDesignSystemStore.getState();
   const rows = [
     ...useRows("color", set.id, set.themes), ...useRows("spacing", set.id, set.themes), ...useRows("radius", set.id, set.themes), ...useRows("number", set.id, set.themes),
@@ -65,10 +68,7 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<Only>("all");
   const [renaming, setRenaming] = useState<Row | null>(null);
-  const [view, setView] = useStored<"palette" | "list">("motif-tokens-view", "palette");
-  const [themeChoice, setThemeChoice] = useState<ThemeShown>("all");
-  // A theme that was deleted is no longer shown.
-  const themeId: ThemeShown = set.themes.some((t) => t.id === themeChoice) ? themeChoice : "all";
+  const [filterOpen, setFilterOpen] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   // What the add row adds: what New token was asked for.
   const [addKind, setAddKind] = useState<TokenKind>("color");
@@ -94,7 +94,7 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
   // A name is taken by a token of the same kind (a color and a radius can both be `card`).
   const taken = (kind: TokenKind) => rows.filter((r) => r.kind === kind).map((r) => r.name);
   const allGroups = useMemo(() => [...new Set(rows.map((r) => r.group))], [rows]);
-  const shown = themeId === "all" ? set.themes : set.themes.filter((t) => t.id === themeId);
+  const columns = tableColumns(set.themes.length);
 
   // A row is of its own kind: what is done to it is done as its own, and what is done to several is done to each kind among them.
   const kindOf = (id: string): TokenKind => rows.find((r) => r.id === id)?.kind ?? "color";
@@ -124,13 +124,13 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
     remove: (ids: string[]) => { editTokens(() => { for (const [k, group] of eachKind(ids)) ds().deleteTokens(k, group); }); selection.clear(); },
   };
   const colorCtx: ColorCtx = {
-    themes: set.themes, shown, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo, rename: setRenaming,
+    themes: set.themes, columns, selection, drag, taken, groups: allGroups, openId, setOpenId, hasRepo, rename: setRenaming,
     all: rows.filter((r) => r.kind === "color").map((r) => r.token as ColorToken),
     every: everyColor, sets,
     act: { ...common, setColor: (id, theme, text) => editTokens(() => ds().setColorText(id, theme, text)), setAlias: (id, theme, target) => editTokens(() => ds().setColorAlias(id, theme, target)), toGroup: (ids, group) => { editTokens(() => { for (const [k, of] of eachKind(ids)) ds().setTokenGroup(k, of, group); }); } },
   };
   const otherCtx: OtherCtx = {
-    selection, drag, taken, hasRepo, rename: setRenaming, themes: set.themes, shown,
+    selection, drag, taken, hasRepo, rename: setRenaming, themes: set.themes, columns,
     act: {
       ...common,
       setThemeValue: (row, themeId, value) => editTokens(() => {
@@ -234,44 +234,52 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
   const empty = rows.length === 0 ? (
     <div className="flex flex-col items-center gap-2 px-6 py-16 text-center" data-empty>
       <p className="text-sm font-medium text-text-primary">No tokens in {set.name} yet</p>
-      <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">Make one with New token: a color, a number, a string or a composition, all in the same set. Or paste a list, or bring them in from the repository with Pull in Source control.</p>
+      <p className="max-w-sm text-xs leading-relaxed text-text-tertiary">Make one with New token: a color, a number, a string or a composition, all in the same set. Or use Bulk Add to paste a list or make a scale, or bring them in from the repository with Pull in Source control.</p>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => { setAddKind("color"); setAdding("base"); }} className="rounded bg-blaze px-3 min-h-11 py-1.5 text-xs font-medium text-on-blaze hover:bg-blaze/90">Add a color</button>
-        <button type="button" onClick={() => setAddMany(true)} className="rounded border border-line px-3 min-h-11 py-1.5 text-xs text-text-secondary hover:text-text-primary">Paste or make a scale</button>
+        <button type="button" onClick={() => setAddMany(true)} className="rounded border border-line px-3 min-h-11 py-1.5 text-xs text-text-secondary hover:text-text-primary">Bulk Add</button>
       </div>
     </div>
   ) : (
     <p className="px-6 py-10 text-center text-xs text-text-tertiary" data-no-match>Nothing matches{query ? ` “${query}”` : ""}.</p>
   );
 
-  // Showing a theme also makes it the set's open theme, which is the one a new theme starts as a copy of and the editor shows.
-  const showTheme = (id: ThemeShown) => { setThemeChoice(id); if (id !== "all") ds().setActiveTheme(set.id, id); };
+  const filterShown = FILTERS.filter((f) => f.id === "all" || f.needs === undefined || (f.needs === "counted" ? counted : multiTheme));
+  const filterLabel = FILTERS.find((f) => f.id === shownOnly)?.label ?? "All";
+  const bar = (
+    <>
+      <label className="relative">
+        <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+        <input ref={search} aria-label="Search tokens" placeholder="Search (press /)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setQuery(""); e.currentTarget.blur(); } }} className="min-h-11 w-56 rounded-md border border-line bg-surface-base py-1 pl-8 pr-2 text-sm text-text-primary outline-none focus:border-accent" />
+      </label>
+      <Popover.Root open={filterOpen} onOpenChange={setFilterOpen}>
+        <Popover.Trigger asChild>
+          <button type="button" aria-label="Filter" data-filter-button data-filtered={shownOnly !== "all" || undefined} title="Narrow the list" className={cn("flex min-h-11 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors", shownOnly !== "all" ? "border-accent/50 bg-accent/10 text-accent" : "border-line text-text-secondary hover:border-accent/40 hover:text-text-primary")}>
+            <ListFilter size={14} /> {shownOnly === "all" ? "Filter" : filterLabel}
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content align="start" sideOffset={6} aria-label="Filters" className="z-50 w-72 rounded-lg border border-surface-border bg-surface-raised p-1.5 shadow-xl">
+            <div role="group" aria-label="Show">
+              {filterShown.map((f) => (
+                <button key={f.id} type="button" aria-pressed={shownOnly === f.id} onClick={() => { setOnly(f.id); setFilterOpen(false); }} className={cn("flex w-full flex-col items-start gap-0.5 rounded-md px-3 py-1.5 text-left outline-none hover:bg-surface-subtle focus-visible:bg-surface-subtle", shownOnly === f.id && "bg-accent/10")}>
+                  <span className={cn("text-xs font-medium", shownOnly === f.id ? "text-accent" : "text-text-primary")}>{f.label}</span>
+                  <span className="text-2xs text-text-tertiary">{f.hint}</span>
+                </button>
+              ))}
+              {!counted && hasRepo && rows.some((r) => r.linked) && (
+                <p className="px-3 py-1.5 text-2xs text-text-tertiary">Scan the repository again (in Source control) to find out which tokens its code uses.</p>
+              )}
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex min-h-11 items-center gap-1.5 rounded-md border border-line px-3 text-sm text-text-secondary transition-colors hover:border-accent/40 hover:text-text-primary"><ListPlus size={14} /> Bulk Add</button>
+    </>
+  );
   return (
     <>
-      <ThemeBar set={set} shown={themeId} onShow={showTheme} />
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-surface-border px-4 py-2">
-        <label className="relative">
-          <Search size={11} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary" />
-          <input ref={search} aria-label="Search tokens" placeholder="Search (press /)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setQuery(""); e.currentTarget.blur(); } }} className="w-52 rounded border border-line bg-surface-base py-1 pl-6 pr-2 text-xs text-text-primary outline-none focus:border-accent" />
-        </label>
-        {([["all", "All"], ["changed", "Changed"], ["unsynced", "Not in repository"], ["readonly", "Read-only"], ...(counted ? [["unused", "Unused"]] : []), ...(multiTheme ? [["differs", "Differ between themes"], ["same", "Same in every theme"]] : [])] as [Only, string][]).map(([id, label]) => (
-          <button key={id} type="button" aria-pressed={shownOnly === id} onClick={() => setOnly(id)} className={chip(shownOnly === id)}>{label}</button>
-        ))}
-        {!counted && hasRepo && rows.some((r) => r.linked) && (
-          <button type="button" disabled title="Scan the repository again (in Source control) to find out which tokens its code uses" className={cn(chip(false), "opacity-50")}>Unused</button>
-        )}
-        <div className="flex-1" />
-        <button type="button" onClick={() => setAddMany(true)} title="Paste CSS, a design tokens file or a list, or make a scale from one value" className="flex items-center gap-1 rounded border border-line px-2 min-h-11 py-1 text-xs text-text-secondary hover:border-accent/40 hover:text-text-primary"><ListPlus size={11} /> Add many…</button>
-        {hasColors && (
-          <div className="flex items-center gap-0.5 rounded bg-surface-subtle p-0.5" role="group" aria-label="View">
-            <button type="button" aria-pressed={view === "palette"} onClick={() => setView("palette")} className={cn("flex items-center gap-1 rounded px-2 min-h-11 py-1 text-xs", view === "palette" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><PaletteIcon size={11} /> Palette</button>
-            <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")} className={cn("flex items-center gap-1 rounded px-2 min-h-11 py-1 text-xs", view === "list" ? "bg-surface-raised text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary")}><Rows3 size={11} /> List</button>
-          </div>
-        )}
-        {hasColors && (
-          <button type="button" onClick={() => editTokens(() => ds().regroupColors(set.id))} title="Put each color in the group its name says: a ramp like gray-50 … gray-900 is one group, a pair like primary and primary-foreground another" className="flex items-center gap-1 rounded px-2 min-h-11 py-1 text-xs text-text-secondary hover:bg-surface-subtle hover:text-text-primary"><Wand2 size={11} /> Regroup by name</button>
-        )}
-      </div>
+      {toolbar && createPortal(bar, toolbar)}
 
       <BulkBar
         picked={picked}
@@ -300,7 +308,9 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
 
       <RenameDialog row={renaming} kind={renaming?.kind ?? "color"} taken={taken(renaming?.kind ?? "color")} onClose={() => setRenaming(null)} />
       <AddTokensDialog open={addMany} onOpenChange={setAddMany} set={set} kind="color" />
-      {hasColors && view === "list" && <ListHead ctx={colorCtx} />}
+      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto" data-table>
+        <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: columns.minWidth }} role="table" aria-label={`Tokens of ${set.name}`}>
+          <TableHeader set={set} columns={columns} canRegroup={hasColors} onRegroup={() => editTokens(() => ds().regroupColors(set.id))} />
       <GroupedTokens
         rows={filtered}
         selection={selection}
@@ -310,18 +320,20 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
         addRow={addRow}
         onRenameGroup={(from, to) => { editTokens(() => { for (const k of KINDS) ds().renameGroup(k, set.id, from, to); }); }}
         empty={empty}
-        renderBody={(items, group) => {
+        renderBody={(items) => {
           const colors = items.filter((r) => r.kind === "color");
           const others = items.filter((r) => r.kind !== "color");
           // The colors of a group are a palette (or a list); the other tokens of the group are rows under them.
           return (
             <>
-              {colors.length > 0 && (view === "palette" ? <PaletteBody rows={colors} group={group} ctx={colorCtx} /> : <ListBody rows={colors} ctx={colorCtx} />)}
+              {colors.length > 0 && <ListBody rows={colors} ctx={colorCtx} />}
               {others.length > 0 && <OtherBody rows={others} ctx={otherCtx} />}
             </>
           );
         }}
       />
+        </div>
+      </div>
     </>
   );
 }

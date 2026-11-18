@@ -1,5 +1,6 @@
 const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
+const { setFilter, regroup, rowOf, swatchOf, labelOf } = require("./support/tokens-ui");
 const { OUT } = require("./support/env");
 
 const checks = [];
@@ -46,7 +47,7 @@ const CSS = `:root {
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const dialog = page.getByRole("dialog");
-  const open = async () => { await page.getByRole("button", { name: /Add many/ }).click(); await dialog.waitFor(); };
+  const open = async () => { await page.getByRole("button", { name: /Bulk Add/ }).click(); await dialog.waitFor(); };
   // How many tokens of a kind the set shows (they are all in one list).
   const tabCount = async (name) => page.locator(`[data-token-id][data-token-kind="${{ Colors: "color", Radii: "radius", Spacing: "spacing", Typography: "typography" }[name]}"]`).count();
   const groupNames = () => page.locator("[data-group]").evaluateAll((els) => els.map((e) => e.getAttribute("data-group")));
@@ -58,7 +59,7 @@ const CSS = `:root {
   // ── Pasting CSS ──────────────────────────────────────────────────────────
   const before = await tabCount("Colors");
   await open();
-  check("Add many opens a dialog for the set", await dialog.getByText("Add tokens to Global").isVisible());
+  check("Bulk Add opens a dialog for the set", await dialog.getByText("Add tokens to Global").isVisible());
   await paste(CSS);
   check("it says how it read what was pasted", await dialog.getByText("Read as CSS").isVisible());
   const names = await dialog.locator("[data-plan-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-plan-row")));
@@ -78,7 +79,7 @@ const CSS = `:root {
   await dialog.waitFor({ state: "hidden" });
   check("adding closes the dialog and puts the tokens in", await settle(async () => (await tabCount("Colors")) === before + 2));
   check("a ramp lands in a group of its own", (await groupNames()).includes("primary") && (await page.locator('[data-group="primary"] [data-token-id]').count()) === 2);
-  check("with the dark value from the .dark block", await (async () => { await page.locator('button[aria-label^="primary-600:"]').waitFor(); return (await page.locator('button[aria-label^="primary-600:"]').getAttribute("aria-label")).includes("#818cf8"); })());
+  check("with the dark value from the .dark block", await (async () => { await swatchOf(page, "primary-600").waitFor(); return (await labelOf(page, "primary-600")).includes("#818cf8"); })());
   check("and the other kinds go in as the kind they are", await settle(async () => (await tabCount("Radii")) === 1));
   check("the one that was left out did not", (await tabCount("Spacing")) === 1);
   await undo();
@@ -97,7 +98,7 @@ const CSS = `:root {
   check("a changed value says it changes the token", (await row("primary-600").innerText()).includes("Changes it"));
   await addButton().click();
   await dialog.waitFor({ state: "hidden" });
-  check("and changes it, rather than adding another", (await tabCount("Colors")) === before + 2 && (await page.locator('button[aria-label^="primary-600:"]').getAttribute("aria-label")).includes("#ff0000"));
+  check("and changes it, rather than adding another", (await tabCount("Colors")) === before + 2 && (await labelOf(page, "primary-600")).includes("#ff0000"));
 
   // ── Lines ────────────────────────────────────────────────────────────────
   await open();
@@ -112,7 +113,7 @@ const CSS = `:root {
   check("a line that is nothing is reported by its number", (await dialog.locator("[data-notes]").innerText()).includes("Line 3"));
   await addButton().click();
   await dialog.waitFor({ state: "hidden" });
-  check("and added", await settle(async () => (await page.getByLabel("Select gray-3").count()) + (await page.locator('button[aria-label^="gray-3:"]').count()) > 0));
+  check("and added", await settle(async () => (await page.getByLabel("Select gray-3").count()) + (await swatchOf(page, "gray-3").count()) > 0));
 
   // ── A design tokens file ─────────────────────────────────────────────────
   await open();
@@ -138,12 +139,12 @@ const CSS = `:root {
   await dialog.waitFor({ state: "hidden" });
   check("a ramp is added as a group", await settle(async () => (await tabCount("Colors")) === colorsBefore + 10) && (await groupNames()).includes("sky"));
   check("in step order", (await page.locator('[data-group="sky"] [data-token-id]').evaluateAll((els) => els.map((e) => e.getAttribute("data-token-id").length > 0).length)) === 10);
-  const sky50 = await page.locator('button[aria-label^="sky-50:"]').getAttribute("aria-label");
-  const sky900 = await page.locator('button[aria-label^="sky-900:"]').getAttribute("aria-label");
+  const sky50 = await labelOf(page, "sky-50");
+  const sky900 = await labelOf(page, "sky-900");
   const [l50, d50] = sky50.replace(/^[^:]+: /, "").split(", ");
   const [l900, d900] = sky900.replace(/^[^:]+: /, "").split(", ");
   check("the dark theme has the ramp turned over", d50 !== l50 && d900 !== l900 && /^#[0-9a-f]{6}$/.test(d50));
-  check("the color given is in the ramp, as it was", (await page.locator('[data-group="sky"]').innerText()).includes("#0ea5e9"));
+  check("the color given is in the ramp, as it was", (await page.locator('[data-group="sky"] input[aria-label*=" value of "]').evaluateAll((els) => els.map((e) => e.value))).includes("#0ea5e9"));
   await undo();
   check("and the ramp is one undo", await settle(async () => (await tabCount("Colors")) === colorsBefore));
 

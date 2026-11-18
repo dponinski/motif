@@ -26,9 +26,13 @@ export function splitNumber(text: string): { value: string; unit: Unit } {
 }
 
 // What the composition looks like.
-export function Sample({ composition, small, themeId }: { composition: Composition; small?: boolean; themeId?: string }) {
+export function Sample({ composition, small, themeId, mark }: { composition: Composition; small?: boolean; themeId?: string; mark?: boolean }) {
   const data = useComposeData();
   const style = previewStyle(composition, data, themeId);
+  // A mark is the sample at the size of a table cell: "Aa" in the text style, or the shadow on a small square.
+  if (mark) return composition.kind === "typography"
+    ? <span data-sample aria-hidden className="flex h-6 w-6 flex-shrink-0 items-center justify-center text-text-primary" style={{ ...style, fontSize: 14, lineHeight: 1 }}>Aa</span>
+    : <span data-sample aria-hidden className="h-6 w-6 flex-shrink-0 rounded border border-surface-border bg-surface-base" style={style} />;
   if (composition.kind === "typography") return <span data-sample className={small ? "w-24 flex-shrink-0 truncate text-text-primary" : "text-text-primary"} style={small ? { fontFamily: style.fontFamily, fontWeight: style.fontWeight, fontSize: 14, lineHeight: 1.2 } : style}>{small ? "Aa Quick" : "The quick brown fox jumps over the lazy dog"}</span>;
   if (composition.kind === "shadow") return <span data-sample className="h-8 w-8 flex-shrink-0 rounded border border-surface-border bg-surface-base" style={style} />;
   return <span data-sample className="w-24 flex-shrink-0 truncate rounded bg-surface-subtle px-1.5 py-0.5 text-center text-2xs text-text-secondary">{composition.slots.length} {composition.slots.length === 1 ? "part" : "parts"}</span>;

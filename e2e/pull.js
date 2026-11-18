@@ -160,7 +160,6 @@ const check = (name, ok, detail = "") => {
   await nav("Tokens");
   check("and the tokens, as a set named for the repository (not left beside an empty one)", await settle(async () => (await sidebar.getByText("acme/ds", { exact: true }).count()) === 1 && (await sidebar.getByText("Global", { exact: true }).count()) === 0));
   check("with its colors, its radii (numbers) and its shadows (compositions), in design tokens files", await settle(async () => (await page.locator('[data-token-id][data-token-kind="color"]').count()) === 17 && (await page.locator('[data-token-id][data-token-kind="number"]').count()) === 4 && (await page.locator('[data-token-id][data-token-kind="composition"]').count()) === 2));
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await primaryLight().waitFor();
   const first = await primaryLight().inputValue();
   check("a token has the repository's value, as it is written there", first === "oklch(0.52 0.21 270)", first);
@@ -176,7 +175,6 @@ const check = (name, ok, detail = "") => {
   await page.getByRole("button", { name: "Pull", exact: false }).first().click();
   check("a pull takes its change in, and says so", await settle(async () => ((await page.locator("[data-pull-notice]").innerText().catch(() => "")) ?? "").includes("token change")), await page.locator("[data-pull-notice]").innerText().catch(() => ""));
   await nav("Tokens");
-  await page.getByRole("button", { name: "List", exact: true }).click().catch(() => {});
   check("the token has the repository's new value", await settle(async () => (await primaryLight().inputValue()) === "oklch(0.6 0.2 30)"), await primaryLight().inputValue());
   check("and no longer says the repository has changed", (await (async () => { await nav("Source control"); return page.locator("[data-behind-note]").count(); })()) === 0);
 
@@ -195,7 +193,6 @@ const check = (name, ok, detail = "") => {
   await dialog.getByRole("button", { name: "Apply my choices" }).click();
   await dialog.waitFor({ state: "hidden" });
   await nav("Tokens");
-  await page.getByRole("button", { name: "List", exact: true }).click().catch(() => {});
   check("and the repository's value is taken when that is the choice", await settle(async () => (await primaryLight().inputValue()) === "#008a3d" || (await primaryLight().inputValue()) !== "#ff0000"), await primaryLight().inputValue());
 
   const real = errors.filter((e) => !/hydrat/i.test(e));

@@ -1,5 +1,6 @@
 const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
+const { setFilter, regroup, rowOf, swatchOf, labelOf } = require("./support/tokens-ui");
 const { OUT } = require("./support/env");
 
 const checks = [];
@@ -36,12 +37,12 @@ const extra = {
   await page.locator("[data-token-groups]").waitFor();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
-  const swatch = (name) => page.locator(`button[aria-label^="${name}:"]`);
-  const label = async (name) => (await swatch(name).getAttribute("aria-label")) ?? "";
+  const swatch = (name) => swatchOf(page, name);
+  const label = (name) => labelOf(page, name);
   const editor = page.locator("[data-color-editor]");
   const openEditor = async (name) => { await page.keyboard.press("Escape"); await swatch(name).click(); await editor.waitFor(); };
   // A token added in the browser has an id of its own, so it is found by its name.
-  const card = (name) => page.locator("[data-token-id]").filter({ has: page.locator(`button[aria-label^="${name}:"]`) });
+  const card = (name) => rowOf(page, name);
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
 
   // ── Making a color another token ─────────────────────────────────────────
@@ -54,7 +55,7 @@ const extra = {
   check("the other theme is left as it was", (await editor.getByLabel("Dark value of background").inputValue()) === "#0b0b0f");
   await editor.getByLabel("Make background (Dark) another token").selectOption({ label: "gray-900" });
   check("each theme can be a different token", await settle(async () => (await label("background")).includes("#f9fafb") && (await label("background")).includes("#e5e7eb")), await label("background"));
-  check("the palette marks a color that is another token", await card("background").locator("[data-alias-mark]").isVisible());
+  check("the row marks a color that is another token", await card("background").locator("[data-alias-chip]").first().isVisible());
   await page.screenshot({ path: `${OUT}/tokens-alias-editor.png` });
 
   // ── A loop is not offered ────────────────────────────────────────────────
@@ -80,11 +81,11 @@ const extra = {
   // ── Detach, keeping the color ────────────────────────────────────────────
   await editor.getByRole("button", { name: /Detach background \(Light\)/ }).click();
   check("detaching keeps the color and stops following", await settle(async () => (await editor.locator("[data-alias-chip]").count()) === 0 && (await editor.getByLabel("Light value of background").inputValue()) === "#f9fafb"));
-  check("no mark is left on the palette", (await card("background").locator("[data-alias-mark]").count()) === 0);
+  check("no mark is left on the row", (await card("background").locator("[data-alias-chip]").count()) === 0);
 
   // ── Pasting aliases ──────────────────────────────────────────────────────
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: /Add many/ }).click();
+  await page.getByRole("button", { name: /Bulk Add/ }).click();
   const dialog = page.getByRole("dialog");
   await dialog.waitFor();
   await dialog.getByLabel("Paste tokens").fill(":root {\n  --surface: var(--gray-900);\n  --muted: var(--nowhere);\n}");
@@ -96,19 +97,18 @@ const extra = {
   await page.screenshot({ path: `${OUT}/tokens-alias-paste.png` });
   await dialog.getByRole("button", { name: /^Add (\d+ tokens?|tokens)$/ }).click();
   await dialog.waitFor({ state: "hidden" });
-  check("and is added as one", await settle(async () => await card("surface").locator("[data-alias-mark]").isVisible()));
+  check("and is added as one", await settle(async () => await card("surface").locator("[data-alias-chip]").first().isVisible()));
 
   // ── Deleting what others are ─────────────────────────────────────────────
   await openEditor("gray-900");
   check("the used one warns what happens", (await editor.locator("[data-used-by]").innerText()).includes("keep the color"));
   await editor.getByRole("button", { name: "Delete gray-900" }).click();
-  check("those that were it keep their color and stop following", await settle(async () => (await swatch("gray-900").count()) === 0 && (await label("surface")).includes("#111827") && (await card("surface").locator("[data-alias-mark]").count()) === 0));
+  check("those that were it keep their color and stop following", await settle(async () => (await swatch("gray-900").count()) === 0 && (await label("surface")).includes("#111827") && (await card("surface").locator("[data-alias-chip]").count()) === 0));
   await undo();
-  check("undo brings both back", await settle(async () => (await swatch("gray-900").count()) === 1 && (await card("surface").locator("[data-alias-mark]").isVisible())));
+  check("undo brings both back", await settle(async () => (await swatch("gray-900").count()) === 1 && (await card("surface").locator("[data-alias-chip]").first().isVisible())));
 
   // ── The list ─────────────────────────────────────────────────────────────
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select surface").waitFor();
   check("the list says which token a color is", (await page.locator("[data-token-id]").filter({ has: page.getByLabel("Select surface") }).locator("[data-alias-chip]").first().innerText()).includes("gray-900"));
   await page.screenshot({ path: `${OUT}/tokens-alias-list.png` });

@@ -1,5 +1,6 @@
 const { chromium } = require("playwright");
 const { seed } = require("./support/seed");
+const { setFilter, regroup, filtersOffered } = require("./support/tokens-ui");
 const { OUT } = require("./support/env");
 
 const checks = [];
@@ -46,16 +47,28 @@ const extra = {
   const names = (group) => page.locator(`[data-group="${group}"] [data-token-id]`).evaluateAll((els) => els.map((e) => e.getAttribute("data-token-id")));
   const undo = () => page.getByRole("button", { name: "Undo", exact: true }).click();
   const redo = () => page.getByRole("button", { name: "Redo", exact: true }).click();
-  const view = (name) => page.getByRole("button", { name, exact: true }).click();
+  const rowValue = (id, theme) => page.locator(`[data-token-id="${id}"]`).getByLabel(`${theme} value of ${id}`, { exact: true });
 
   // ── Seeing ───────────────────────────────────────────────────────────────
   check("the set shows its colors and its lengths together", (await page.locator('[data-token-id][data-token-kind="color"]').count()) === 11 && (await page.locator('[data-token-id][data-token-kind="spacing"]').count()) === 3);
-  check("colors open as a palette, in groups", (await groupNames()).join() === "primary,gray,semantic,base", (await groupNames()).join());
+  // The controls are in the top bar, and the tokens are a table.
+  const topBar = page.locator("[data-bar]");
+  check("search, Filter, Bulk Add and New token are in the top bar", (await topBar.getByLabel("Search tokens").count()) === 1 && (await topBar.getByRole("button", { name: "Filter" }).count()) === 1 && (await topBar.getByRole("button", { name: "Bulk Add" }).count()) === 1 && (await topBar.getByRole("button", { name: "New token" }).count()) === 1);
+  check("the filters are not chips on the page: they open from Filter", (await page.locator("[data-token-groups]").getByRole("button", { name: "Changed" }).count()) === 0 && (await filtersOffered(page)).join() === "All,Changed,Not in repository,Read-only,Differ between themes,Same in every theme", (await filtersOffered(page)).join());
+  check("there is no palette or list switch, and no theme bar", (await page.getByRole("button", { name: "Palette", exact: true }).count()) === 0 && (await page.getByRole("button", { name: "List", exact: true }).count()) === 0 && (await page.getByRole("toolbar", { name: "Themes" }).count()) === 0);
+  const tableHead = page.locator("[data-table-head]");
+  check("the table head names the columns: Name, a column for each theme, and Type", /name/i.test(await tableHead.innerText()) && (await tableHead.locator("[data-theme-segment]").count()) === 2 && /type/i.test(await tableHead.innerText()));
+  check("a row's cells line up with the head's columns", await (async () => {
+    const tableHeads = await tableHead.locator('[data-theme-segment]').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+    const cells = await page.locator('[data-token-id="primary-500"] input[aria-label*=" value of "]').evaluateAll((els) => els.map((e) => Math.round(e.closest("[role=cell]").getBoundingClientRect().left)));
+    return tableHeads.length === 2 && cells.length === 2 && tableHeads.every((h, i) => Math.abs(h - cells[i]) <= 8);
+  })());
+  check("colors are rows, in groups", (await groupNames()).join() === "primary,gray,semantic,base", (await groupNames()).join());
   check("a ramp reads in step order, whatever order it came in", (await names("primary")).join() === "primary-50,primary-100,primary-500,primary-900", (await names("primary")).join());
-  check("each swatch shows its hex, Light and Dark", (await page.locator('[data-group="primary"]').innerText()).includes("#6366f1") && (await page.locator('[data-group="primary"]').innerText()).includes("#818cf8"));
-  await page.screenshot({ path: `${OUT}/tokens-palette.png` });
+  check("each row shows its hex, Light and Dark, in a column for each theme", (await rowValue("primary-500", "Light").inputValue()) === "#6366f1" && (await rowValue("primary-500", "Dark").inputValue()) === "#818cf8" && (await page.locator("[data-table-head] [data-theme-segment]").count()) === 2);
+  await page.screenshot({ path: `${OUT}/tokens-table.png` });
 
-  await page.locator('button[aria-label^="primary-500:"]').click();
+  await page.getByRole("button", { name: "Edit primary-500 (Light)" }).click();
   const editor = page.locator("[data-color-editor]");
   await editor.waitFor();
   check("a swatch opens its editor with the value for each theme", (await editor.getByLabel("Light value of primary-500").inputValue()) === "#6366f1" && (await editor.getByLabel("Dark value of primary-500").inputValue()) === "#818cf8");
@@ -63,22 +76,20 @@ const extra = {
   await page.screenshot({ path: `${OUT}/tokens-editor.png` });
   await editor.getByLabel("Light value of primary-500").fill("not a color");
   await editor.getByLabel("Light value of primary-500").press("Enter");
-  check("a value that isn't a color is refused", (await editor.getByLabel("Light value of primary-500").evaluate((e) => e.className.includes("border-danger"))) && (await page.locator('button[aria-label^="primary-500:"]').getAttribute("aria-label")).includes("#6366f1"));
+  check("a value that isn't a color is refused", (await editor.getByLabel("Light value of primary-500").evaluate((e) => e.className.includes("border-danger"))) && (await rowValue("primary-500", "Light").inputValue()) === "#6366f1");
   await editor.getByLabel("Light value of primary-500").fill("rgb(255 0 0)");
   await editor.getByLabel("Light value of primary-500").press("Enter");
-  check("one that is a color is taken, in any notation", await settle(async () => (await page.locator('button[aria-label^="primary-500:"]').getAttribute("aria-label")).includes("#ff0000")));
+  check("one that is a color is taken, in any notation", await settle(async () => /^(#ff0000|rgb\(255 0 0\))$/i.test(await rowValue("primary-500", "Light").inputValue())));
   await page.keyboard.press("Escape");
   await undo();
-  check("and undone", await settle(async () => (await page.locator('button[aria-label^="primary-500:"]').getAttribute("aria-label")).includes("#6366f1")));
+  check("and undone", await settle(async () => (await rowValue("primary-500", "Light").inputValue()) === "#6366f1"));
 
-  // ── The list ─────────────────────────────────────────────────────────────
-  await view("List");
+  // ── Editing in the table ─────────────────────────────────────────────────
   await page.getByLabel("Select gray-100").waitFor();
   check("the list shows a row for each token with the values to edit in place", (await page.getByLabel("Light value of gray-100").inputValue()) === "#f3f4f6" && (await page.getByLabel("Dark value of gray-100").inputValue()) === "#111827");
   await page.reload();
   await page.locator('nav button[title="Tokens"]').click();
   await page.locator("[data-token-groups]").waitFor();
-  check("which view was last used is remembered", (await page.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed")) === "true");
   await page.getByLabel("Light value of gray-100").fill("#eeeeee");
   await page.getByLabel("Light value of gray-100").press("Enter");
   check("a value is changed where it stands", await settle(async () => (await page.getByLabel("Light value of gray-100").inputValue()) === "#eeeeee"));
@@ -104,9 +115,9 @@ const extra = {
   await page.getByLabel("Search tokens").fill("zzz");
   check("and says when nothing does", await page.locator("[data-no-match]").isVisible());
   await page.getByLabel("Search tokens").fill("");
-  await page.getByRole("button", { name: "Read-only", exact: true }).click();
+  await setFilter(page, "Read-only");
   check("a filter leaves the tokens it names", await page.locator("[data-no-match]").isVisible());
-  await page.getByRole("button", { name: "All", exact: true }).click();
+  await setFilter(page, "All");
   await page.locator("body").click({ position: { x: 700, y: 20 } });
   await page.keyboard.press("/");
   check("/ goes to the search", await page.getByLabel("Search tokens").evaluate((e) => e === document.activeElement));
@@ -187,8 +198,8 @@ const extra = {
   await page.getByLabel("Name of the teal group").fill("aqua");
   await page.getByLabel("Name of the teal group").press("Enter");
   check("a group is renamed, with its tokens", await settle(async () => (await groupNames()).includes("aqua") && (await names("aqua")).length === 2));
-  await page.getByRole("button", { name: /Regroup by name/ }).click();
-  check("Regroup by name files a ramp under its own name", await settle(async () => (await names("teal")).join() === "teal-100,teal-200" && !(await groupNames()).includes("aqua")), (await groupNames()).join());
+  await regroup(page);
+  check("Regroup colors by name files a ramp under its own name", await settle(async () => (await names("teal")).join() === "teal-100,teal-200" && !(await groupNames()).includes("aqua")), (await groupNames()).join());
 
   // ── Other kinds ──────────────────────────────────────────────────────────
   await page.getByLabel("Select space-1").waitFor();

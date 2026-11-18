@@ -58,7 +58,6 @@ const check = (name, ok, detail = "") => {
   await bar.getByRole("button", { name: "Add theme" }).click();
   await page.getByLabel("New theme name").fill("Dark");
   await page.getByLabel("New theme name").press("Enter");
-  await bar.getByRole("button", { name: "All themes", exact: true }).click();
   const dark = await themeId("Dark");
   const group = page.locator("[data-composition-themes]");
   check("with two, the parts are shown in one theme at a time, the first to begin with", await settle(async () => (await group.locator('button[aria-pressed="true"]').innerText()) === (await saved()).sets[0].themes[0].name));

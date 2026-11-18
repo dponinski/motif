@@ -162,7 +162,6 @@ const extra = {
   await page.getByRole("dialog").getByRole("button", { name: "Delete theme" }).click();
   check("Delete theme deletes it", await settle(async () => (await bar.locator('[data-theme-segment="p-d"]').count()) === 0));
   await sidebar.getByText("Semantic colors", { exact: true }).click();
-  await page.getByRole("button", { name: "Palette", exact: true }).click().catch(() => {});
   const t = await saved();
   const surface = t.tokens.find((x) => x.name === "surface");
   check("the colors that followed it by name follow the theme the set has open", surface.values["s-d"] === "#f9fafb", JSON.stringify(surface.values));

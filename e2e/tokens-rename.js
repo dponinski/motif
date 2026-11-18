@@ -161,7 +161,6 @@ const check = (name, ok, detail = "") => {
 
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   const row = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
   const usedBefore = Number((await row("primary").locator("[data-used]").innerText()).match(/\d+/)[0]);

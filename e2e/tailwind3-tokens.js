@@ -160,7 +160,6 @@ const check = (name, ok, detail = "") => {
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
   check("its colors, radii and shadows are read (the colors from channels, the rest from the config)", (await page.locator('[data-token-id][data-token-kind="color"]').count()) === 17 && (await page.locator('[data-token-id][data-token-kind="radius"]').count()) === 4 && (await page.locator('[data-token-id][data-token-kind="shadow"]').count()) === 2);
-  await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   const row = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
   check("a color kept as channels shows as the color it is, in each theme", (await page.getByLabel("Light value of primary", { exact: true }).inputValue()) === "#0f172a" && (await page.getByLabel("Dark value of primary", { exact: true }).inputValue()) === "#f8fafc");
