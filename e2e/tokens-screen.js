@@ -130,6 +130,9 @@ const extra = {
   check("the selection is let go", (await bar.count()) === 0);
 
   // ── Dragging ─────────────────────────────────────────────────────────────
+  // The brand's 44px controls leave the list less room; the drag needs the group header and the row both in view.
+  await page.setViewportSize({ width: 1440, height: 1300 });
+  await page.waitForTimeout(300);
   const row = page.locator('[data-token-id="foreground"]');
   const head = page.locator('[data-group-drop="primary"]');
   const rb = await row.boundingBox();

@@ -325,6 +325,17 @@ Open **Source control** (or **Repo sync** in the Tokens view) with a repository 
 npm test
 ```
 
+## Look and feel
+
+Motif is built with its own design system (the brand: a cream surface, ink text, one blaze orange for the main action, cobalt for what is selected). Everything in it is a CSS variable in `src/app/globals.css` and a name in `tailwind.config.ts`, so changing the look is changing those two files.
+
+- **Colors**: `surface`, `surface-raised`, `surface-sunken`, `ink`, `ink-muted`, `line` and `line-soft`; the accents `blaze` (primary actions, with `on-blaze` text, never white), `cobalt` (selection, links), `sun`, `mint` and `bubblegum` with a `-soft` tint each; `success` and `danger` for status. Each has a light and a dark value. The older names (`bg-surface-base`, `text-text-primary`, `border-surface-border`) point at them.
+- **Theme**: the app follows the system's light or dark setting until a choice is made (the three buttons on the project list, and in the editor).
+- **Type**: Bricolage Grotesque for display, Figtree for the interface and DM Mono for code, served with the app (no request to a font service). The scale is 12, 14, 16 and 18px; body text is 16px.
+- **Controls**: buttons, inputs and selects that have a text label are at least 44px tall; icon-only buttons stay small. The top bars are 56px.
+- **Shape**: radii of 6, 10 and 16px, flat surfaces with a one-pixel line, a shadow only for menus, tooltips and dialogs, and a 3px focus ring on everything that takes focus.
+- **Mark**: `src/components/Logo.tsx` (the mark, the lowercase wordmark and the pattern band of its four shapes), `public/brand/` and the favicon `src/app/icon.svg`.
+
 ## Building on a server with an old glibc
 
 `npm run build` uses Webpack (`next build --webpack`). Next 16 builds with Turbopack by default, which needs Next's native compiler, and that needs glibc 2.29 or newer; on an older host (some shared hosting) Next falls back to its WebAssembly compiler, which only Webpack supports. Webpack builds the same app everywhere, so the build doesn't depend on the host. `npm run dev` still uses Turbopack.

@@ -149,11 +149,11 @@ const check = (name, ok, detail = "") => {
 
   // The bars of the screen as it is now: every `[data-bar]`, its height, and where its bottom line is (those along the top).
   const bars = () => page.evaluate(() => [...document.querySelectorAll("[data-bar]")].map((el) => { const r = el.getBoundingClientRect(); return { name: (el.textContent || el.getAttribute("title") || "").trim().slice(0, 24), top: Math.round(r.top * 10) / 10, height: Math.round(r.height * 10) / 10, bottom: Math.round(r.bottom * 10) / 10 }; }));
-  const aligned = (list) => list.length >= 2 && list.every((b) => b.height === 40) && new Set(list.filter((b) => b.top === 0).map((b) => b.bottom)).size === 1;
+  const aligned = (list) => list.length >= 2 && list.every((b) => b.height === 56) && new Set(list.filter((b) => b.top === 0).map((b) => b.bottom)).size === 1;
   const report = async (name, minimum) => {
     const list = await bars();
     const top = list.filter((b) => b.top === 0);
-    check(`${name}: every bar is 40px tall and the ones along the top end on one line`, aligned(list) && top.length >= minimum, JSON.stringify(list));
+    check(`${name}: every bar is 56px tall and the ones along the top end on one line`, aligned(list) && top.length >= minimum, JSON.stringify(list));
   };
 
   await seed(page, "headers1");
@@ -190,7 +190,7 @@ const check = (name, ok, detail = "") => {
   await page.goto("http://localhost:3000/");
   await page.locator("header[data-bar]").waitFor();
   const dash = await bars();
-  check("the project list's header is the same 40px", dash.length === 1 && dash[0].height === 40, JSON.stringify(dash));
+  check("the project list's header is the same 56px", dash.length === 1 && dash[0].height === 56, JSON.stringify(dash));
   await page.screenshot({ path: `${OUT}/headers-dashboard.png` });
 
   const real = errors.filter((e) => !/hydrat|must be used inside/i.test(e));
