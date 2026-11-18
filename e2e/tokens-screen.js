@@ -38,7 +38,7 @@ const extra = {
   await page.goto("http://localhost:3000/editor/tkn00001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const groupNames = () => page.locator("[data-group]").evaluateAll((els) => els.map((e) => e.getAttribute("data-group")));
@@ -49,7 +49,7 @@ const extra = {
   const view = (name) => page.getByRole("button", { name, exact: true }).click();
 
   // ── Seeing ───────────────────────────────────────────────────────────────
-  check("the tabs say how many tokens each kind has", (await page.getByRole("tab", { name: /Colors/ }).innerText()).includes("11") && (await page.getByRole("tab", { name: /Spacing/ }).innerText()).includes("3"));
+  check("the set shows its colors and its lengths together", (await page.locator('[data-token-id][data-token-kind="color"]').count()) === 11 && (await page.locator('[data-token-id][data-token-kind="spacing"]').count()) === 3);
   check("colors open as a palette, in groups", (await groupNames()).join() === "primary,gray,semantic,base", (await groupNames()).join());
   check("a ramp reads in step order, whatever order it came in", (await names("primary")).join() === "primary-50,primary-100,primary-500,primary-900", (await names("primary")).join());
   check("each swatch shows its hex, Light and Dark", (await page.locator('[data-group="primary"]').innerText()).includes("#6366f1") && (await page.locator('[data-group="primary"]').innerText()).includes("#818cf8"));
@@ -77,7 +77,7 @@ const extra = {
   check("the list shows a row for each token with the values to edit in place", (await page.getByLabel("Light value of gray-100").inputValue()) === "#f3f4f6" && (await page.getByLabel("Dark value of gray-100").inputValue()) === "#111827");
   await page.reload();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
   check("which view was last used is remembered", (await page.getByRole("button", { name: "List", exact: true }).getAttribute("aria-pressed")) === "true");
   await page.getByLabel("Light value of gray-100").fill("#eeeeee");
   await page.getByLabel("Light value of gray-100").press("Enter");
@@ -121,9 +121,9 @@ const extra = {
   await bar.getByRole("button", { name: "Move to group" }).click();
   await page.getByLabel("New group").fill("teal");
   await page.getByLabel("New group").press("Enter");
-  check("they move to a group, new if need be", await settle(async () => (await groupNames()).includes("teal") && !(await groupNames()).includes("base")) && (await names("teal")).join() === "teal-100,teal-200");
+  check("they move to a group, new if need be", await settle(async () => (await groupNames()).includes("teal") && !(await names("base")).includes("teal-100")) && (await names("teal")).join() === "teal-100,teal-200");
   await undo();
-  check("in one undo", await settle(async () => (await groupNames()).includes("base") && !(await groupNames()).includes("teal")));
+  check("in one undo", await settle(async () => (await names("base")).includes("teal-100") && !(await groupNames()).includes("teal")));
   await redo();
   check("and one redo", await settle(async () => (await groupNames()).includes("teal")));
   await page.getByRole("button", { name: "Clear the selection" }).click();
@@ -191,9 +191,8 @@ const extra = {
   check("Regroup by name files a ramp under its own name", await settle(async () => (await names("teal")).join() === "teal-100,teal-200" && !(await groupNames()).includes("aqua")), (await groupNames()).join());
 
   // ── Other kinds ──────────────────────────────────────────────────────────
-  await page.getByRole("tab", { name: /Spacing/ }).click();
   await page.getByLabel("Select space-1").waitFor();
-  check("spacing has the same arrangement", (await page.locator("[data-token-id]").count()) === 3 && (await page.getByLabel("Value of space-4").inputValue()) === "16");
+  check("spacing has the same arrangement, in the same list", (await page.locator('[data-token-id][data-token-kind="spacing"]').count()) === 3 && (await page.getByLabel("Value of space-4").inputValue()) === "16");
   await page.getByLabel("Value of space-4").fill("20");
   await page.getByLabel("Value of space-4").press("Enter");
   check("a value is changed where it stands", await settle(async () => (await page.getByLabel("Value of space-4").inputValue()) === "20"));

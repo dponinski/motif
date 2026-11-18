@@ -88,7 +88,7 @@ export function CommitInput({ value, onCommit, label, className, mono, frame, in
 // The row of fields that adds a token: Enter adds it and the row stays for the next one, with the name already suggested.
 export interface AddField { key: string; label: string; placeholder: string; width?: string; mono?: boolean; validate?: (v: string) => boolean; options?: { value: string; label: string }[] }
 
-export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
+export function AddRow({ fields, initial, focus, onAdd, onClose, detect, onField }: {
   fields: AddField[];
   initial: Record<string, string>;
   // The field the pointer starts in, and returns to after each add.
@@ -98,6 +98,8 @@ export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
   onClose: () => void;
   // Lets what was typed in one field belong in another (a color pasted where the name goes).
   detect?: (key: string, value: string, values: Record<string, string>) => Record<string, string> | null;
+  // Told when a field changes (the type of what is being added decides which fields there are).
+  onField?: (key: string, value: string) => void;
 }) {
   const [values, setValues] = useState(initial);
   const [bad, setBad] = useState<string | null>(null);
@@ -108,6 +110,7 @@ export function AddRow({ fields, initial, focus, onAdd, onClose, detect }: {
     const moved = detect?.(key, value, next);
     setValues(moved ? { ...next, ...moved } : next);
     setBad(null);
+    onField?.(key, value);
   };
   const submit = () => {
     const wrong = fields.find((f) => (f.validate ? !f.validate(values[f.key] ?? "") : false));

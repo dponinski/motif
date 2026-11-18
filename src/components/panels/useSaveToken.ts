@@ -35,7 +35,7 @@ export function useSaveToken(repo: string, index: TokenIndex): (group: ClassGrou
       index.byRole[kind].some((c) => c.name === full || c.value === full) || list.some((t) => t.setId === setId && ((t as { repoName?: string }).repoName ?? cssName(t.name)) === full);
     const prefix = "prefix" in plan ? plan.prefix : "";
     return {
-      plan: !linked ? { reason: "Link this repository's tokens first (Repo sync), so the token has a set to go in" } : plan,
+      plan: !linked ? { reason: "Link this repository's tokens first (Source control), so the token has a set to go in" } : plan,
       kind,
       prefix,
       value: raw.value,

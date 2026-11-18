@@ -70,8 +70,8 @@ const check = (name, ok, detail = "") => {
   check("a composition came in as one, with its parts as tokens", stored.compositions.some((c) => c.name === "heading" && c.kind === "typography" && c.own && c.slots.find((s) => s.name === "font-family").ref));
 
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /^Colors/ }).waitFor();
-  check("the Tokens screen shows them", (await page.locator('button[aria-label^="primary:"]').count()) === 1 && (await page.getByRole("tab", { name: /^Compositions/ }).innerText()).includes("1"));
+  await page.locator("[data-token-groups]").waitFor();
+  check("the Tokens screen shows them", (await page.locator('button[aria-label^="primary:"]').count()) === 1 && (await page.locator('[data-token-id][data-token-kind="composition"]').count()) === 1);
   await page.screenshot({ path: `${OUT}/tokens-dtcg-pull.png` });
 
   // ── The repository changes ────────────────────────────────────────────────

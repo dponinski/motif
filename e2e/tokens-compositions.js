@@ -37,13 +37,13 @@ const extra = {
   await page.goto("http://localhost:3000/editor/comp0001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /^Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const sidebar = page.locator("div.w-\\[220px\\]");
   const addRow = page.locator("[data-add-row]");
-  const tab = (name) => page.getByRole("tab", { name: new RegExp(`^${name}`) });
-  const tabCount = (name) => tab(name).evaluate((e) => Number(e.textContent.match(/(\d+)$/)?.[1]));
+  // How many tokens of a kind the set shows (every kind is in the one list).
+  const tabCount = (name) => page.locator(`[data-token-id][data-token-kind="${{ Compositions: "composition", Strings: "string", Typography: "typography" }[name]}"]`).count();
   const newComposition = async (name, preset) => {
     await page.getByRole("button", { name: "New token" }).click();
     await page.getByRole("menuitem", { name: /^Composition/ }).click();
@@ -65,8 +65,7 @@ const extra = {
   check("New token offers Composition", (await page.getByRole("menuitem", { name: /^Composition/ }).count()) === 1);
   await page.keyboard.press("Escape");
   await newComposition("heading", "typography");
-  check("a composition opens the Compositions tab and is added from a preset: Typography", await settle(async () => (await tab("Compositions").getAttribute("aria-selected")) === "true" && (await tabCount("Compositions")) === 1));
-  check("there is no Add many for compositions", (await page.getByRole("button", { name: /Add many/ }).count()) === 0);
+  check("a composition is added from a preset: Typography", await settle(async () => (await tabCount("Compositions")) === 1));
   await page.getByRole("button", { name: "Edit heading", exact: true }).click();
   await row("heading").locator("[data-composition-editor]").waitFor();
   const parts = await row("heading").locator("[data-slot]").evaluateAll((els) => els.map((e) => e.getAttribute("data-slot")));
@@ -88,26 +87,20 @@ const extra = {
   await page.screenshot({ path: `${OUT}/tokens-compositions-editor.png` });
 
   // ── Following ─────────────────────────────────────────────────────────────
-  await tab("Strings").click();
   await page.getByLabel("Value of font-sans").fill("Merriweather, serif");
   await page.getByLabel("Value of font-sans").press("Enter");
-  await tab("Compositions").click();
   await open("heading");
   check("when the token changes, so does the part", await settle(async () => (await slot("heading", "font-family").locator("[data-slot-text]").innerText()) === "Merriweather, serif"));
-  check("and the search finds the composition by what a part is", await (async () => { await page.getByLabel("Search tokens").fill("Merriweather"); const ok = await settle(async () => (await page.locator("[data-token-id]").count()) === 1); await page.getByLabel("Search tokens").fill(""); return ok; })());
+  check("and the search finds the composition by what a part is, with the String it follows", await (async () => { await page.getByLabel("Search tokens").fill("Merriweather"); const ok = await settle(async () => (await tabCount("Compositions")) === 1 && (await tabCount("Strings")) === 1); await page.getByLabel("Search tokens").fill(""); return ok; })());
 
   // ── A token that goes ─────────────────────────────────────────────────────
-  await tab("Strings").click();
   await page.getByLabel("Delete font-sans").click();
-  await tab("Compositions").click();
   await open("heading");
   check("a part keeps the value its token had, and is a value of its own", await settle(async () => (await slot("heading", "font-family").locator("[data-slot-token]").count()) === 0 && (await page.getByLabel("font-family of heading", { exact: true }).inputValue()) === "Merriweather, serif"));
   await undo();
   await open("heading");
   check("undo brings the token back, and the part is it again", await settle(async () => (await slot("heading", "font-family").locator("[data-slot-token]").innerText()) === "font-sans"));
-  await tab("Strings").click();
   check("(the token is back)", (await tabCount("Strings")) === 1);
-  await tab("Compositions").click();
 
   // ── Another set's tokens ──────────────────────────────────────────────────
   await sidebar.getByText("Semantic", { exact: true }).click();
@@ -141,7 +134,7 @@ const extra = {
   check("a part is removed", await settle(async () => (await row("badge").locator("[data-slot]").count()) === 2));
 
   // ── Arranged like any token, undone, saved ────────────────────────────────
-  check("they are counted on their tab", (await tabCount("Compositions")) === 2);
+  check("they are both in the list", (await tabCount("Compositions")) === 2);
   await undo();
   check("each change is a step of undo", await settle(async () => (await row("badge").locator("[data-slot]").count()) === 3));
   const t = await saved();
@@ -152,7 +145,6 @@ const extra = {
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
   await sidebar.getByText("Primitives", { exact: true }).click();
-  await tab("Compositions").click();
   check("after a reload it is still a composition, and still follows its tokens", await settle(async () => (await tabCount("Compositions")) === 1 && (await tabCount("Typography")) === 0));
   await open("heading");
   check("with its parts", (await slot("heading", "font-size").locator("[data-slot-token]").innerText()) === "text-xl");

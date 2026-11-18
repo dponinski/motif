@@ -39,7 +39,7 @@ const extra = {
   await page.goto("http://localhost:3000/editor/cmp00001");
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.locator("div.w-\\[220px\\]").getByText("Global", { exact: true }).click();
 

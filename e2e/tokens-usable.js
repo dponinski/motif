@@ -165,20 +165,18 @@ const check = (name, ok, detail = "") => {
   // ── Tokens are made, with names that don't say what they are ──────────────
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("tab", { name: /Radii/ }).click();
-  await page.getByRole("button", { name: /^Add to / }).first().click({ force: true });
-  const add = page.locator("[data-add-row]");
-  await add.getByLabel("New radius name").fill("card");
-  await add.getByLabel("New radius value").fill("14");
-  await add.getByLabel("New radius value").press("Enter");
-  await add.getByLabel("New radius name").press("Escape");
-  await page.getByRole("tab", { name: /Spacing/ }).click();
-  await page.getByRole("button", { name: /Add a spacing/ }).click();
-  await add.getByLabel("New spacing name").fill("gutter");
-  await add.getByLabel("New spacing value").fill("22");
-  await add.getByLabel("New spacing value").press("Enter");
-  await add.getByLabel("New spacing name").press("Escape");
-  await page.getByRole("tab", { name: /Spacing/ }).click();
+  const addNumber = async (name, value, use) => {
+    await page.getByRole("button", { name: /^Add to / }).first().click({ force: true });
+    const add = page.locator("[data-add-row]");
+    await add.getByLabel("Type of the new token").selectOption("number");
+    await add.getByLabel("New number name").fill(name);
+    await add.getByLabel("New number value").fill(value);
+    await add.getByLabel("New number used as").selectOption(use);
+    await add.getByLabel("New number value").press("Enter");
+    await add.getByLabel("New number name").press("Escape");
+  };
+  await addNumber("card", "14", "radius");
+  await addNumber("gutter", "22", "spacing");
   check("both tokens are in the set", await settle(async () => (await page.locator("[data-token-id]").filter({ hasText: "gutter" }).count()) === 1));
 
   // ── Used before anything is sent ──────────────────────────────────────────

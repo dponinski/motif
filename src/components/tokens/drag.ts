@@ -28,7 +28,9 @@ export function useTokenDrag(options: { axis: "x" | "y"; dragged: (id: string) =
         const over = token.getAttribute("data-token-id")!;
         if (ids.includes(over)) return null;
         const box = token.getBoundingClientRect();
-        const f = latest.current.axis === "x" ? (e.clientX - box.left) / box.width : (e.clientY - box.top) / box.height;
+        // (A palette's cards are side by side, a list's rows one under the other: the token says which.)
+        const across = (token.getAttribute("data-axis") ?? latest.current.axis) === "x";
+        const f = across ? (e.clientX - box.left) / box.width : (e.clientY - box.top) / box.height;
         return { type: "token", id: over, after: f > 0.5 };
       }
       const group = el?.closest("[data-group-drop]") as HTMLElement | null;

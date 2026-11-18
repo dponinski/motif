@@ -216,9 +216,7 @@ const check = (name, ok, detail = "") => {
   // ── In the Tokens screen, to be sent with the next sync ───────────────────
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  await page.getByRole("tab", { name: /Colors/ }).click();
   check("the color is a token of the set, Motif's own until synced", (await page.locator('button[aria-label^="brand:"]').count()) === 1);
-  await page.getByRole("tab", { name: /Radii/ }).click();
   check("and so is the radius, named for its class", await settle(async () => (await page.getByText("radius-card", { exact: true }).count()) >= 1));
   await page.screenshot({ path: `${OUT}/tokens-saved.png` });
 

@@ -159,7 +159,7 @@ const check = (name, ok, detail = "") => {
   check("the components come in on their own", await settle(async () => (await page.locator("aside button[title*='src/']").filter({ hasText: /^Button$/ }).count()) === 1, 60000));
   await nav("Tokens");
   check("and the tokens, as a set named for the repository (not left beside an empty one)", await settle(async () => (await sidebar.getByText("acme/ds", { exact: true }).count()) === 1 && (await sidebar.getByText("Global", { exact: true }).count()) === 0));
-  check("with its colors, radii and shadows (which are compositions, in design tokens files)", await settle(async () => (await page.getByRole("tab", { name: /Colors/ }).innerText()).includes("17") && (await page.getByRole("tab", { name: /Radii/ }).innerText()).includes("4") && (await page.getByRole("tab", { name: /Compositions/ }).innerText()).includes("2")));
+  check("with its colors, its radii (numbers) and its shadows (compositions), in design tokens files", await settle(async () => (await page.locator('[data-token-id][data-token-kind="color"]').count()) === 17 && (await page.locator('[data-token-id][data-token-kind="number"]').count()) === 4 && (await page.locator('[data-token-id][data-token-kind="composition"]').count()) === 2));
   await page.getByRole("button", { name: "List", exact: true }).click();
   await primaryLight().waitFor();
   const first = await primaryLight().inputValue();

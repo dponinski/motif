@@ -3,6 +3,8 @@ import type { Unit } from "./model";
 // What a Number or a String can say it is for (the repository's naming for it comes later: for now it is how Motif arranges them).
 export const NUMBER_USES: { value: string; label: string }[] = [
   { value: "", label: "Not said" },
+  { value: "spacing", label: "Spacing" },
+  { value: "radius", label: "Radius" },
   { value: "font-size", label: "Font size" },
   { value: "line-height", label: "Line height" },
   { value: "font-weight", label: "Font weight" },

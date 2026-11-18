@@ -33,7 +33,7 @@ const extra = {
   await page.goto("http://localhost:3000/editor/talias01");
   await page.getByText("Layers", { exact: true }).waitFor();
   await page.locator('nav button[title="Tokens"]').click();
-  await page.getByRole("tab", { name: /Colors/ }).waitFor();
+  await page.locator("[data-token-groups]").waitFor();
 
   const settle = async (fn, ms = 6000) => { for (let i = 0; i < ms / 100; i++) { if (await fn().catch(() => false)) return true; await page.waitForTimeout(100); } return false; };
   const swatch = (name) => page.locator(`button[aria-label^="${name}:"]`);

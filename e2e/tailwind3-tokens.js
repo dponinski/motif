@@ -159,19 +159,16 @@ const check = (name, ok, detail = "") => {
 
   await nav("Tokens");
   await page.locator("div.w-\\[220px\\]").getByText("acme/ds", { exact: true }).click();
-  check("its colors, radii and shadows are read (the colors from channels, the rest from the config)", (await page.getByRole("tab", { name: /Colors/ }).innerText()).includes("17") && (await page.getByRole("tab", { name: /Radii/ }).innerText()).includes("4") && (await page.getByRole("tab", { name: /Shadows/ }).innerText()).includes("2"));
-  await page.getByRole("tab", { name: /Colors/ }).click();
+  check("its colors, radii and shadows are read (the colors from channels, the rest from the config)", (await page.locator('[data-token-id][data-token-kind="color"]').count()) === 17 && (await page.locator('[data-token-id][data-token-kind="radius"]').count()) === 4 && (await page.locator('[data-token-id][data-token-kind="shadow"]').count()) === 2);
   await page.getByRole("button", { name: "List", exact: true }).click();
   await page.getByLabel("Select primary", { exact: true }).waitFor();
   const row = (name) => page.locator("[data-token-id]").filter({ has: page.getByLabel(`Select ${name}`, { exact: true }) });
   check("a color kept as channels shows as the color it is, in each theme", (await page.getByLabel("Light value of primary", { exact: true }).inputValue()) === "#0f172a" && (await page.getByLabel("Dark value of primary", { exact: true }).inputValue()) === "#f8fafc");
   check("and a token of the config is not locked", (await row("primary").locator('[aria-label="Read-only"]').count()) === 0);
-  await page.getByRole("tab", { name: /Radii/ }).click();
   check("nor is a radius defined in the config", (await page.locator("[data-token-id]").filter({ hasText: "radius-md" }).locator('[aria-label="Read-only"], [aria-label="Can\'t be edited here"]').count()) === 0);
   await page.screenshot({ path: `${OUT}/tailwind3-tokens.png` });
 
   // ── Renaming a color that shares its group with its foreground ────────────
-  await page.getByRole("tab", { name: /Colors/ }).click();
   await page.getByLabel("Edit secondary (Light)").click();
   const editor = page.locator("[data-color-editor]");
   await editor.locator("[data-rename-open]").click();
@@ -189,12 +186,10 @@ const check = (name, ok, detail = "") => {
   // ── Editing values, and adding a token ────────────────────────────────────
   await page.getByLabel("Light value of primary", { exact: true }).fill("#ff0000");
   await page.getByLabel("Light value of primary", { exact: true }).press("Enter");
-  await page.getByRole("tab", { name: /Radii/ }).click();
   const radiusInput = page.getByLabel("Value of radius-md", { exact: true });
   await radiusInput.waitFor();
   await radiusInput.fill("10");
   await radiusInput.press("Enter");
-  await page.getByRole("tab", { name: /Colors/ }).click();
   await page.locator('[data-group="primary"]').hover();
   await page.getByRole("button", { name: "Add to primary" }).click();
   const add = page.locator("[data-add-row]");
