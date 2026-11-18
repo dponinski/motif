@@ -164,20 +164,24 @@ const check = (name, ok, detail = "") => {
 
   // ── What the inspector changes is what the canvas shows ─────────────────────
   // Every control is tried on the element it belongs to, and the canvas (the element's computed style in the preview) is read after.
-  const until = async (read, want, ms = 6000) => { const end = Date.now() + ms; let got; while (Date.now() < end) { got = await read(); if (want(got)) return got; await page.waitForTimeout(100); } return got; };
-  const open = async (name, readyFor) => { await rowFor(name).click(); await stage.locator(`#root ${readyFor}`).first().waitFor({ timeout: 60000 }); await page.getByRole("button", { name: "Design", exact: true }).click(); };
+  const until = async (read, want, ms = 20000) => { const end = Date.now() + ms; let got; while (Date.now() < end) { got = await read(); if (want(got)) return got; await page.waitForTimeout(100); } return got; };
+  // Each component says its own name in its text, so a preview that is still the previous component's is not taken for this one.
+  const open = async (name, readyFor, text) => { await rowFor(name).click(); await stage.locator(`#root ${readyFor}`).getByText(text, { exact: true }).or(stage.locator(`#root ${readyFor}`).filter({ hasText: new RegExp(`^${text}$`) })).first().waitFor({ timeout: 60000 }); await page.getByRole("button", { name: "Design", exact: true }).click(); };
   // The corner of an element, where no child is (the middle of a box is its content).
-  const pick = async (selector, tag) => { await stage.locator(selector).first().click({ position: { x: 3, y: 3 } }); await aside.getByText(`<${tag}>`).waitFor({ timeout: 10000 }); };
+  // (The panel is read for the element picked, not for the one picked before it: its controls are there once the element's source has been read.)
+  const pick = async (selector, tag) => { await stage.locator(selector).first().click({ position: { x: 3, y: 3 } }); await aside.getByText(`<${tag}>`).waitFor({ timeout: 10000 }); await aside.getByLabel("Display", { exact: true }).waitFor({ timeout: 20000 }); await page.waitForTimeout(300); };
   // Chooses an option and says what the canvas does with it.
   const choose = async (label, option, selector, prop, want) => {
     await field(label).selectOption(option);
+    // The control took it, and then the canvas shows it.
+    await until(async () => field(label).inputValue(), (v) => v === option);
     return until(() => css(selector, prop), want);
   };
 
   await componentsReady(page);
 
   // Tailwind classes
-  await open("Card", "h2");
+  await open("Card", "h2", "Title");
   await pick("#root h2", "h2");
   check("text size: the class is replaced and the canvas follows", (await choose("Text size", "2xl", "#root h2", "fontSize", (v) => v === "24px")) === "24px");
   check("weight", (await choose("Weight", "bold", "#root h2", "fontWeight", (v) => v === "700")) === "700");
@@ -203,7 +207,7 @@ const check = (name, ok, detail = "") => {
   check("undo takes the last one back", (await until(() => css("#root div[data-motif]", "paddingTop"), (v) => v !== "64px")) !== "64px");
 
   // A stylesheet rule in a repository that uses Tailwind: the rule outranks any class, so the rule is what is edited
-  await open("Plain", ".plain-box");
+  await open("Plain", ".plain-text", "Plain");
   await pick("#root .plain-box", "div");
   check("an element styled by a stylesheet says where its styles are", (await aside.getByText("Styles in").first().innerText()).includes("Plain.css"));
   check("padding is read from the rule", (await field("Padding").inputValue()) === "8px");
@@ -216,7 +220,7 @@ const check = (name, ok, detail = "") => {
   check("text size of the span", (await choose("Text size", "20px", "#root .plain-text", "fontSize", (v) => v === "20px")) === "20px");
 
   // The element's own style attribute
-  await open("Inline", "span");
+  await open("Inline", "span", "Inline");
   await pick("#root span", "span");
   check("an inline style is listed as outranking the classes", (await aside.locator("[data-inline-style]").innerText()).includes("font-size"));
   check("text size: the property leaves the style and the class shows", (await choose("Text size", "2xl", "#root span", "fontSize", (v) => v === "24px")) === "24px");
@@ -227,7 +231,7 @@ const check = (name, ok, detail = "") => {
   check("and then nothing is inline", (await aside.locator("[data-inline-style]").count()) === 0);
 
   // Classes that a condition adds
-  await open("Cn", "span");
+  await open("Cn", "span", "Cn");
   await pick("#root span", "span");
   check("a weight set by both sides of a condition", (await choose("Weight", "thin", "#root span", "fontWeight", (v) => v === "100")) === "100");
   await setColor("Text color", "#00aa00");
