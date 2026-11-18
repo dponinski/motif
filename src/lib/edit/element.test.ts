@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadFixture } from "../repo-scan/fixtures";
-import { analyze, deleteElement, duplicateElement, moveElement, setGroup, setSlotClasses, setText, slotText } from "./element";
+import { analyze, deleteElement, duplicateElement, moveElement, removeInlineStyle, setGroup, setSlotClasses, setText, slotText } from "./element";
 import { groupById, readGroup } from "./classes";
 import { instrument, parseMotifKey } from "./instrument";
 
@@ -289,5 +289,77 @@ describe("changing text and structure", () => {
   it("does not treat an element inside an expression as a sibling", async () => {
     const cond = "export const A = ({ x }: { x: boolean }) => (<div>{x && <span>a</span>}</div>);";
     expect(await deleteElement("A.tsx", cond, cond.indexOf("<span"))).toBeNull();
+  });
+});
+
+describe("classes that depend on a condition", () => {
+  const code = [
+    'import { cn } from "../lib/cn";',
+    "export function Tag({ on = false }) {",
+    '  return <span className={cn("text-sm", on ? "font-bold" : "font-normal", on && "bg-blue-500")}>x</span>;',
+    "}",
+    "",
+  ].join("\n");
+  const start = code.indexOf("<span");
+
+  it("reads each branch as classes of its own", async () => {
+    const info = (await analyze("Tag.tsx", code, start))!;
+    expect(info.slots.map((s) => [s.kind, slotText(s)])).toEqual([["cn", "text-sm"], ["cn-when", "font-bold"], ["cn-when", "font-normal"], ["cn-when", "bg-blue-500"]]);
+  });
+
+  it("sets a group in every branch that has it, so the value shows whichever way the condition goes", async () => {
+    const done = (await setGroup("Tag.tsx", code, start, "font-weight", "thin"))!;
+    expect(done.code).toContain('cn("text-sm font-thin", on ? "font-thin" : "font-thin"');
+    expect(done.summary).toContain("every condition");
+  });
+
+  it("sets the plain class too when the condition adds the same group", async () => {
+    const withBase = code.replace('"text-sm"', '"text-sm bg-gray-100"');
+    const done = (await setGroup("Tag.tsx", withBase, withBase.indexOf("<span"), "bg", "red-500"))!;
+    expect(done.code).toContain('"text-sm bg-red-500"');
+    expect(done.code).toContain("on && \"bg-red-500\"");
+  });
+
+  it("puts a group that only a condition sets into the plain classes as well", async () => {
+    const only = code.replace('on && "bg-blue-500"', 'on && "text-red-500"');
+    const done = (await setGroup("Tag.tsx", only, only.indexOf("<span"), "text-color", "green-600"))!;
+    expect(done.code).toContain('cn("text-sm text-green-600"');
+    expect(done.code).toContain('on && "text-green-600"');
+  });
+
+  it("adds a group nothing sets to the plain classes, as before", async () => {
+    const done = (await setGroup("Tag.tsx", code, start, "p", "4"))!;
+    expect(done.code).toContain('cn("text-sm p-4"');
+  });
+});
+
+describe("an inline style", () => {
+  const code = [
+    "export function Box() {",
+    '  return <div className="flex" style={{ padding: 8, fontSize: 14, color: "red" }}>x</div>;',
+    "}",
+    "",
+  ].join("\n");
+  const start = code.indexOf("<div");
+
+  it("lists the properties it sets, as CSS names", async () => {
+    expect((await analyze("Box.tsx", code, start))!.inlineProps).toEqual(["padding", "font-size", "color"]);
+    const plain = 'export const A = () => <p className="x">a</p>;';
+    expect((await analyze("A.tsx", plain, plain.indexOf("<p")))!.inlineProps).toEqual([]);
+  });
+
+  it("takes properties out, keeping the others as they were written", async () => {
+    const done = (await removeInlineStyle("Box.tsx", code, start, ["font-size", "padding"]))!;
+    expect(done.code).toContain('style={{ color: "red" }}');
+    expect(done.summary).toContain("padding, font-size");
+  });
+
+  it("takes the attribute away when none are left", async () => {
+    const done = (await removeInlineStyle("Box.tsx", code, start, ["padding", "font-size", "color"]))!;
+    expect(done.code).toContain('<div className="flex">x</div>');
+  });
+
+  it("does nothing for a property it doesn't set", async () => {
+    expect(await removeInlineStyle("Box.tsx", code, start, ["margin"])).toBeNull();
   });
 });

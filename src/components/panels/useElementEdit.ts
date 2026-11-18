@@ -5,10 +5,10 @@ import { useShallow } from "zustand/react/shallow";
 import { gitBlobSha } from "@/lib/github";
 import { recordChange } from "./useEditRunner";
 import { BREAKPOINT_WIDTH, GROUPS, readGroup, type ClassGroup } from "@/lib/edit/classes";
-import { analyze, setGroup, type EditResult, type ElementInfo } from "@/lib/edit/element";
+import { analyze, removeInlineStyle, setGroup, type EditResult, type ElementInfo } from "@/lib/edit/element";
 import { readDeclarations } from "@/lib/edit/css";
 import { CSS_GROUPS, cssNames, readCssGroup, type CssGroup } from "@/lib/edit/css-groups";
-import { setCssGroup, stylesheetOf, viewOf } from "@/lib/edit/css-element";
+import { ownedClass, setCssGroup, stylesheetOf, viewOf } from "@/lib/edit/css-element";
 import type { LibraryComponent } from "@/lib/preview/library";
 import { activeTheme } from "@/lib/edit/tokens";
 import { useTokenIndex } from "@/components/stage/preview-core";
@@ -86,12 +86,15 @@ export function useElementEdit(component: LibraryComponent, source: LibrarySourc
       try {
         const code = await read(selection.path);
         const next = code === null ? null : await analyze(selection.path, code, selection.start, values);
-        // Styles that are in a stylesheet next to the component are edited there. (With Tailwind v4 the classes are.)
+        // Styles that are in a stylesheet next to the component are edited there. With Tailwind the classes are, except for an element
+        // that has a class with a rule in that stylesheet (`plain-box`): its rule outranks any utility class, so a class written for it
+        // would never show.
         let nextSheet: typeof sheet = null;
-        const sheetPath = code !== null && source.tailwindVersion === null ? stylesheetOf(selection.path, code) : null;
+        const sheetPath = code !== null ? stylesheetOf(selection.path, code) : null;
         if (code !== null && sheetPath) {
           const text = await read(sheetPath);
-          nextSheet = { path: sheetPath, text: text ?? "", exists: text !== null, code };
+          const owns = next !== null && text !== null && ownedClass(next.classes, text) !== null;
+          if (source.tailwindVersion === null || owns) nextSheet = { path: sheetPath, text: text ?? "", exists: text !== null, code };
         }
         if (!stale) { setInfo(next); setSheet(nextSheet); }
       } catch (err) {
@@ -160,7 +163,16 @@ export function useElementEdit(component: LibraryComponent, source: LibrarySourc
         setError(errorMessage(err));
       }
     };
-    const change = (g: ClassGroup, value: string | null) => (css ? runCss(g, value) : run((code, start) => setGroup(selection.path, code, start, g.id, value, values, modifier, names)));
+    // One group on the classes. A property the element also sets in its own `style` would outrank the class, so choosing a value takes
+    // it out of the inline style: what is chosen is what shows.
+    const setClasses = async (code: string, start: number, g: ClassGroup, value: string | null): Promise<EditResult | null> => {
+      const result = await setGroup(selection.path, code, start, g.id, value, values, modifier, names);
+      const props = CSS_GROUPS.find((x) => x.id === g.id)?.props ?? [];
+      if (!result || value === null || modifier !== "" || !props.some((p) => info.inlineProps.includes(p))) return result;
+      const moved = await removeInlineStyle(selection.path, result.code, result.selection ?? start, props);
+      return moved ? { ...moved, summary: `${result.summary} (and taken out of the inline style)` } : result;
+    };
+    const change = (g: ClassGroup, value: string | null) => (css ? runCss(g, value) : run((code, start) => setClasses(code, start, g, value)));
     // Several groups at once (a corner dragged is a width and a height): one step to undo for classes. A stylesheet's rule and
     // the component are written together by each `runCss`, so those go one after another.
     const changeMany = async (list: { group: ClassGroup; value: string | null }[]) => {
@@ -171,7 +183,7 @@ export function useElementEdit(component: LibraryComponent, source: LibrarySourc
         let text = code, at = start, last: EditResult | null = null;
         const summaries: string[] = [];
         for (const { group, value } of list) {
-          const result = await setGroup(selection.path, text, at, group.id, value, values, modifier, names);
+          const result = await setClasses(text, at, group, value);
           if (!result) continue;
           text = result.code;
           at = result.selection ?? at;

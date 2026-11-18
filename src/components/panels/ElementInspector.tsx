@@ -267,6 +267,12 @@ export default function ElementInspector({ component, source, connection, part =
         </p>
       )}
 
+      {info && info.inlineProps.length > 0 && (
+        <p className="mx-3 mb-2 text-2xs leading-relaxed text-text-tertiary" data-inline-style>
+          Set in the element&apos;s own <span className="font-mono">style</span>: <span className="font-mono">{info.inlineProps.join(", ")}</span>. An inline style outranks classes, so choosing a value for one of these takes it out of the style and puts it in the classes.
+        </p>
+      )}
+
       {editable && (
         <div className="border-t border-surface-border px-3 py-2.5" data-editing-for>
           <p className="mb-2 text-2xs font-medium uppercase tracking-wider text-text-tertiary">Editing the style for</p>

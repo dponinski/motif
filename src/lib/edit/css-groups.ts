@@ -5,11 +5,27 @@ import { splitOpacity, type TokenIndex } from "./tokens";
 // inspector's terms (a token's name, a keyword, `[16px]` for a value written out) goes to and from what the stylesheet
 // says. The groups keep their ids, labels and sections, so the same controls drive a stylesheet as drive classes.
 
-export type CssNames = Record<TokenRole, ReadonlySet<string>>;
+// The tokens a stylesheet can name, by what the inspector calls them. With Tailwind a token is named by its class (`sm`) and its variable
+// is something else (`--radius-sm`), so `vars` says which variable each is; without Tailwind the two are the same and `vars` is absent.
+export type CssNames = Record<TokenRole, ReadonlySet<string>> & { vars?: Partial<Record<TokenRole, ReadonlyMap<string, string>>> };
 
 export const cssNames = (index: TokenIndex): CssNames => {
   const of = (role: TokenRole) => new Set(index.byRole[role].map((c) => c.value));
-  return { color: of("color"), spacing: of("spacing"), radius: of("radius"), shadow: of("shadow"), text: of("text"), font: of("font") };
+  const names: CssNames = { color: of("color"), spacing: of("spacing"), radius: of("radius"), shadow: of("shadow"), text: of("text"), font: of("font") };
+  if (!index.css) {
+    const roles = Object.keys(index.byRole) as TokenRole[];
+    names.vars = Object.fromEntries(roles.map((role) => [role, new Map(index.byRole[role].map((c) => [c.value, c.name]))]));
+  }
+  return names;
+};
+
+const varOf = (names: CssNames, role: TokenRole, token: string): string => names.vars?.[role]?.get(token) ?? token;
+// The token a variable is, when the stylesheet says `var(--radius-sm)`.
+const tokenOf = (names: CssNames, role: TokenRole, name: string): string => {
+  const map = names.vars?.[role];
+  if (!map) return name;
+  for (const [token, variable] of map) if (variable === name) return token;
+  return name;
 };
 
 export type CssChange = [prop: string, value: string | null, ifAbsent?: "ifAbsent"];
@@ -31,7 +47,7 @@ const isArbitrary = (field: string) => /^\[.*\]$/.test(field);
 function read(role: TokenRole | undefined, css: string, names: CssNames, options: string[], keywords: Record<string, string>): string {
   const t = css.trim();
   const v = t.match(VAR);
-  if (v) return role && names[role].has(v[1]) ? v[1] : arbitrary(t);
+  if (v) { const token = role ? tokenOf(names, role, v[1]) : v[1]; return role && names[role].has(token) ? token : arbitrary(t); }
   if (t === "0px" || t === "0") return options.includes("0") ? "0" : arbitrary(t);
   const keyword = Object.entries(keywords).find(([, c]) => c === t);
   if (keyword) return keyword[0];
@@ -39,7 +55,7 @@ function read(role: TokenRole | undefined, css: string, names: CssNames, options
 }
 
 function write(role: TokenRole | undefined, field: string, names: CssNames, keywords: Record<string, string>): string {
-  if (role && names[role].has(field)) return `var(--${field})`;
+  if (role && names[role].has(field)) return `var(--${varOf(names, role, field)})`;
   if (isArbitrary(field)) return unwrap(field);
   return keywords[field] ?? field;
 }
@@ -66,14 +82,14 @@ const color = (id: string, prop: string, start: string): CssGroup => {
   const fromColor = (css: string, names: CssNames): string => {
     const t = css.trim();
     const v = t.match(VAR);
-    if (v) return names.color.has(v[1]) ? v[1] : arbitrary(t);
+    if (v) { const token = tokenOf(names, "color", v[1]); return names.color.has(token) ? token : arbitrary(t); }
     const mix = t.match(/^color-mix\(\s*in srgb,\s*(.+?)\s+(\d+(?:\.\d+)?)%\s*,\s*transparent\s*\)$/);
     if (mix) return `${fromColor(mix[1], names)}/${mix[2]}`;
     if (/^currentcolor$/i.test(t)) return "current";
     return ["transparent", "white", "black", "inherit"].includes(t) ? t : arbitrary(t);
   };
   const toColor = (field: string, names: CssNames): string => {
-    if (names.color.has(field)) return `var(--${field})`;
+    if (names.color.has(field)) return `var(--${varOf(names, "color", field)})`;
     if (isArbitrary(field)) return unwrap(field);
     return field === "current" ? "currentColor" : field;
   };
@@ -141,11 +157,11 @@ export const CSS_GROUPS: CssGroup[] = [
       if (t === undefined) return null;
       if (t === "none") return "none";
       const v = t.match(VAR);
-      if (v) return names.shadow.has(v[1]) ? v[1] : arbitrary(t);
+      if (v) { const token = tokenOf(names, "shadow", v[1]); return names.shadow.has(token) ? token : arbitrary(t); }
       const preset = Object.entries(SHADOWS).find(([, css]) => css === t);
       return preset ? preset[0] : arbitrary(t);
     },
-    toCss: (value, names) => [["box-shadow", names.shadow.has(value) ? `var(--${value})` : isArbitrary(value) ? unwrap(value) : SHADOWS[value] ?? value]],
+    toCss: (value, names) => [["box-shadow", names.shadow.has(value) ? `var(--${varOf(names, "shadow", value)})` : isArbitrary(value) ? unwrap(value) : SHADOWS[value] ?? value]],
   },
   {
     ...make("opacity", ["opacity"], undefined, ["0", "5", "10", "20", "25", "30", "40", "50", "60", "70", "75", "80", "90", "95", "100"], "50"),

@@ -14,7 +14,7 @@ const path = require("path");
 const { ROOT, APP_PORT, APP_URL } = require("./support/env");
 
 // Use the shared server.
-const SHARED = ["build", "canvas", "chat", "direct", "insert", "docs-repo", "docs", "edit", "empty", "import", "migrate", "persist", "preview", "projects", "props", "repo", "stage", "states", "structure", "sync-flow", "sync-mixed", "tokenpick", "tokens", "variants", "compare", "tour", "tokens-screen", "tokens-add", "tokens-alias", "tokens-quickadd", "tokens-usage", "tokens-rename", "tailwind3-tokens", "tailwind3-preview", "tailwind3-docs", "headers", "tokens-themes", "tokens-usable", "pull", "layout", "source-control", "tokens-compare", "tokens-types", "tokens-collections", "tokens-sets", "tokens-compositions", "tokens-dtcg-pull", "tokens-dtcg-push", "tokens-convert"];
+const SHARED = ["build", "canvas", "chat", "direct", "insert", "docs-repo", "docs", "edit", "empty", "import", "migrate", "persist", "preview", "projects", "props", "repo", "stage", "states", "structure", "sync-flow", "sync-mixed", "tokenpick", "tokens", "variants", "compare", "tour", "tokens-screen", "tokens-add", "tokens-alias", "tokens-quickadd", "tokens-usage", "tokens-rename", "tailwind3-tokens", "tailwind3-preview", "tailwind3-docs", "headers", "tokens-themes", "tokens-usable", "pull", "layout", "source-control", "tokens-compare", "tokens-types", "tokens-collections", "tokens-sets", "inspector-canvas", "tokens-compositions", "tokens-dtcg-pull", "tokens-dtcg-push", "tokens-convert"];
 // Start a server of their own, with no database.
 const OWN = ["signin"];
 // Start a server of their own, and need PostgreSQL.

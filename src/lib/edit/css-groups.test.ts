@@ -162,3 +162,21 @@ describe("the repository's variables as tokens", () => {
     expect(suggest(cssGroupById("radius"), "40px", index)).toBeNull();
   });
 });
+
+describe("tokens in a repository that uses Tailwind", () => {
+  // `--radius-sm` is the class `rounded-sm`: the inspector names it `sm`, and a stylesheet has to say the variable.
+  const tw = (name: string, kind: RepoToken["kind"], value: string, tailwind: string): RepoToken => ({ ...token(name, kind, value), tailwind });
+  const withTailwind = cssNames(buildTokenIndex([tw("radius-sm", "radius", "4px", "radius-sm"), tw("shadow-card", "shadow", "0 1px 2px #0001", "shadow-card"), tw("color-brand", "color", "#3366ff", "color-brand")], ["default"], 4, {}, false));
+
+  it("are written as the variable they are", () => {
+    expect(cssGroupById("radius").toCss("sm", withTailwind)).toEqual([["border-radius", "var(--radius-sm)"]]);
+    expect(cssGroupById("shadow").toCss("card", withTailwind)).toEqual([["box-shadow", "var(--shadow-card)"]]);
+    expect(cssGroupById("bg").toCss("brand", withTailwind)).toEqual([["background-color", "var(--color-brand)"]]);
+  });
+
+  it("and read back as the token", () => {
+    expect(cssGroupById("radius").fromCss({ "border-radius": "var(--radius-sm)" }, withTailwind)).toBe("sm");
+    expect(cssGroupById("shadow").fromCss({ "box-shadow": "var(--shadow-card)" }, withTailwind)).toBe("card");
+    expect(cssGroupById("bg").fromCss({ "background-color": "var(--color-brand)" }, withTailwind)).toBe("brand");
+  });
+});
