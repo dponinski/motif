@@ -1,5 +1,6 @@
 import type { Composition, Slot, StoredTokenData, Token, TokenType } from "../tokens/model";
 import { ALL_THEMES } from "../tokens/model";
+import { slotIn } from "../tokens/compose";
 import { cssToColor } from "./color";
 import { COMPOSITION_NAMESPACE, leafOf, namespaceOf, pathOf, placeOf, refOf, slug, themeKey } from "./names";
 import { EXT, type DtcgConfig, type DtcgFiles, type Skipped } from "./types";
@@ -174,11 +175,26 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
     if (slot.type === "number") { const n = parseFloat(v); return Number.isFinite(n) ? numberValue(n, slot.unit ?? "") : undefined; }
     return v;
   };
-  const slotValue = (slot: Slot): unknown | undefined => {
+  const slotValue = (part: Slot, themeId?: string): unknown | undefined => {
+    const slot = slotIn(part, themeId);
     const to = slot.ref ? pathById.get(slot.ref) : undefined;
     return to ? refOf(to) : literal(slot);
   };
   const typeOf = (type: TokenType, slot: Slot): string => (type === "color" ? "color" : type === "number" ? ((slot.unit ?? "") === "" ? "number" : "dimension") : "string");
+
+  // The value of a text style or a shadow, as the design tokens say it, in a theme (else the one every theme has).
+  const compositeValue = (c: Composition, themeId?: string): Obj => {
+    const props = c.kind === "typography" ? TYPOGRAPHY_PROPS : SHADOW_PROPS;
+    const value: Obj = {};
+    for (const slot of c.slots) {
+      const prop = props[slot.name];
+      if (!prop) continue;
+      const v = slotValue(slot, themeId);
+      if (v !== undefined) value[prop] = v;
+    }
+    if (c.kind === "shadow" && c.inset) value.inset = true;
+    return value;
+  };
 
   const compositionNode = (c: Composition): { path: string[]; node: Obj } | null => {
     const ns = COMPOSITION_NAMESPACE[c.kind];
@@ -194,15 +210,8 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
     }
     const path = [ns, leafOf(c.name, ns)];
     const props = c.kind === "typography" ? TYPOGRAPHY_PROPS : SHADOW_PROPS;
-    const value: Obj = {};
-    const extra: Slot[] = [];
-    for (const slot of c.slots) {
-      const prop = props[slot.name];
-      if (!prop) { extra.push(slot); continue; }
-      const v = slotValue(slot);
-      if (v !== undefined) value[prop] = v;
-    }
-    if (c.kind === "shadow" && c.inset) value.inset = true;
+    const value = compositeValue(c);
+    const extra = c.slots.filter((slot) => !props[slot.name]);
     return {
       path,
       node: {
@@ -223,6 +232,19 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
     if (!made) continue;
     if (!claim(c.id, c.name, made.path)) continue;
     put(treeFor(baseFile(c.setId)), made.path, made.node);
+    // What a part is in another theme goes to that theme's file, only where it differs: a part of a custom composition on its own, a text
+    // style or a shadow as its whole value.
+    for (const theme of (themesOfSet.get(c.setId) ?? []).slice(1)) {
+      if (!c.slots.some((slot) => slot.themes?.[theme.id])) continue;
+      if (c.kind === "custom") {
+        for (const slot of c.slots) {
+          const v = slotValue(slot, theme.id);
+          if (v !== undefined && JSON.stringify(v) !== JSON.stringify(slotValue(slot))) put(treeFor(themeFile(c.setId, theme.key)), [...made.path, slug(slot.name)], { $value: v });
+        }
+      } else if (JSON.stringify(compositeValue(c, theme.id)) !== JSON.stringify(compositeValue(c))) {
+        put(treeFor(themeFile(c.setId, theme.key)), made.path, { $value: compositeValue(c, theme.id) });
+      }
+    }
   }
 
   // ── Files and config ───────────────────────────────────────────────────────

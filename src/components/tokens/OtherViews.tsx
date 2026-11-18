@@ -43,7 +43,7 @@ export interface OtherCtx {
 const number = (text: string) => { const n = parseFloat(text); return Number.isFinite(n) ? n : null; };
 const px = (n: number) => `${parseFloat(n.toFixed(2))}`;
 
-function Visual({ row }: { row: Row }) {
+function Visual({ row, themeId }: { row: Row; themeId?: string }) {
   switch (row.kind) {
     case "spacing": return <div className="flex w-40 flex-shrink-0 items-center"><div className="h-2 rounded-sm bg-accent/40" style={{ width: Math.max(2, Math.min((row.token as SpacingToken).value, 160)) }} /></div>;
     case "radius": return <div className="h-6 w-6 flex-shrink-0 border border-text-tertiary/40 bg-surface-subtle" style={{ borderRadius: Math.min((row.token as RadiusToken).value, 12) }} />;
@@ -51,7 +51,7 @@ function Visual({ row }: { row: Row }) {
     case "typography": { const t = row.token as TypographyToken; return <span className="w-24 flex-shrink-0 truncate text-text-primary" style={{ fontFamily: t.fontFamily, fontSize: Math.min(18, t.fontSize), fontWeight: t.fontWeight, lineHeight: 1.2 }}>Aa Quick fox</span>; }
     case "number": { const n = row.token as NumberToken; return <span className="w-16 flex-shrink-0 truncate rounded bg-surface-subtle px-1.5 py-0.5 text-center font-mono text-2xs text-text-secondary" aria-hidden>{n.value}{n.unit}</span>; }
     case "string": { const x = row.token as StringToken; return <span className="w-16 flex-shrink-0 truncate text-center text-text-primary" style={x.use === "font-family" ? { fontFamily: x.value } : undefined} aria-hidden>Aa</span>; }
-    case "composition": return <Sample composition={row.token as Composition} small />;
+    case "composition": return <Sample composition={row.token as Composition} small themeId={themeId} />;
     default: return null;
   }
 }
@@ -176,12 +176,14 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
   const [open, setOpen] = useState(false);
   const expandable = row.kind === "typography" || row.kind === "shadow" || row.kind === "composition";
   const data = useDesignSystemStore(useShallow((s) => ({ colors: s.colors, numbers: s.numbers, strings: s.strings, spacing: s.spacing, radii: s.radii })));
+  // With one theme shown (of several), what a composition looks like in it.
+  const shownTheme = ctx.themes.length > 1 && ctx.shown.length === 1 ? ctx.shown[0].id : undefined;
   const picked = ctx.selection.selected.has(row.id);
   const dragged = ctx.drag.moving?.includes(row.id);
   const over = ctx.drag.over?.type === "token" && ctx.drag.over.id === row.id ? ctx.drag.over : null;
   const summary = row.kind === "typography"
     ? `${(row.token as TypographyToken).fontSize}px · ${(row.token as TypographyToken).fontWeight} · ${(row.token as TypographyToken).lineHeight}`
-    : row.kind === "shadow" ? row.text : row.kind === "composition" ? compositionSummary(row.token as Composition, data) : "";
+    : row.kind === "shadow" ? row.text : row.kind === "composition" ? compositionSummary(row.token as Composition, data, shownTheme) : "";
   return (
     <div data-token-id={row.id} data-token-kind={row.kind} data-selected={picked || undefined} className={cn("relative border-b border-transparent", dragged && "opacity-40")}>
       {over && <span aria-hidden className={cn("absolute inset-x-0 z-10 h-0.5 bg-accent", over.after ? "bottom-0" : "top-0")} data-drop={over.after ? "after" : "before"} />}
@@ -192,7 +194,7 @@ export function OtherRowView({ row, ctx }: { row: Row; ctx: OtherCtx }) {
       >
         <span data-drag-handle title="Drag to move or reorder" className="-ml-3 w-3 flex-shrink-0 cursor-grab text-text-tertiary opacity-0 group-hover/row:opacity-100"><GripVertical size={12} /></span>
         <input type="checkbox" aria-label={`Select ${row.name}`} checked={picked} onChange={() => ctx.selection.toggle(row.id)} className="h-3 w-3 flex-shrink-0 accent-[var(--cobalt)]" />
-        <Visual row={row} />
+        <Visual row={row} themeId={shownTheme} />
         <InlineName row={row} taken={ctx.taken(row.kind)} onRename={(n) => ctx.act.rename(row.id, n)} className="w-40 flex-shrink-0 text-xs text-text-primary" />
         <Fields row={row} ctx={ctx} />
         {summary && <span className="min-w-0 truncate text-2xs text-text-tertiary">{summary}</span>}

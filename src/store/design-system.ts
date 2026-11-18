@@ -4,7 +4,7 @@ import { normalizeColor } from "@/lib/token-sync/color";
 import { deriveGroup, uniqueName } from "@/lib/tokens/organize";
 import { darkOf } from "@/lib/tokens/theme-gen";
 import { detachMissing, moveColors, refreshAliases, renameAlias, targetOf, tokenKey, wouldLoop } from "@/lib/tokens/alias-colors";
-import type { Composition, Unit } from "@/lib/tokens/model";
+import type { Composition, Slot, Unit } from "@/lib/tokens/model";
 import { previewStyle, releaseSlots, resolve, type ComposeData } from "@/lib/tokens/compose";
 
 // ── Theme & Set types ─────────────────────────────────────────────────────────
@@ -342,6 +342,15 @@ const withList = (kind: TokenKind, list: Arranged[]) => ({ [SLICE[kind]]: list }
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 // Held in memory for the project that is open; the project keeps it (see store/project-session.ts).
+// A part of a composition without the value it had in a theme.
+function dropSlotTheme(slot: Slot, themeId: string): Slot {
+  const { [themeId]: _gone, ...rest } = slot.themes ?? {};
+  void _gone;
+  const { themes: _all, ...others } = slot;
+  void _all;
+  return Object.keys(rest).length ? { ...others, themes: rest } : others;
+}
+
 // A number or a string without the value it had in a theme.
 function dropTheme<T extends { setId: string; themeValues?: Record<string, unknown> }>(token: T, setId: string, themeId: string): T {
   if (token.setId !== setId || !token.themeValues || !(themeId in token.themeValues)) return token;
@@ -458,6 +467,8 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
             // A number or a string that has a value of its own in the theme has it in the copy too.
             numbers: s.numbers.map((n) => (n.setId === setId && n.themeValues?.[themeId] !== undefined ? { ...n, themeValues: { ...n.themeValues, [id]: n.themeValues[themeId] } } : n)),
             strings: s.strings.map((n) => (n.setId === setId && n.themeValues?.[themeId] !== undefined ? { ...n, themeValues: { ...n.themeValues, [id]: n.themeValues[themeId] } } : n)),
+            // The parts of a composition that have a value of their own in the theme have it in the copy too.
+            compositions: s.compositions.map((c) => (c.setId === setId && c.slots.some((sl) => sl.themes?.[themeId]) ? { ...c, slots: c.slots.map((sl) => (sl.themes?.[themeId] ? { ...sl, themes: { ...sl.themes, [id]: sl.themes[themeId] } } : sl)) } : c)),
           };
         });
         return id;
@@ -484,6 +495,7 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
             // What a number or a string had in the theme goes with it.
             numbers: s.numbers.map((n) => dropTheme(n, setId, themeId)),
             strings: s.strings.map((n) => dropTheme(n, setId, themeId)),
+            compositions: s.compositions.map((c) => (c.setId === setId && c.slots.some((sl) => sl.themes?.[themeId]) ? { ...c, slots: c.slots.map((sl) => (sl.themes?.[themeId] ? dropSlotTheme(sl, themeId) : sl)) } : c)),
           };
         }),
 
