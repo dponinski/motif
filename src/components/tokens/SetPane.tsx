@@ -130,9 +130,19 @@ export default function SetPane({ set, sets, request }: { set: TokenSet; sets: T
     act: { ...common, setColor: (id, theme, text) => editTokens(() => ds().setColorText(id, theme, text)), setAlias: (id, theme, target) => editTokens(() => ds().setColorAlias(id, theme, target)), toGroup: (ids, group) => { editTokens(() => { for (const [k, of] of eachKind(ids)) ds().setTokenGroup(k, of, group); }); } },
   };
   const otherCtx: OtherCtx = {
-    selection, drag, taken, hasRepo, rename: setRenaming,
+    selection, drag, taken, hasRepo, rename: setRenaming, themes: set.themes, shown,
     act: {
       ...common,
+      setThemeValue: (row, themeId, value) => editTokens(() => {
+        const s = ds();
+        const base = set.themes[0]?.id;
+        if (row.kind === "number") { if (themeId === base) { if (typeof value === "number") s.updateNumber(row.id, { value }); } else s.setNumberThemeValue(row.id, themeId, typeof value === "number" ? value : null); }
+        else if (row.kind === "string") { if (themeId === base) { if (typeof value === "string") s.updateString(row.id, { value }); } else s.setStringThemeValue(row.id, themeId, typeof value === "string" ? value : null); }
+        else if (row.kind === "spacing" || row.kind === "radius") {
+          if (themeId === base) { if (typeof value === "number") (row.kind === "spacing" ? s.updateSpacing : s.updateRadius)(row.id, { value }); }
+          else s.setLengthThemeValue(row.kind, row.id, themeId, typeof value === "number" ? value : null);
+        }
+      }),
       update: (row: Row, patch: Record<string, unknown>) => editTokens(() => {
         const s = ds();
         if (row.kind === "spacing") s.updateSpacing(row.id, patch);

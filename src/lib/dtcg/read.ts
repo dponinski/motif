@@ -158,14 +158,20 @@ export function readDtcg(files: DtcgFiles, existing?: StoredTokenData): Read {
     }
 
     const literal = literalOf(f.value);
+    // What a theme's file says about this token, when it says something: the theme's own value.
+    const inTheme = (i: number) => (i > 0 ? overrides.get(`${cs.themes[i].key}\0${keyOf(f.path)}`) : undefined);
     if (f.type === "dimension" || f.type === "number" || f.type === "fontWeight") {
       const n = numberOf(literal);
       if (!n) { notes.push(`${name}: not a number or a dimension`); continue; }
-      tokens.push({ ...where, type: "number", unit: n.unit, ...(use ? { use } : {}), values: { [ALL_THEMES]: String(n.n) } });
+      const values: Record<string, string> = { [ALL_THEMES]: String(n.n) };
+      cs.themes.forEach((_, i) => { const o = inTheme(i); const m = o ? numberOf(literalOf(o.value)) : null; if (m && String(m.n) !== values[ALL_THEMES]) values[set.themes[i].id] = String(m.n); });
+      tokens.push({ ...where, type: "number", unit: n.unit, ...(use ? { use } : {}), values });
     } else if (f.type === "fontFamily" || f.type === "string") {
       const text = textOf(literal);
       if (text === null) { notes.push(`${name}: not text`); continue; }
-      tokens.push({ ...where, type: "string", ...(use ? { use } : f.type === "fontFamily" ? { use: "font-family" } : {}), values: { [ALL_THEMES]: text } });
+      const values: Record<string, string> = { [ALL_THEMES]: text };
+      cs.themes.forEach((_, i) => { const o = inTheme(i); const t2 = o ? textOf(literalOf(o.value)) : null; if (t2 !== null && t2 !== text) values[set.themes[i].id] = t2; });
+      tokens.push({ ...where, type: "string", ...(use ? { use } : f.type === "fontFamily" ? { use: "font-family" } : {}), values });
     } else {
       notes.push(`${name}: a ${f.type ?? "token without a type"}, which Motif doesn't keep yet`);
     }

@@ -109,12 +109,15 @@ export interface NumberToken {
   group?: string;
   setId: string;
   repoName?: string;
+  // A value of its own in a theme (by theme id); a theme that isn't here has `value`, as the colors of a theme without one do not.
+  themeValues?: Record<string, number>;
 }
 
 export interface StringToken {
   id: string;
   name: string;
   value: string;
+  themeValues?: Record<string, string>;
   // Where it belongs: font-family, or nothing said.
   use?: string;
   group?: string;
@@ -191,6 +194,11 @@ interface DesignSystemStore {
 
   // Numbers and strings that aren't a spacing or a radius. Each add returns the id of the token it made.
   addNumber: (token: Omit<NumberToken, "id">) => string;
+  // A number's or a string's value in a theme: null takes the value of its own away, so the theme has the default again.
+  // A spacing or a radius (a length in pixels) given a value in a theme becomes a number used as that: only a number can differ by theme.
+  setLengthThemeValue: (kind: "spacing" | "radius", id: string, themeId: string, px: number | null) => void;
+  setNumberThemeValue: (id: string, themeId: string, value: number | null) => void;
+  setStringThemeValue: (id: string, themeId: string, value: string | null) => void;
   updateNumber: (id: string, updates: Partial<NumberToken>) => void;
   deleteNumber: (id: string) => void;
   addString: (token: Omit<StringToken, "id">) => string;
@@ -334,6 +342,16 @@ const withList = (kind: TokenKind, list: Arranged[]) => ({ [SLICE[kind]]: list }
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 // Held in memory for the project that is open; the project keeps it (see store/project-session.ts).
+// A number or a string without the value it had in a theme.
+function dropTheme<T extends { setId: string; themeValues?: Record<string, unknown> }>(token: T, setId: string, themeId: string): T {
+  if (token.setId !== setId || !token.themeValues || !(themeId in token.themeValues)) return token;
+  const { [themeId]: _gone, ...rest } = token.themeValues;
+  void _gone;
+  const { themeValues: _all, ...others } = token;
+  void _all;
+  return (Object.keys(rest).length ? { ...others, themeValues: rest } : others) as T;
+}
+
 export const useDesignSystemStore = create<DesignSystemStore>()(
   (set, get) => ({
       ...emptyTokenData(),
@@ -437,6 +455,9 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
               const alias = c.themeAlias?.[themeId];
               return { ...c, themeValues: { ...c.themeValues, [id]: c.themeValues[themeId] ?? c.value }, ...(alias ? { themeAlias: { ...c.themeAlias, [id]: alias } } : {}) };
             }),
+            // A number or a string that has a value of its own in the theme has it in the copy too.
+            numbers: s.numbers.map((n) => (n.setId === setId && n.themeValues?.[themeId] !== undefined ? { ...n, themeValues: { ...n.themeValues, [id]: n.themeValues[themeId] } } : n)),
+            strings: s.strings.map((n) => (n.setId === setId && n.themeValues?.[themeId] !== undefined ? { ...n, themeValues: { ...n.themeValues, [id]: n.themeValues[themeId] } } : n)),
           };
         });
         return id;
@@ -460,6 +481,9 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
               const { [themeId]: __, ...aliases } = c.themeAlias ?? {};
               return { ...c, themeValues: rest, themeAlias: Object.keys(aliases).length ? aliases : undefined };
             }), sets),
+            // What a number or a string had in the theme goes with it.
+            numbers: s.numbers.map((n) => dropTheme(n, setId, themeId)),
+            strings: s.strings.map((n) => dropTheme(n, setId, themeId)),
           };
         }),
 
@@ -590,6 +614,42 @@ export const useDesignSystemStore = create<DesignSystemStore>()(
       },
       updateNumber: (id, updates) =>
         set((s) => ({ numbers: s.numbers.map((n) => (n.id === id ? { ...n, ...updates } : n)) })),
+      setLengthThemeValue: (kind, id, themeId, px) => {
+        const list = kind === "spacing" ? get().spacing : get().radii;
+        const length = list.find((x) => x.id === id);
+        if (!length) return;
+        const { value, ...rest } = length;
+        set((s) => ({
+          spacing: kind === "spacing" ? s.spacing.filter((x) => x.id !== id) : s.spacing,
+          radii: kind === "radius" ? s.radii.filter((x) => x.id !== id) : s.radii,
+          numbers: [...s.numbers, { ...rest, value, unit: "px" as const, use: kind }],
+        }));
+        get().setNumberThemeValue(id, themeId, px);
+      },
+      setNumberThemeValue: (id, themeId, value) =>
+        set((s) => ({
+          numbers: s.numbers.map((n) => {
+            if (n.id !== id) return n;
+            const { [themeId]: _old, ...rest } = n.themeValues ?? {};
+            void _old;
+            const next = value === null ? rest : { ...rest, [themeId]: value };
+            const { themeValues: _all, ...others } = n;
+            void _all;
+            return Object.keys(next).length ? { ...others, themeValues: next } : others;
+          }),
+        })),
+      setStringThemeValue: (id, themeId, value) =>
+        set((s) => ({
+          strings: s.strings.map((n) => {
+            if (n.id !== id) return n;
+            const { [themeId]: _old, ...rest } = n.themeValues ?? {};
+            void _old;
+            const next = value === null ? rest : { ...rest, [themeId]: value };
+            const { themeValues: _all, ...others } = n;
+            void _all;
+            return Object.keys(next).length ? { ...others, themeValues: next } : others;
+          }),
+        })),
       deleteNumber: (id) =>
         set((s) => ({ numbers: s.numbers.filter((n) => n.id !== id), compositions: released(s, [id]) })),
 

@@ -25,14 +25,14 @@ export function fixture(): StoredTokenData {
     spacing: [{ id: "sp4", name: "space-4", value: 16, group: "base", setId: "set-prim" }],
     radii: [{ id: "rmd", name: "radius-md", value: 6, group: "base", setId: "set-prim" }],
     numbers: [
-      { id: "n-xl", name: "text-xl", value: 1.5, unit: "rem", use: "font-size", setId: "set-prim" },
+      { id: "n-xl", name: "text-xl", value: 1.5, unit: "rem", use: "font-size", setId: "set-prim", themeValues: { [PD]: 1.75 } },
       { id: "n-ratio", name: "ratio", value: 1.25, unit: "", setId: "set-prim" },
       { id: "n-bold", name: "bold", value: 700, unit: "", use: "font-weight", setId: "set-prim" },
       { id: "n-em", name: "tight", value: 0.9, unit: "em", use: "line-height", setId: "set-prim" },
     ],
     strings: [
       { id: "s-sans", name: "font-sans", value: "Inter, system-ui, sans-serif", use: "font-family", setId: "set-prim" },
-      { id: "s-label", name: "label", value: "Save", setId: "set-sem" },
+      { id: "s-label", name: "label", value: "Save", setId: "set-sem", themeValues: { [SD]: "Save changes" } },
     ],
     compositions: [
       { id: "c-head", name: "heading", kind: "typography", setId: "set-sem", group: "text", slots: [

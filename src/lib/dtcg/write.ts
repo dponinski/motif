@@ -139,15 +139,30 @@ export function writeDtcg(data: StoredTokenData, options: WriteOptions = {}): Wr
       continue;
     }
 
-    const text = t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "";
+    // A number or a string has one value for every theme (`ALL_THEMES`) and may have one of its own in a theme: the base file has what the
+    // first theme has, and a theme's file has the values that differ from it.
+    const valueIn = (themeId: string) => t.values[themeId] ?? t.values[ALL_THEMES] ?? Object.values(t.values)[0] ?? "";
+    const baseTheme = baseOf(t.setId);
+    const text = baseTheme ? valueIn(baseTheme.id) : valueIn(ALL_THEMES);
+    const others = (themesOfSet.get(t.setId) ?? []).slice(1);
     if (t.type === "number") {
       const n = parseFloat(text);
       if (!Number.isFinite(n)) { skipped.push({ name: t.name, reason: "It isn't a number" }); continue; }
       const unit = t.unit ?? "";
       const type = unit === "" ? (t.use === "font-weight" ? "fontWeight" : "number") : "dimension";
       put(treeFor(baseFile(t.setId)), path, { $type: type, $value: numberValue(n, unit), ...extension(ext) });
+      for (const theme of others) {
+        const v = valueIn(theme.id);
+        const m = parseFloat(v);
+        if (v === text || !Number.isFinite(m)) continue;
+        put(treeFor(themeFile(t.setId, theme.key)), path, { $value: numberValue(m, unit) });
+      }
     } else {
       put(treeFor(baseFile(t.setId)), path, { $type: t.use === "font-family" ? "fontFamily" : "string", $value: text, ...extension(ext) });
+      for (const theme of others) {
+        const v = valueIn(theme.id);
+        if (v !== text) put(treeFor(themeFile(t.setId, theme.key)), path, { $value: v });
+      }
     }
   }
 
